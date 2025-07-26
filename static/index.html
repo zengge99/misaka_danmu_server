@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Danmu API Frontend</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="app-container">
+        <!-- 登录/注册视图 -->
+        <div id="auth-view">
+            <h1>弹幕API控制台</h1>
+            <div class="form-container">
+                <!-- 登录表单 -->
+                <form id="login-form">
+                    <h2>登录</h2>
+                    <input type="text" id="login-username" placeholder="用户名" required>
+                    <input type="password" id="login-password" placeholder="密码" required>
+                    <button type="submit">登录</button>
+                </form>
+                <!-- 注册表单 -->
+                <form id="register-form">
+                    <h2>注册</h2>
+                    <input type="text" id="register-username" placeholder="用户名" required>
+                    <input type="password" id="register-password" placeholder="密码" required>
+                    <button type="submit">注册</button>
+                </form>
+            </div>
+            <p id="auth-error" class="error-message"></p>
+        </div>
+
+        <!-- 主应用视图 -->
+        <div id="main-view" class="hidden">
+            <header>
+                <h1>弹幕API控制台</h1>
+                <div>
+                    <span id="current-user"></span>
+                    <button id="logout-btn">登出</button>
+                </div>
+            </header>
+            
+            <main>
+                <div class="search-section">
+                    <h2>从外部数据源搜索</h2>
+                    <form id="search-form">
+                        <input type="text" id="search-keyword" placeholder="输入番剧名称..." required>
+                        <button type="submit">搜索</button>
+                    </form>
+                </div>
+
+                <div id="results-section">
+                    <h2>搜索结果</h2>
+                    <div id="loader" class="hidden"></div>
+                    <ul id="results-list"></ul>
+                </div>
+
+                <div id="logs-section">
+                    <h2>日志/状态</h2>
+                    <pre id="log-output"></pre>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
