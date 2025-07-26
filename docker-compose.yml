@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        # 从宿主机获取 PUID 和 PGID，默认为 1000
+        PUID: ${PUID:-1000}
+        PGID: ${PGID:-1000}
+    container_name: danmu-api
+    restart: unless-stopped
+    ports:
+      # 将宿主机的 8000 端口映射到容器的 8000 端口
+      - "8000:8000"
+    environment:
+      # Pydantic-settings 会自动读取这些环境变量
+      # 服务配置
+      - DANMUAPI_SERVER__HOST=0.0.0.0
+      - DANMUAPI_SERVER__PORT=8000
+      # 数据库配置
+      - DANMUAPI_DATABASE__HOST=db # 使用 service name 作为 host
+      - DANMUAPI_DATABASE__PORT=3306
+      - DANMUAPI_DATABASE__USER=${MYSQL_USER:-danmaku_user}
+      - DANMUAPI_DATABASE__PASSWORD=${MYSQL_PASSWORD:-danmaku_pass}
+      - DANMUAPI_DATABASE__NAME=${MYSQL_DATABASE:-danmaku_db}
+      # JWT 配置 - 强烈建议在 .env 文件中设置一个强密钥
+      - DANMUAPI_JWT__SECRET_KEY=${JWT_SECRET_KEY:-a_very_secret_key_that_should_be_changed_in_prod}
+    volumes:
+      # 挂载配置文件，方便修改而无需重新构建镜像
+      - ./config/config.yml:/app/config/config.yml:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - danmu-net
+
+  db:
+    image: mysql:8.0
+    container_name: danmu-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-supersecretrootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-danmaku_db}
+      MYSQL_USER: ${MYSQL_USER:-danmaku_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-danmaku_pass}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${MYSQL_USER:-danmaku_user}", "-p${MYSQL_PASSWORD:-danmaku_pass}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - danmu-net
+
+volumes:
+  db_data:
+
+networks:
+  danmu-net:
