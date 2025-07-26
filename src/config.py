@@ -1,6 +1,6 @@
 import yaml
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Optional
 
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, EnvSettingsSource
@@ -21,6 +21,11 @@ class JWTConfig(BaseModel):
     secret_key: str = "a_very_secret_key_that_should_be_changed"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440 # 1 day
+
+# 4. (新增) 初始管理员配置
+class AdminConfig(BaseModel):
+    initial_user: Optional[str] = None
+    initial_password: Optional[str] = None
 
 # 2. 创建一个自定义的配置源，用于从 YAML 文件加载设置
 class YamlConfigSettingsSource(PydanticBaseSettingsSource):
@@ -44,6 +49,7 @@ class Settings(BaseSettings):
     server: ServerConfig = ServerConfig()
     database: DatabaseConfig = DatabaseConfig()
     jwt: JWTConfig = JWTConfig()
+    admin: AdminConfig = AdminConfig()
 
     class Config:
         # 为环境变量设置前缀，避免与系统变量冲突

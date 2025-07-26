@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from .database import create_db_pool, close_db_pool, init_db_tables
+from .database import create_db_pool, close_db_pool, init_db_tables, create_initial_admin_user
 from .api import router as api_router, auth_router
 from .scraper_manager import ScraperManager
 from .config import settings
@@ -22,6 +22,8 @@ async def startup_event():
     app.state.scraper_manager = ScraperManager()
     # 在创建连接池后初始化表
     await init_db_tables(app)
+    # 创建初始管理员用户（如果需要）
+    await create_initial_admin_user(app)
 
 @app.on_event("shutdown")
 async def shutdown_event():
