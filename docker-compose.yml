@@ -11,13 +11,13 @@ services:
     container_name: danmu-api
     restart: unless-stopped
     ports:
-      # 将宿主机的 8000 端口映射到容器的 8000 端口
-      - "8000:8000"
+      # 将宿主机的 7768 端口映射到容器的 7768 端口
+      - "7768:7768"
     environment:
       # Pydantic-settings 会自动读取这些环境变量
       # 服务配置
       - DANMUAPI_SERVER__HOST=0.0.0.0
-      - DANMUAPI_SERVER__PORT=8000
+      - DANMUAPI_SERVER__PORT=7768
       # 数据库配置
       - DANMUAPI_DATABASE__HOST=db # 使用 service name 作为 host
       - DANMUAPI_DATABASE__PORT=3306

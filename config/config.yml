@@ -1,7 +1,7 @@
 # 服务器配置
 server:
   host: "127.0.0.1"
-  port: 8000
+  port: 7768
 
 # 数据库配置
 database:

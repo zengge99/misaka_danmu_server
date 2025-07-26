@@ -39,7 +39,7 @@ RUN chown -R appuser:appgroup /app
 USER appuser
 
 # 暴露应用运行的端口
-EXPOSE 8000
+EXPOSE 7768
 
 # 运行应用的命令
 # host 在 docker-compose.yml 中通过环境变量设置为 0.0.0.0
