@@ -2,65 +2,36 @@ version: '3.8'
 
 services:
   app:
-    build:
-      context: .
-      args:
-        # 从宿主机获取 PUID 和 PGID，默认为 1000
-        PUID: ${PUID:-1000}
-        PGID: ${PGID:-1000}
+    # 使用您已经构建并推送到 Docker Hub 的镜像
+    image: l429609201/danmu_api_server:latest
     container_name: danmu-api
     restart: unless-stopped
-    ports:
-      # 将宿主机的 7768 端口映射到容器的 7768 端口
-      - "7768:7768"
+    # 使用主机网络模式，容器将直接使用宿主机的网络。
+    # 这意味着容器内的 127.0.0.1 就是宿主机的 127.0.0.1。
+    # 应用将直接在宿主机的 7768 端口上可用，无需端口映射。
+    network_mode: "host"
     environment:
       # Pydantic-settings 会自动读取这些环境变量
-      # 服务配置
+      # 服务配置 (端口在主机网络模式下由应用内部配置决定)
       - DANMUAPI_SERVER__HOST=0.0.0.0
       - DANMUAPI_SERVER__PORT=7768
-      # 数据库配置
-      - DANMUAPI_DATABASE__HOST=db # 使用 service name 作为 host
+      # 数据库配置 - 连接到宿主机上的数据库
+      - DANMUAPI_DATABASE__HOST=127.0.0.1
       - DANMUAPI_DATABASE__PORT=3306
-      - DANMUAPI_DATABASE__USER=${MYSQL_USER:-danmaku_user}
-      - DANMUAPI_DATABASE__PASSWORD=${MYSQL_PASSWORD:-danmaku_pass}
-      - DANMUAPI_DATABASE__NAME=${MYSQL_DATABASE:-danmaku_db}
+      - DANMUAPI_DATABASE__USER=danmuapi
+      - DANMUAPI_DATABASE__PASSWORD=danmuapi
+      - DANMUAPI_DATABASE__NAME=danmuapi
       # JWT 配置 - 强烈建议在 .env 文件中设置一个强密钥
-      - DANMUAPI_JWT__SECRET_KEY=${JWT_SECRET_KEY:-a_very_secret_key_that_should_be_changed_in_prod}
+      #- DANMUAPI_JWT__SECRET_KEY=${JWT_SECRET_KEY:-a_very_secret_key_that_should_be_changed_in_prod}
       # 初始管理员配置
-      # 设置初始管理员用户名。应用启动时会检查该用户是否存在，如果不存在则创建。
       - DANMUAPI_ADMIN__INITIAL_USER=admin
-      # (可选) 设置初始管理员密码。如果留空或不设置，系统将生成一个安全的随机密码并打印在容器日志中。
-      # - DANMUAPI_ADMIN__INITIAL_PASSWORD=your_strong_password
     volumes:
-      # 挂载配置文件，方便修改而无需重新构建镜像
+      # (可选) 挂载本地配置文件以覆盖镜像中的默认配置。
+      # 如果您主要使用环境变量进行配置，可以注释掉此行。
       - ./config/config.yml:/app/config/config.yml:ro
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - danmu-net
 
-  db:
-    image: mysql:8.0
-    container_name: danmu-db
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-supersecretrootpassword}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-danmaku_db}
-      MYSQL_USER: ${MYSQL_USER:-danmaku_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-danmaku_pass}
-    volumes:
-      - db_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${MYSQL_USER:-danmaku_user}", "-p${MYSQL_PASSWORD:-danmaku_pass}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - danmu-net
-
-volumes:
-  db_data:
-
-networks:
-  danmu-net:
+# 由于不再使用容器化的数据库，db 服务、volumes 和 networks 部分已被移除。
+# 请确保您的宿主机上已经运行了 MySQL 服务，并且：
+# 1. 监听在 127.0.0.1:3306。
+# 2. 创建了名为 'danmuapi' 的数据库。
+# 3. 创建了用户 'danmuapi'，密码为 'danmuapi'，并授予了对 'danmuapi' 数据库的访问权限。
