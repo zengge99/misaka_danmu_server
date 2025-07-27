@@ -36,9 +36,8 @@ h1, h2 {
 }
 
 /* Auth View */
-#auth-view .form-container {
+#auth-view .auth-wrapper {
     display: flex;
-    gap: 40px;
     justify-content: center;
 }
 
@@ -51,6 +50,19 @@ form {
     border-radius: 8px;
     background-color: var(--card-bg);
     width: 300px;
+}
+
+.switch-form-text {
+    font-size: 0.9em;
+    text-align: center;
+    margin-top: 10px;
+    color: #666;
+}
+
+.switch-form-text a {
+    color: var(--primary-color);
+    text-decoration: none;
+    cursor: pointer;
 }
 
 input[type="text"],
@@ -79,12 +91,6 @@ button:hover {
 button:disabled {
     background-color: #a0c7e4;
     cursor: not-allowed;
-}
-
-.error-message {
-    color: var(--error-color);
-    text-align: center;
-    margin-top: 15px;
 }
 
 /* Main View */
@@ -190,4 +196,31 @@ main > div {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+/* Generic message styling */
+.message {
+    text-align: center;
+    margin-top: 10px;
+    font-size: 0.9em;
+    min-height: 1.2em; /* 预留空间，防止布局跳动 */
+}
+
+.message.success {
+    color: var(--success-color);
+}
+
+.message.error {
+    color: var(--error-color);
+}
+
+/* Account Section */
+#account-section form {
+    width: auto; /* Override the fixed width from auth form */
+    max-width: 400px;
+    margin: 0 auto; /* Center the form */
+}
+
+#account-section form h3 {
+    margin: 0;
 }

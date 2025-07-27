@@ -221,3 +221,24 @@ async def login_for_access_token(
 @auth_router.get("/users/me", response_model=models.User, summary="获取当前用户信息")
 async def read_users_me(current_user: models.User = Depends(security.get_current_user)):
     return current_user
+
+
+@auth_router.put("/users/me/password", status_code=status.HTTP_204_NO_CONTENT, summary="修改当前用户密码")
+async def change_current_user_password(
+    password_data: models.PasswordChange,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    # 1. 从数据库获取完整的用户信息，包括哈希密码
+    user_in_db = await crud.get_user_by_username(pool, current_user.username)
+    if not user_in_db:
+        # 理论上不会发生，因为 get_current_user 已经验证过
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # 2. 验证旧密码是否正确
+    if not security.verify_password(password_data.old_password, user_in_db["hashed_password"]):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect old password")
+
+    # 3. 更新密码
+    new_hashed_password = security.get_password_hash(password_data.new_password)
+    await crud.update_user_password(pool, current_user.username, new_hashed_password)

@@ -118,3 +118,11 @@ async def create_user(pool: aiomysql.Pool, user: models.UserCreate) -> int:
             query = "INSERT INTO users (username, hashed_password) VALUES (%s, %s)"
             await cursor.execute(query, (user.username, hashed_password))
             return cursor.lastrowid
+
+
+async def update_user_password(pool: aiomysql.Pool, username: str, new_hashed_password: str) -> None:
+    """更新用户的密码"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            query = "UPDATE users SET hashed_password = %s WHERE username = %s"
+            await cursor.execute(query, (new_hashed_password, username))

@@ -3,6 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const mainView = document.getElementById('main-view');
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
+    const showRegisterLink = document.getElementById('show-register-link');
+    const showLoginLink = document.getElementById('show-login-link');
     const authError = document.getElementById('auth-error');
     const searchForm = document.getElementById('search-form');
     const searchKeywordInput = document.getElementById('search-keyword');
@@ -11,6 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentUserSpan = document.getElementById('current-user');
     const logoutBtn = document.getElementById('logout-btn');
     const loader = document.getElementById('loader');
+    const changePasswordForm = document.getElementById('change-password-form');
+    const passwordChangeMessage = document.getElementById('password-change-message');
 
     let token = localStorage.getItem('danmu_api_token');
 
@@ -87,6 +91,21 @@ document.addEventListener('DOMContentLoaded', () => {
         showView('auth');
         log('已登出。');
     }
+
+    // --- Auth Form Switching Logic ---
+    showRegisterLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        loginForm.classList.add('hidden');
+        registerForm.classList.remove('hidden');
+        authError.textContent = '';
+    });
+
+    showLoginLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        registerForm.classList.add('hidden');
+        loginForm.classList.remove('hidden');
+        authError.textContent = '';
+    });
 
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -211,6 +230,46 @@ document.addEventListener('DOMContentLoaded', () => {
             resultsList.appendChild(li);
         });
     }
+
+    changePasswordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        passwordChangeMessage.textContent = '';
+        passwordChangeMessage.className = 'message'; // Reset class
+
+        const oldPassword = document.getElementById('old-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+
+        if (newPassword.length < 8) {
+            passwordChangeMessage.textContent = '新密码至少需要8位。';
+            passwordChangeMessage.classList.add('error');
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            passwordChangeMessage.textContent = '两次输入的新密码不一致。';
+            passwordChangeMessage.classList.add('error');
+            return;
+        }
+
+        try {
+            await apiFetch('/api/v2/auth/users/me/password', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    old_password: oldPassword,
+                    new_password: newPassword,
+                }),
+            });
+            passwordChangeMessage.textContent = '密码修改成功！';
+            passwordChangeMessage.classList.add('success');
+            log('密码已成功修改。');
+            changePasswordForm.reset();
+        } catch (error) {
+            passwordChangeMessage.textContent = `修改失败: ${error.message}`;
+            passwordChangeMessage.classList.add('error');
+            log(`修改密码失败: ${error.message}`);
+        }
+    });
 
     // Initial check
     checkLogin();

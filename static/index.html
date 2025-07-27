@@ -11,23 +11,25 @@
         <!-- 登录/注册视图 -->
         <div id="auth-view">
             <h1>弹幕API控制台</h1>
-            <div class="form-container">
+            <div class="auth-wrapper">
                 <!-- 登录表单 -->
                 <form id="login-form">
                     <h2>登录</h2>
                     <input type="text" id="login-username" placeholder="用户名" required>
                     <input type="password" id="login-password" placeholder="密码" required>
                     <button type="submit">登录</button>
+                    <p class="switch-form-text">没有账户？ <a href="#" id="show-register-link">立即注册</a></p>
                 </form>
                 <!-- 注册表单 -->
-                <form id="register-form">
+                <form id="register-form" class="hidden">
                     <h2>注册</h2>
                     <input type="text" id="register-username" placeholder="用户名" required>
                     <input type="password" id="register-password" placeholder="密码" required>
                     <button type="submit">注册</button>
+                    <p class="switch-form-text">已有账户？ <a href="#" id="show-login-link">返回登录</a></p>
                 </form>
             </div>
-            <p id="auth-error" class="error-message"></p>
+            <p id="auth-error" class="message error"></p>
         </div>
 
         <!-- 主应用视图 -->
@@ -58,6 +60,19 @@
                 <div id="logs-section">
                     <h2>日志/状态</h2>
                     <pre id="log-output"></pre>
+                </div>
+
+                <div id="account-section">
+                    <h2>账户管理</h2>
+                    <form id="change-password-form">
+                        <h3>修改密码</h3>
+                        <p>如果您是使用初始随机密码登录的，建议您在此修改为自己的密码。</p>
+                        <input type="password" id="old-password" placeholder="当前密码" required>
+                        <input type="password" id="new-password" placeholder="新密码 (至少8位)" required>
+                        <input type="password" id="confirm-password" placeholder="确认新密码" required>
+                        <button type="submit">确认修改</button>
+                        <p id="password-change-message" class="message"></p>
+                    </form>
                 </div>
             </main>
         </div>
