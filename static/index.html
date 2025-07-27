@@ -42,7 +42,7 @@
                         <span>&#9662;</span> <!-- Downward arrow -->
                     </button>
                     <div id="user-menu-content" class="user-menu-dropdown hidden">
-                        <a href="#" id="change-password-link">修改密码</a>
+                        <!-- 修改密码功能已移至侧边栏 -->
                         <a href="#" id="logout-link">退出登录</a>
                     </div>
                 </div>
@@ -50,54 +50,44 @@
             <div class="main-layout">
                 <nav id="sidebar">
                     <ul>
-                        <li><a href="#" class="nav-link active" data-view="home-view">主页</a></li>
-                        <!-- 其它导航项可以加在这里 -->
+                        <li><a href="#" class="nav-link active" data-view="home-view">主页看板</a></li>
+                        <li><a href="#" class="nav-link" data-view="account-view">账户设置</a></li>
                     </ul>
                 </nav>
                 <main id="main-content">
                     <div id="home-view" class="content-view">
                         <div class="search-section">
-                            <h2>从外部数据源搜索</h2>
+                            <h2>搜索与导入</h2>
                             <form id="search-form">
                                 <input type="text" id="search-keyword" placeholder="输入番剧名称..." required>
                                 <button type="submit">搜索</button>
                             </form>
                         </div>
-        
                         <div id="results-section">
                             <h2>搜索结果</h2>
                             <div id="loader" class="hidden"></div>
                             <ul id="results-list"></ul>
                         </div>
-        
                         <div id="logs-section">
                             <h2>日志/状态</h2>
                             <pre id="log-output"></pre>
                         </div>
                     </div>
-                    <!-- 其它视图可以加在这里 -->
-                    <!-- <div id="settings-view" class="content-view hidden">...</div> -->
+                    <div id="account-view" class="content-view hidden">
+                        <div class="account-management-section">
+                            <h2>账户管理</h2>
+                            <form id="change-password-form">
+                                <h3>修改密码</h3>
+                                <p>如果您是使用初始随机密码登录的，建议您在此修改为自己的密码。</p>
+                                <input type="password" id="old-password" placeholder="当前密码" required>
+                                <input type="password" id="new-password" placeholder="新密码 (至少8位)" required>
+                                <input type="password" id="confirm-password" placeholder="确认新密码" required>
+                                <button type="submit">确认修改</button>
+                                <p id="password-change-message" class="message"></p>
+                            </form>
+                        </div>
+                    </div>
                 </main>
-            </div>
-        </div>
-    </div>
-
-    <!-- 密码修改模态框 -->
-    <div id="modal-overlay" class="hidden">
-        <div id="password-change-modal" class="modal">
-            <div class="modal-header">
-                <h2>修改密码</h2>
-                <button id="modal-close-btn" class="close-button">&times;</button>
-            </div>
-            <div class="modal-body">
-                <form id="change-password-form">
-                    <p>如果您是使用初始随机密码登录的，建议您在此修改为自己的密码。</p>
-                    <input type="password" id="old-password" placeholder="当前密码" required>
-                    <input type="password" id="new-password" placeholder="新密码 (至少8位)" required>
-                    <input type="password" id="confirm-password" placeholder="确认新密码" required>
-                    <button type="submit">确认修改</button>
-                    <p id="password-change-message" class="message"></p>
-                </form>
             </div>
         </div>
     </div>

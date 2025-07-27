@@ -13,22 +13,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentUserSpan = document.getElementById('current-user');
     const loader = document.getElementById('loader');
 
-    // New UI elements for dropdown and modal
+    // UI elements for user menu and password form
     const userMenuTrigger = document.getElementById('user-menu-trigger');
     const userMenuContent = document.getElementById('user-menu-content');
-    const changePasswordLink = document.getElementById('change-password-link');
     const logoutLink = document.getElementById('logout-link');
-    const modalOverlay = document.getElementById('modal-overlay');
     const changePasswordForm = document.getElementById('change-password-form');
-    const modalCloseBtn = document.getElementById('modal-close-btn');
     const passwordChangeMessage = document.getElementById('password-change-message');
 
-    // --- New UI elements for sidebar navigation ---
+    // UI elements for sidebar navigation
     const sidebar = document.getElementById('sidebar');
     const contentViews = document.querySelectorAll('.content-view');
-
-    // 确保模态框在启动时是隐藏的，作为一道保险，防止因缓存等问题导致其意外显示
-    if (modalOverlay) modalOverlay.classList.add('hidden');
 
     let token = localStorage.getItem('danmu_api_token');
 
@@ -352,13 +346,27 @@ document.addEventListener('DOMContentLoaded', () => {
             passwordChangeMessage.classList.add('success');
             log('密码已成功修改。');
             changePasswordForm.reset();
-            setTimeout(hidePasswordModal, 1500); // On success, close modal after a short delay
         } catch (error) {
             passwordChangeMessage.textContent = `修改失败: ${error.message}`;
             passwordChangeMessage.classList.add('error');
             log(`修改密码失败: ${error.message}`);
         }
     });
+
+    // --- User Menu Logic ---
+    userMenuTrigger.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent click from bubbling to document
+        userMenuContent.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+        // 当点击位置不在用户菜单触发器内部，并且菜单是可见的，则关闭菜单
+        if (!userMenuTrigger.contains(e.target) && !userMenuContent.classList.contains('hidden')) {
+            userMenuContent.classList.add('hidden');
+        }
+    });
+
+    logoutLink.addEventListener('click', (e) => { e.preventDefault(); logout(); });
 
     // Initial check
     checkLogin();
