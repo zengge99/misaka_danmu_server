@@ -54,9 +54,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 对于非OK响应，尝试解析错误信息
         if (!response.ok) {
-            // 尝试将响应体作为JSON解析，如果失败则使用原始文本
-            const errorData = await response.json().catch(() => response.text());
-            const errorMessage = errorData.detail || errorData || `HTTP error! status: ${response.status}`;
+            let errorMessage = `HTTP error! status: ${response.status}`;
+            try {
+                const errorData = await response.json();
+                // 使用 'detail' 字段（FastAPI标准），否则将错误对象转为字符串
+                errorMessage = errorData.detail || JSON.stringify(errorData);
+            } catch (e) {
+                // 如果解析JSON失败，则直接使用响应文本
+                errorMessage = await response.text().catch(() => errorMessage);
+            }
             throw new Error(errorMessage);
         }
 
@@ -144,15 +150,17 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('password', password);
 
         try {
-            const data = await fetch('/api/v2/auth/token', {
+            const response = await fetch('/api/v2/auth/token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: formData,
-            }).then(res => {
-                if (!res.ok) throw new Error('用户名或密码错误');
-                return res.json();
             });
 
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.detail || '用户名或密码错误');
+            }
+            
             token = data.access_token;
             localStorage.setItem('danmu_api_token', token);
             log('登录成功。');
@@ -170,9 +178,9 @@ document.addEventListener('DOMContentLoaded', () => {
         userMenuContent.classList.toggle('hidden');
     });
 
-    document.addEventListener('click', () => {
-        // Hide dropdown if clicked outside
-        if (!userMenuContent.classList.contains('hidden')) {
+    document.addEventListener('click', (e) => {
+        // 当点击位置不在用户菜单触发器内部，并且菜单是可见的，则关闭菜单
+        if (!userMenuTrigger.contains(e.target) && !userMenuContent.classList.contains('hidden')) {
             userMenuContent.classList.add('hidden');
         }
     });
@@ -183,7 +191,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function showPasswordModal() {
+        userMenuContent.classList.add('hidden'); // 确保在打开弹窗时，下拉菜单是关闭的
         modalOverlay.classList.remove('hidden');
+        // 重置表单状态
         passwordChangeMessage.textContent = '';
         passwordChangeMessage.className = 'message';
         changePasswordForm.reset();
