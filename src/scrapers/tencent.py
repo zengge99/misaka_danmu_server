@@ -157,10 +157,11 @@ class TencentScraper(BaseScraper):
 
         return results
 
-    async def _internal_get_episodes(self, cid: str) -> List[TencentEpisode]:
+    async def _internal_get_episodes(self, cid: str, target_episode_index: Optional[int] = None) -> List[TencentEpisode]:
         """
         获取指定cid的所有分集列表。
         处理了腾讯视频复杂的分页逻辑。
+        如果提供了 target_episode_index，则会提前停止翻页。
         """
         url = "https://pbaccess.video.qq.com/trpc.universal_backend_service.page_server_rpc.PageServer/GetPageData?video_appid=3000010&vplatform=2"
         all_episodes: Dict[str, TencentEpisode] = {}
@@ -170,6 +171,7 @@ class TencentScraper(BaseScraper):
         page_context = "" # 首次请求为空
         last_vid_of_page = ""
 
+        found_target = False
         self.logger.info(f"开始为 cid='{cid}' 获取分集列表...")
 
         while True:
@@ -182,7 +184,7 @@ class TencentScraper(BaseScraper):
                     "page_size": str(page_size),
                     "lid": "0",
                     "req_from": "web_mobile",
-                    "page_context": page_context,
+                    "page_context": page_context
                 },
             }
             try:
@@ -232,10 +234,19 @@ class TencentScraper(BaseScraper):
                     if not is_preview and episode.vid not in all_episodes:
                         all_episodes[episode.vid] = episode
                         new_episodes_found += 1
+
+                        # 检查是否已找到目标分集
+                        if target_episode_index is not None and len(all_episodes) == target_episode_index:
+                            self.logger.info(f"已找到目标分集 {target_episode_index}，停止翻页。")
+                            found_target = True
+                            break # 从当前页的 for 循环中跳出
                     
                     current_page_vids.append(episode.vid)
 
                 self.logger.info(f"cid='{cid}': 当前页获取 {len(item_datas)} 个项目，新增 {new_episodes_found} 个有效分集。当前总数: {len(all_episodes)}")
+
+                if found_target:
+                    break # 从 while 循环中跳出
 
                 # 检查是否需要翻页，并防止因API返回重复数据导致的死循环
                 if len(item_datas) < page_size or not current_page_vids or current_page_vids[-1] == last_vid_of_page:
@@ -265,13 +276,14 @@ class TencentScraper(BaseScraper):
         # 某些综艺节目可能会返回重复的剧集，这里进行去重
         return list(all_episodes.values())
 
-    async def get_episodes(self, media_id: str) -> List[models.ProviderEpisodeInfo]:
+    async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None) -> List[models.ProviderEpisodeInfo]:
         """
         获取指定cid的所有分集列表。
         media_id 对于腾讯来说就是 cid。
         """
-        tencent_episodes = await self._internal_get_episodes(media_id)
-        return [
+        tencent_episodes = await self._internal_get_episodes(media_id, target_episode_index=target_episode_index)
+        
+        all_provider_episodes = [
             models.ProviderEpisodeInfo(
                 provider=self.provider_name,
                 episodeId=ep.vid,
@@ -280,6 +292,13 @@ class TencentScraper(BaseScraper):
             )
             for i, ep in enumerate(tencent_episodes)
         ]
+
+        # 如果指定了目标，则只返回目标分集
+        if target_episode_index is not None:
+            target_episode = next((ep for ep in all_provider_episodes if ep.episodeIndex == target_episode_index), None)
+            return [target_episode] if target_episode else []
+
+        return all_provider_episodes
 
     async def _internal_get_comments(self, vid: str) -> List[TencentComment]:
         """

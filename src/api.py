@@ -258,25 +258,20 @@ async def generic_import_task(
         logger.info(f"媒体 '{anime_title}' (ID: {anime_id}, 类型: {media_type}) 已准备就绪。")
 
         # 2. 获取所有分集信息
-        episodes = await scraper.get_episodes(media_id)
+        # 将目标集数信息传递给 scraper，让其可以优化获取过程
+        episodes = await scraper.get_episodes(media_id, target_episode_index=current_episode_index)
         if not episodes:
-            logger.warning(f"未能为 provider='{provider}' media_id='{media_id}' 获取到任何分集。任务终止。")
+            logger.warning(f"未能为 provider='{provider}' media_id='{media_id}' 获取到任何分集。")
+            if current_episode_index:
+                logger.warning(f"特别是，未能找到指定的目标分集: {current_episode_index}。")
+            logger.warning("任务终止。")
             return
 
-        # 新增逻辑：如果媒体类型是电影，只处理找到的第一个“分集”（通常是正片的不同版本）
+        # 如果是电影，即使返回了多个版本（如原声、国语），也只处理第一个
         if media_type == "movie" and episodes:
             logger.info(f"检测到媒体类型为电影，将只处理第一个分集 '{episodes[0].title}'。")
             episodes = episodes[:1]
         
-        # 新增逻辑：如果指定了当前集数，则只处理该分集
-        if current_episode_index is not None and media_type == "tv_series":
-            target_episode = next((ep for ep in episodes if ep.episodeIndex == current_episode_index), None)
-            if target_episode:
-                logger.info(f"检测到指定集数 {current_episode_index}，将只处理分集 '{target_episode.title}'。")
-                episodes = [target_episode]
-            else:
-                logger.warning(f"指定了集数 {current_episode_index}，但在找到的 {len(episodes)} 个分集中未匹配到。将继续处理所有分集。")
-
         # 3. 为每个分集获取并存储弹幕
         for i, episode in enumerate(episodes):
             logger.info(f"--- 开始处理分集 {i+1}/{len(episodes)}: '{episode.title}' (ID: {episode.episodeId}) ---")
