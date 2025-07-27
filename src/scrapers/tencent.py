@@ -51,7 +51,15 @@ class TencentScraper(BaseScraper):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
             "Referer": "https://v.qq.com/",
         }
-        self.client = httpx.AsyncClient(headers=self.base_headers, timeout=20.0)
+        # 根据C#代码，这个特定的cookie对于成功请求至关重要
+        self.cookies = {
+            "pgv_pvid": "40b67e3b06027f3d",
+            "video_platform": "2",
+            "vversion_name": "8.2.95",
+            "video_bucketid": "4",
+            "video_omgid": "0a1ff6bc9407c0b1cff86ee5d359614d"
+        }
+        self.client = httpx.AsyncClient(headers=self.base_headers, cookies=self.cookies, timeout=20.0)
 
     @property
     def provider_name(self) -> str:
@@ -73,6 +81,10 @@ class TencentScraper(BaseScraper):
 
             if data.data and data.data.normal_list:
                 for item in data.data.normal_list.item_list:
+                    # 根据C#代码，增加对年份的过滤，提高结果质量
+                    if not item.video_info.year or item.video_info.year == 0:
+                        continue
+
                     video_info = item.video_info
                     # 将腾讯的类型映射到我们内部的类型
                     media_type = "movie" if "电影" in video_info.type_name else "tv_series"
@@ -101,8 +113,10 @@ class TencentScraper(BaseScraper):
         """
         url = "https://pbaccess.video.qq.com/trpc.universal_backend_service.page_server_rpc.PageServer/GetPageData?video_appid=3000010&vplatform=2"
         all_episodes: Dict[str, TencentEpisode] = {}
+        # 采用C#代码中更可靠的分页逻辑
         page_size = 100
-        page_context = ""
+        begin_num = 1
+        page_context = "" # 首次请求为空
         last_vid_of_page = ""
 
         print(f"开始为 cid='{cid}' 获取分集列表...")
@@ -154,10 +168,10 @@ class TencentScraper(BaseScraper):
 
                 last_vid_of_page = current_page_vids[-1]
                 
-                # 腾讯的分页上下文是基于偏移量的，但其API行为不稳定，我们通过记录最后一个vid来确保前进
-                # 简单的上下文构造（可能需要根据实际情况调整）
-                offset = len(all_episodes)
-                page_context = f"offset={offset}&size={page_size}"
+                # 构造下一页的上下文
+                begin_num += page_size
+                end_num = begin_num + page_size - 1
+                page_context = f"episode_begin={begin_num}&episode_end={end_num}&episode_step={page_size}"
 
                 await asyncio.sleep(0.5)  # 礼貌性等待
 
@@ -169,6 +183,7 @@ class TencentScraper(BaseScraper):
                 break
 
         print(f"分集列表获取完成，共 {len(all_episodes)} 个。")
+        # 某些综艺节目可能会返回重复的剧集，这里进行去重
         return list(all_episodes.values())
 
     async def get_episodes(self, media_id: str) -> List[models.ProviderEpisodeInfo]:
@@ -209,7 +224,10 @@ class TencentScraper(BaseScraper):
 
         # 2. 遍历分段，获取弹幕内容
         print(f"为 vid='{vid}' 找到 {len(segment_index)} 个弹幕分段，开始获取...")
-        for key, segment in segment_index.items():
+        # 确保按时间顺序处理分段
+        sorted_keys = sorted(segment_index.keys(), key=int)
+        for key in sorted_keys:
+            segment = segment_index[key]
             segment_name = segment.get("segment_name")
             if not segment_name:
                 continue
