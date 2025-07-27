@@ -234,18 +234,24 @@ class YoukuScraper(BaseScraper):
     async def _ensure_token_cookie(self):
         cna_cookie = self.client.cookies.get("cna", domain="mmstat.com")
         if not cna_cookie:
-            await self.client.get("https://log.mmstat.com/eg.js")
+            try:
+                await self.client.get("https://log.mmstat.com/eg.js")
+            except httpx.ConnectError as e:
+                self.logger.warning(f"Youku: 无法连接到 mmstat 获取 'cna' cookie。这可能是 DNS 或网络问题。将尝试继续。错误: {e}")
         
         self._cna = self.client.cookies.get("cna", domain="mmstat.com") or ""
 
         token_cookie = self.client.cookies.get("_m_h5_tk", domain="youku.com")
         if not token_cookie:
-            await self.client.get("https://acs.youku.com/h5/mtop.com.youku.aplatform.weakget/1.0/?jsv=2.5.1&appKey=24679788")
+            try:
+                await self.client.get("https://acs.youku.com/h5/mtop.com.youku.aplatform.weakget/1.0/?jsv=2.5.1&appKey=24679788")
+            except httpx.ConnectError as e:
+                self.logger.error(f"Youku: 无法连接到 acs.youku.com 获取令牌 cookie。弹幕获取很可能会失败。错误: {e}")
         
         self._token = (self.client.cookies.get("_m_h5_tk", domain="youku.com") or "").split("_")[0]
 
         if not self._cna or not self._token:
-            self.logger.warning("Youku: Failed to obtain necessary cookies (cna, _m_h5_tk) for danmaku.")
+            self.logger.warning("Youku: 未能获取到弹幕签名所需的 cookie (cna, _m_h5_tk)。")
 
     def _generate_msg_sign(self, msg_enc: str) -> str:
         s = msg_enc + "MkmC9SoIw6xCkSKHhJ7b5D2r51kBiREr"

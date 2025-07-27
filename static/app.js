@@ -26,8 +26,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const libraryTableBody = document.querySelector('#library-table tbody');
     const libraryView = document.getElementById('library-view');
     const animeDetailView = document.getElementById('anime-detail-view');
-    const backToLibraryBtn = document.getElementById('back-to-library-btn');
-
 
     // Sources View Elements
     const sourcesList = document.getElementById('sources-list');
@@ -38,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
-    let logRefreshInterval = null; // For polling server logs
+    let logRefreshInterval = null;
 
     // --- Core Functions ---
     function toggleLoader(show) {
@@ -73,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
             throw new Error(errorMessage);
         }
         
-        if (response.status === 204) { // Handle No Content response
+        if (response.status === 204) {
             return {};
         }
         
@@ -103,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             currentUserSpan.textContent = `用户: ${user.username}`;
             showView('main');
-            startLogRefresh(); // Start polling for logs on successful login
+            startLogRefresh();
         } catch (error) {
             console.error(`自动登录失败: ${error.message}`);
             logout();
@@ -114,12 +112,12 @@ document.addEventListener('DOMContentLoaded', () => {
         token = null;
         localStorage.removeItem('danmu_api_token');
         showView('auth');
-        stopLogRefresh(); // Stop polling for logs on logout
+        stopLogRefresh();
     }
 
     // --- Log Polling ---
     function startLogRefresh() {
-        refreshServerLogs(); // Initial fetch
+        refreshServerLogs();
         if (logRefreshInterval) clearInterval(logRefreshInterval);
         logRefreshInterval = setInterval(refreshServerLogs, 3000);
     }
@@ -135,7 +133,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const logs = await apiFetch('/api/v2/logs');
             logOutput.textContent = logs.join('\n');
         } catch (error) {
-            // This will be caught by apiFetch which calls logout() on 401
             console.error("刷新日志失败:", error.message);
         }
     }
@@ -233,10 +230,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (viewId === 'library-view') {
                 loadLibrary();
-                // 确保详情页被隐藏
                 libraryView.classList.remove('hidden');
                 animeDetailView.classList.add('hidden');
-
             } else if (viewId === 'sources-view') {
                 loadScraperSettings();
             }
@@ -304,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             media_id: item.mediaId,
                             anime_title: item.title,
                             type: item.type,
-                            current_episode_index: item.currentEpisodeIndex, // 新增：将当前集数一同提交
+                            current_episode_index: item.currentEpisodeIndex,
                         }),
                     });
                     alert(data.message);
@@ -364,19 +359,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Library View
     async function loadLibrary() {
         if (!libraryTableBody) return;
-        libraryTableBody.innerHTML = '<tr><td colspan="6">加载中...</td></tr>';
+        libraryTableBody.innerHTML = '<tr><td colspan="7">加载中...</td></tr>';
         try {
             const data = await apiFetch('/api/v2/library');
             renderLibrary(data.animes);
         } catch (error) {
-            libraryTableBody.innerHTML = `<tr><td colspan="6" class="error">加载失败: ${error.message}</td></tr>`;
+            libraryTableBody.innerHTML = `<tr><td colspan="7" class="error">加载失败: ${error.message}</td></tr>`;
         }
     }
 
     function renderLibrary(animes) {
         libraryTableBody.innerHTML = '';
         if (animes.length === 0) {
-            libraryTableBody.innerHTML = '<tr><td colspan="6">媒体库为空。</td></tr>';
+            libraryTableBody.innerHTML = '<tr><td colspan="7">媒体库为空。</td></tr>';
             return;
         }
 
@@ -405,77 +400,6 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         });
     }
-
-    window.handleAction = (action, animeId) => {
-        const row = document.querySelector(`#library-table button[onclick*="handleAction('${action}', ${animeId})"]`).closest('tr');
-        const title = row ? row.cells[1].textContent : `ID: ${animeId}`;
-
-        if (action === 'delete') {
-            if (confirm(`您确定要删除番剧 '${title}' 吗？\n此操作将删除其所有分集和弹幕，且不可恢复。`)) {
-                apiFetch(`/api/v2/library/anime/${animeId}`, {
-                    method: 'DELETE',
-                }).then(() => {
-                    loadLibrary();
-                }).catch(error => {
-                    alert(`删除失败: ${error.message}`);
-                });
-            }
-        } else if (action === 'edit') {
-            const currentSeason = row ? row.cells[2].textContent : '1';
-            const newTitle = prompt("请输入新的影视名称：", title);
-            if (newTitle === null) return;
-            const newSeasonStr = prompt("请输入新的季数：", currentSeason);
-            if (newSeasonStr === null) return;
-
-            const newSeason = parseInt(newSeasonStr, 10);
-            if (isNaN(newSeason) || newSeason < 1) {
-                alert("季数必须是一个大于0的数字。");
-                return;
-            }
-
-            apiFetch(`/api/v2/library/anime/${animeId}`, {
-                method: 'PUT',
-                body: JSON.stringify({ title: newTitle, season: newSeason }),
-            }).then(() => {
-                alert("信息更新成功！");
-                loadLibrary();
-            }).catch(error => {
-                alert(`更新失败: ${error.message}`);
-            });
-
-        } else if (action === 'refresh_full') {
-            if (confirm(`您确定要为 '${title}' 执行全量刷新吗？\n这将删除所有现有弹幕并从源重新获取。`)) {
-                apiFetch(`/api/v2/library/anime/${animeId}/refresh`, {
-                    method: 'POST',
-                }).then(response => {
-                    alert(response.message || "全量刷新任务已开始，请在日志中查看进度。");
-                }).catch(error => {
-                    alert(`启动刷新任务失败: ${error.message}`);
-                });
-            }
-        } else {
-            alert(`功能 '${action}' 尚未实现。`);
-        }
-    };
-
-    // 全局的 handleSourceAction 函数，用于详情页
-    window.handleSourceAction = (action, sourceId, title) => {
-        if (action === 'refresh') {
-            refreshSource(sourceId, title);
-        }
-    };
-
-    // 全局的 handleSourceAction 函数，用于详情页
-    window.handleSourceAction = (action, sourceId, title) => {
-        if (action === 'refresh') {
-            refreshSource(sourceId, title);
-        }
-    };
-
-    backToLibraryBtn.addEventListener('click', () => {
-        animeDetailView.classList.add('hidden');
-        libraryView.classList.remove('hidden');
-    });
 
     // --- Scraper Sources View ---
     async function loadScraperSettings() {
@@ -550,7 +474,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify(settingsToSave),
             });
             alert('搜索源设置已保存！');
-            // 重新加载以确认顺序
             loadScraperSettings();
         } catch (error) {
             alert(`保存失败: ${error.message}`);
@@ -560,30 +483,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Anime Detail View (New Implementation) ---
+    // --- Anime Detail View ---
     async function showAnimeDetailView(animeId) {
         libraryView.classList.add('hidden');
         animeDetailView.classList.remove('hidden');
         animeDetailView.innerHTML = '<div>加载中...</div>';
-        
-        document.getElementById('back-to-library-btn').addEventListener('click', () => {
-            animeDetailView.classList.add('hidden');
-            libraryView.classList.remove('hidden');
-        });
 
         try {
-            // First, get the main anime info (we can get this from the library list data)
             const fullLibrary = await apiFetch('/api/v2/library');
             const anime = fullLibrary.animes.find(a => a.animeId === animeId);
             if (!anime) throw new Error("找不到该作品的信息。");
 
-            // Then, get all sources for this anime
             const sources = await apiFetch(`/api/v2/library/anime/${animeId}/sources`);
             
             renderAnimeDetailView(anime, sources);
 
         } catch (error) {
-            animeDetailView.innerHTML += `<div class="error">加载详情失败: ${error.message}</div>`;
+            animeDetailView.innerHTML = `<div class="error">加载详情失败: ${error.message}</div>`;
         }
     }
 
@@ -648,6 +564,58 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- Global Action Handlers ---
+    window.handleAction = (action, animeId) => {
+        const row = document.querySelector(`#library-table button[onclick*="handleAction('${action}', ${animeId})"]`).closest('tr');
+        const title = row ? row.cells[1].textContent : `ID: ${animeId}`;
+
+        if (action === 'delete') {
+            if (confirm(`您确定要删除番剧 '${title}' 吗？\n此操作将删除其所有分集和弹幕，且不可恢复。`)) {
+                apiFetch(`/api/v2/library/anime/${animeId}`, {
+                    method: 'DELETE',
+                }).then(() => {
+                    loadLibrary();
+                }).catch(error => {
+                    alert(`删除失败: ${error.message}`);
+                });
+            }
+        } else if (action === 'edit') {
+            const currentSeason = row ? row.cells[2].textContent : '1';
+            const newTitle = prompt("请输入新的影视名称：", title);
+            if (newTitle === null) return;
+            const newSeasonStr = prompt("请输入新的季数：", currentSeason);
+            if (newSeasonStr === null) return;
+
+            const newSeason = parseInt(newSeasonStr, 10);
+            if (isNaN(newSeason) || newSeason < 1) {
+                alert("季数必须是一个大于0的数字。");
+                return;
+            }
+
+            apiFetch(`/api/v2/library/anime/${animeId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ title: newTitle, season: newSeason }),
+            }).then(() => {
+                alert("信息更新成功！");
+                loadLibrary();
+            }).catch(error => {
+                alert(`更新失败: ${error.message}`);
+            });
+        } else if (action === 'view') {
+            showAnimeDetailView(animeId);
+        } else {
+            alert(`功能 '${action}' 尚未实现。`);
+        }
+    };
+
+    window.handleSourceAction = (action, sourceId, title) => {
+        if (action === 'refresh') {
+            refreshSource(sourceId, title);
+        } else if (action === 'delete') {
+            // Placeholder for deleting a source
+            alert(`功能 '删除源' (ID: ${sourceId}) 尚未实现。`);
+        }
+    };
 
     // Logout
     logoutBtn.addEventListener('click', logout);
