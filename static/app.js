@@ -30,8 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const editAnimeForm = document.getElementById('edit-anime-form');
     const librarySearchInput = document.getElementById('library-search-input');
 
-
-
     // Sources View Elements
     const sourcesList = document.getElementById('sources-list');
     const saveSourcesBtn = document.getElementById('save-sources-btn');
@@ -142,25 +140,51 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Event Listeners ---
+    // --- Event Listeners Setup ---
+    function setupEventListeners() {
+        // Auth Form Switching
+        showRegisterLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            loginForm.classList.add('hidden');
+            registerForm.classList.remove('hidden');
+            authError.textContent = '';
+        });
 
-    // Auth Form Switching
-    showRegisterLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        loginForm.classList.add('hidden');
-        registerForm.classList.remove('hidden');
-        authError.textContent = '';
-    });
+        showLoginLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            registerForm.classList.add('hidden');
+            loginForm.classList.remove('hidden');
+            authError.textContent = '';
+        });
 
-    showLoginLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        registerForm.classList.add('hidden');
-        loginForm.classList.remove('hidden');
-        authError.textContent = '';
-    });
+        // Forms
+        registerForm.addEventListener('submit', handleRegister);
+        loginForm.addEventListener('submit', handleLogin);
+        searchForm.addEventListener('submit', handleSearch);
+        changePasswordForm.addEventListener('submit', handleChangePassword);
+        editAnimeForm.addEventListener('submit', handleEditAnimeSave);
 
-    // Registration
-    registerForm.addEventListener('submit', async (e) => {
+        // Sidebar Navigation
+        sidebar.addEventListener('click', handleSidebarNavigation);
+
+        // Buttons
+        logoutBtn.addEventListener('click', logout);
+        saveSourcesBtn.addEventListener('click', handleSaveSources);
+        toggleSourceBtn.addEventListener('click', handleToggleSource);
+        moveSourceUpBtn.addEventListener('click', handleMoveSourceUp);
+        moveSourceDownBtn.addEventListener('click', handleMoveSourceDown);
+        document.getElementById('back-to-library-from-edit-btn').addEventListener('click', () => {
+            editAnimeView.classList.add('hidden');
+            libraryView.classList.remove('hidden');
+        });
+
+        // Inputs
+        librarySearchInput.addEventListener('input', handleLibrarySearch);
+    }
+
+    // --- Event Handlers ---
+
+    async function handleRegister(e) {
         e.preventDefault();
         authError.textContent = '';
         const username = document.getElementById('register-username').value;
@@ -177,10 +201,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             authError.textContent = `注册失败: ${error.message}`;
         }
-    });
+    }
 
-    // Login
-    loginForm.addEventListener('submit', async (e) => {
+    async function handleLogin(e) {
         e.preventDefault();
         authError.textContent = '';
         const username = document.getElementById('login-username').value;
@@ -214,10 +237,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             authError.textContent = `登录失败: ${error.message}`;
         }
-    });
+    }
 
-    // Sidebar Navigation
-    sidebar.addEventListener('click', (e) => {
+    function handleSidebarNavigation(e) {
         const navLink = e.target.closest('.nav-link');
         if (navLink) {
             e.preventDefault();
@@ -235,18 +257,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (viewId === 'library-view') {
                 loadLibrary();
-                libraryView.classList.remove('hidden');
-                animeDetailView.classList.add('hidden');
-                editAnimeView.classList.add('hidden');
-                animeDetailView.classList.add('hidden');
             } else if (viewId === 'sources-view') {
                 loadScraperSettings();
             }
         }
-    });
+    }
 
-    // Search
-    searchForm.addEventListener('submit', async (e) => {
+    async function handleSearch(e) {
         e.preventDefault();
         const keyword = searchKeywordInput.value;
         if (!keyword) return;
@@ -262,7 +279,139 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             toggleLoader(false);
         }
-    });
+    }
+
+    async function handleChangePassword(e) {
+        e.preventDefault();
+        passwordChangeMessage.textContent = '';
+        passwordChangeMessage.className = 'message';
+
+        const oldPassword = document.getElementById('old-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+
+        if (newPassword.length < 8) {
+            passwordChangeMessage.textContent = '新密码至少需要8位。';
+            passwordChangeMessage.classList.add('error');
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            passwordChangeMessage.textContent = '两次输入的新密码不一致。';
+            passwordChangeMessage.classList.add('error');
+            return;
+        }
+
+        try {
+            await apiFetch('/api/v2/auth/users/me/password', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    old_password: oldPassword,
+                    new_password: newPassword,
+                }),
+            });
+            passwordChangeMessage.textContent = '密码修改成功！';
+            passwordChangeMessage.classList.add('success');
+            changePasswordForm.reset();
+        } catch (error) {
+            passwordChangeMessage.textContent = `修改失败: ${error.message}`;
+            passwordChangeMessage.classList.add('error');
+        }
+    }
+
+    function handleLibrarySearch() {
+        const searchTerm = librarySearchInput.value.toLowerCase();
+        const rows = libraryTableBody.querySelectorAll('tr');
+        rows.forEach(row => {
+            const titleCell = row.cells[1];
+            if (titleCell) {
+                const title = titleCell.textContent.toLowerCase();
+                row.style.display = title.includes(searchTerm) ? '' : 'none';
+            }
+        });
+    }
+
+    function handleToggleSource() {
+        const selected = sourcesList.querySelector('li.selected');
+        if (!selected) return;
+        const isEnabled = selected.dataset.isEnabled === 'true';
+        selected.dataset.isEnabled = !isEnabled;
+        selected.querySelector('.status-icon').textContent = !isEnabled ? '✅' : '❌';
+    }
+
+    function handleMoveSourceUp() {
+        const selected = sourcesList.querySelector('li.selected');
+        if (selected && selected.previousElementSibling) {
+            sourcesList.insertBefore(selected, selected.previousElementSibling);
+        }
+    }
+
+    function handleMoveSourceDown() {
+        const selected = sourcesList.querySelector('li.selected');
+        if (selected && selected.nextElementSibling) {
+            sourcesList.insertBefore(selected.nextElementSibling, selected);
+        }
+    }
+
+    async function handleSaveSources() {
+        const settingsToSave = [];
+        sourcesList.querySelectorAll('li').forEach((li, index) => {
+            settingsToSave.push({
+                provider_name: li.dataset.providerName,
+                is_enabled: li.dataset.isEnabled === 'true',
+                display_order: index + 1,
+            });
+        });
+
+        try {
+            saveSourcesBtn.disabled = true;
+            saveSourcesBtn.textContent = '保存中...';
+            await apiFetch('/api/v2/scrapers', {
+                method: 'PUT',
+                body: JSON.stringify(settingsToSave),
+            });
+            alert('搜索源设置已保存！');
+            loadScraperSettings();
+        } catch (error) {
+            alert(`保存失败: ${error.message}`);
+        } finally {
+            saveSourcesBtn.disabled = false;
+            saveSourcesBtn.textContent = '保存设置';
+        }
+    }
+
+    async function handleEditAnimeSave(e) {
+        e.preventDefault();
+        const animeId = document.getElementById('edit-anime-id').value;
+        const newTitle = document.getElementById('edit-anime-title').value;
+        const newSeason = parseInt(document.getElementById('edit-anime-season').value, 10);
+
+        if (isNaN(newSeason) || newSeason < 1) {
+            alert("季数必须是一个大于0的数字。");
+            return;
+        }
+
+        const saveButton = editAnimeForm.querySelector('button[type="submit"]');
+        saveButton.disabled = true;
+        saveButton.textContent = '保存中...';
+
+        try {
+            await apiFetch(`/api/v2/library/anime/${animeId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ title: newTitle, season: newSeason }),
+            });
+            alert("信息更新成功！");
+            document.getElementById('back-to-library-from-edit-btn').click();
+            loadLibrary();
+        } catch (error) {
+            alert(`更新失败: ${error.message}`);
+        } finally {
+            saveButton.disabled = false;
+            saveButton.textContent = '保存更改';
+        }
+    }
+
+    // --- Rendering Functions ---
 
     function displayResults(results) {
         resultsList.innerHTML = '';
@@ -324,46 +473,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Change Password
-    changePasswordForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        passwordChangeMessage.textContent = '';
-        passwordChangeMessage.className = 'message';
-
-        const oldPassword = document.getElementById('old-password').value;
-        const newPassword = document.getElementById('new-password').value;
-        const confirmPassword = document.getElementById('confirm-password').value;
-
-        if (newPassword.length < 8) {
-            passwordChangeMessage.textContent = '新密码至少需要8位。';
-            passwordChangeMessage.classList.add('error');
-            return;
-        }
-
-        if (newPassword !== confirmPassword) {
-            passwordChangeMessage.textContent = '两次输入的新密码不一致。';
-            passwordChangeMessage.classList.add('error');
-            return;
-        }
-
-        try {
-            await apiFetch('/api/v2/auth/users/me/password', {
-                method: 'PUT',
-                body: JSON.stringify({
-                    old_password: oldPassword,
-                    new_password: newPassword,
-                }),
-            });
-            passwordChangeMessage.textContent = '密码修改成功！';
-            passwordChangeMessage.classList.add('success');
-            changePasswordForm.reset();
-        } catch (error) {
-            passwordChangeMessage.textContent = `修改失败: ${error.message}`;
-            passwordChangeMessage.classList.add('error');
-        }
-    });
-
-    // Library View
     async function loadLibrary() {
         if (!libraryTableBody) return;
         libraryTableBody.innerHTML = '<tr><td colspan="7">加载中...</td></tr>';
@@ -408,7 +517,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Scraper Sources View ---
     async function loadScraperSettings() {
         if (!sourcesList) return;
         sourcesList.innerHTML = '<li>加载中...</li>';
@@ -441,59 +549,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    toggleSourceBtn.addEventListener('click', () => {
-        const selected = sourcesList.querySelector('li.selected');
-        if (!selected) return;
-        const isEnabled = selected.dataset.isEnabled === 'true';
-        selected.dataset.isEnabled = !isEnabled;
-        selected.querySelector('.status-icon').textContent = !isEnabled ? '✅' : '❌';
-    });
-
-    moveSourceUpBtn.addEventListener('click', () => {
-        const selected = sourcesList.querySelector('li.selected');
-        if (selected && selected.previousElementSibling) {
-            sourcesList.insertBefore(selected, selected.previousElementSibling);
-        }
-    });
-
-    moveSourceDownBtn.addEventListener('click', () => {
-        const selected = sourcesList.querySelector('li.selected');
-        if (selected && selected.nextElementSibling) {
-            sourcesList.insertBefore(selected.nextElementSibling, selected);
-        }
-    });
-
-    saveSourcesBtn.addEventListener('click', async () => {
-        const settingsToSave = [];
-        sourcesList.querySelectorAll('li').forEach((li, index) => {
-            settingsToSave.push({
-                provider_name: li.dataset.providerName,
-                is_enabled: li.dataset.isEnabled === 'true',
-                display_order: index + 1,
-            });
-        });
-
-        try {
-            saveSourcesBtn.disabled = true;
-            saveSourcesBtn.textContent = '保存中...';
-            await apiFetch('/api/v2/scrapers', {
-                method: 'PUT',
-                body: JSON.stringify(settingsToSave),
-            });
-            alert('搜索源设置已保存！');
-            loadScraperSettings();
-        } catch (error) {
-            alert(`保存失败: ${error.message}`);
-        } finally {
-            saveSourcesBtn.disabled = false;
-            saveSourcesBtn.textContent = '保存设置';
-        }
-    });
-
-    // --- Anime Detail View ---
     async function showAnimeDetailView(animeId) {
         libraryView.classList.add('hidden');
         animeDetailView.classList.remove('hidden');
+        editAnimeView.classList.add('hidden');
         animeDetailView.innerHTML = '<div>加载中...</div>';
 
         try {
@@ -571,52 +630,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Edit Anime View ---
     function showEditAnimeView(animeId, currentTitle, currentSeason) {
         libraryView.classList.add('hidden');
+        animeDetailView.classList.add('hidden');
         editAnimeView.classList.remove('hidden');
 
         document.getElementById('edit-anime-id').value = animeId;
         document.getElementById('edit-anime-title').value = currentTitle;
         document.getElementById('edit-anime-season').value = currentSeason;
     }
-
-    editAnimeForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const animeId = document.getElementById('edit-anime-id').value;
-        const newTitle = document.getElementById('edit-anime-title').value;
-        const newSeason = parseInt(document.getElementById('edit-anime-season').value, 10);
-
-        if (isNaN(newSeason) || newSeason < 1) {
-            alert("季数必须是一个大于0的数字。");
-            return;
-        }
-
-        const saveButton = editAnimeForm.querySelector('button[type="submit"]');
-        saveButton.disabled = true;
-        saveButton.textContent = '保存中...';
-
-        try {
-            await apiFetch(`/api/v2/library/anime/${animeId}`, {
-                method: 'PUT',
-                body: JSON.stringify({ title: newTitle, season: newSeason }),
-            });
-            alert("信息更新成功！");
-            // 返回并刷新列表
-            document.getElementById('back-to-library-from-edit-btn').click();
-            loadLibrary();
-        } catch (error) {
-            alert(`更新失败: ${error.message}`);
-        } finally {
-            saveButton.disabled = false;
-            saveButton.textContent = '保存更改';
-        }
-    });
-
-    document.getElementById('back-to-library-from-edit-btn').addEventListener('click', () => {
-        editAnimeView.classList.add('hidden');
-        libraryView.classList.remove('hidden');
-    });
 
     // --- Global Action Handlers ---
     window.handleAction = (action, animeId) => {
@@ -652,9 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Logout
-    logoutBtn.addEventListener('click', logout);
-
     // --- Initial Load ---
+    setupEventListeners();
     checkLogin();
 });
