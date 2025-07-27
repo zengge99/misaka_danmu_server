@@ -154,3 +154,33 @@ async def update_user_login_info(pool: aiomysql.Pool, username: str, token: str)
             # 使用 NOW() 获取数据库服务器的当前时间
             query = "UPDATE users SET token = %s, token_update = NOW() WHERE username = %s"
             await cursor.execute(query, (token, username))
+
+
+async def delete_anime(pool: aiomysql.Pool, anime_id: int) -> bool:
+    """
+    删除一个番剧及其所有关联数据（分集、弹幕）。
+    此操作在事务中执行以保证数据一致性。
+    """
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            try:
+                await conn.begin()  # 开始事务
+
+                # 1. 获取该番剧下的所有分集ID
+                await cursor.execute("SELECT id FROM episode WHERE anime_id = %s", (anime_id,))
+                episode_ids = [row[0] for row in await cursor.fetchall()]
+
+                if episode_ids:
+                    # 2. 删除这些分集的所有弹幕
+                    format_strings = ','.join(['%s'] * len(episode_ids))
+                    await cursor.execute(f"DELETE FROM comment WHERE episode_id IN ({format_strings})", tuple(episode_ids))
+                    # 3. 删除所有分集
+                    await cursor.execute(f"DELETE FROM episode WHERE id IN ({format_strings})", tuple(episode_ids))
+
+                # 4. 删除番剧本身
+                affected_rows = await cursor.execute("DELETE FROM anime WHERE id = %s", (anime_id,))
+                await conn.commit()  # 提交事务
+                return affected_rows > 0
+            except Exception as e:
+                await conn.rollback()  # 如果出错则回滚
+                raise e

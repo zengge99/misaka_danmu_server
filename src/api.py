@@ -2,7 +2,7 @@ import re
 from typing import Optional, List
 import asyncio
 
-from datetime import timedelta
+from datetime import timedelta, datetime
 import aiomysql
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
@@ -14,6 +14,11 @@ from .database import get_db_pool
 
 router = APIRouter()
 auth_router = APIRouter()
+
+def log_task(message: str):
+    """为后台任务打印带时间戳的日志"""
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [TASK] {message}")
+
 async def get_scraper_manager(request: Request) -> ScraperManager:
     """依赖项：从应用状态获取 Scraper 管理器"""
     return request.app.state.scraper_manager
@@ -104,6 +109,22 @@ async def get_library(
     animes = [models.LibraryAnimeInfo.model_validate(item) for item in db_results]
     return models.LibraryResponse(animes=animes)
 
+@router.delete("/library/anime/{anime_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除媒体库中的番剧")
+async def delete_anime_from_library(
+    anime_id: int,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """删除一个番剧及其所有关联的分集和弹幕。"""
+    try:
+        deleted = await crud.delete_anime(pool, anime_id)
+        if not deleted:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anime not found or already deleted")
+    except Exception as e:
+        log_task(f"删除番剧 (ID: {anime_id}) 时发生错误: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An error occurred while deleting the anime.")
+    return
+
 @router.get(
     "/comment/{episode_id}",
     response_model=models.CommentResponse,
@@ -138,17 +159,17 @@ async def generic_import_task(
 
         # 1. 在数据库中创建或获取番剧ID
         anime_id = await crud.get_or_create_anime(pool, anime_title)
-        print(f"番剧 '{anime_title}' (ID: {anime_id}) 已准备就绪。")
+        log_task(f"番剧 '{anime_title}' (ID: {anime_id}) 已准备就绪。")
 
         # 2. 获取所有分集信息
         episodes = await scraper.get_episodes(media_id)
         if not episodes:
-            print(f"未能为 provider='{provider}' media_id='{media_id}' 获取到任何分集。任务终止。")
+            log_task(f"未能为 provider='{provider}' media_id='{media_id}' 获取到任何分集。任务终止。")
             return
 
         # 3. 为每个分集获取并存储弹幕
         for i, episode in enumerate(episodes):
-            print(f"--- 开始处理分集 {i+1}/{len(episodes)}: '{episode.title}' (ID: {episode.episodeId}) ---")
+            log_task(f"--- 开始处理分集 {i+1}/{len(episodes)}: '{episode.title}' (ID: {episode.episodeId}) ---")
             
             # 3.1 在数据库中创建或获取分集ID
             episode_db_id = await crud.get_or_create_episode(pool, anime_id, episode.episodeIndex, episode.title)
@@ -156,18 +177,18 @@ async def generic_import_task(
             # 3.2 获取弹幕
             comments = await scraper.get_comments(episode.episodeId)
             if not comments:
-                print(f"分集 '{episode.title}' 未找到弹幕，跳过。")
+                log_task(f"分集 '{episode.title}' 未找到弹幕，跳过。")
                 continue
 
             # 3.3 批量插入弹幕 (get_comments 已按要求格式化)
             added_count = await crud.bulk_insert_comments(pool, episode_db_id, comments)
             total_comments_added += added_count
-            print(f"分集 '{episode.title}' (DB ID: {episode_db_id}) 新增 {added_count} 条弹幕。")
+            log_task(f"分集 '{episode.title}' (DB ID: {episode_db_id}) 新增 {added_count} 条弹幕。")
 
     except Exception as e:
-        print(f"导入任务发生严重错误: {e}")
+        log_task(f"导入任务发生严重错误: {e}")
     finally:
-        print(f"--- {provider} 导入任务完成 (media_id={media_id})。总共新增 {total_comments_added} 条弹幕。 ---")
+        log_task(f"--- {provider} 导入任务完成 (media_id={media_id})。总共新增 {total_comments_added} 条弹幕。 ---")
 
 
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED, summary="从指定数据源导入弹幕")
@@ -181,7 +202,7 @@ async def import_from_provider(
     try:
         # 在启动任务前检查provider是否存在
         manager.get_scraper(request_data.provider)
-        print(f"用户 '{current_user.username}' 正在导入数据...")
+        log_task(f"用户 '{current_user.username}' 正在从 '{request_data.provider}' 导入 '{request_data.anime_title}' (media_id={request_data.media_id})")
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
