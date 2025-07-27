@@ -185,6 +185,14 @@ async def get_anime_sources(pool: aiomysql.Pool, anime_id: int) -> List[Dict[str
             await cursor.execute(query, (anime_id,))
             return await cursor.fetchall()
 
+async def get_episodes_for_source(pool: aiomysql.Pool, source_id: int) -> List[Dict[str, Any]]:
+    """获取指定数据源的所有分集信息。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            query = "SELECT id, title, episode_index, source_url, fetched_at FROM episode WHERE source_id = %s ORDER BY episode_index ASC"
+            await cursor.execute(query, (source_id,))
+            return await cursor.fetchall()
+
 async def clear_source_data(pool: aiomysql.Pool, source_id: int):
     """清空指定源的所有分集和弹幕，用于刷新。"""
     async with pool.acquire() as conn:

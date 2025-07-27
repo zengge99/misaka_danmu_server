@@ -236,6 +236,20 @@ header {
     box-shadow: var(--shadow);
 }
 
+/* Episode List View Styles */
+.episode-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.episode-list-header h3 {
+    margin: 0;
+}
+
+#episode-list-table { /* Reuse library table styles */ }
+
 /* Library Table Styles */
 #library-table {
     width: 100%;

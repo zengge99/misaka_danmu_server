@@ -101,6 +101,14 @@ class LibraryAnimeInfo(BaseModel):
 class LibraryResponse(BaseModel):
     animes: List[LibraryAnimeInfo]
 
+# --- 分集管理模型 ---
+class EpisodeDetail(BaseModel):
+    id: int
+    title: str
+    episode_index: int
+    source_url: Optional[str] = None
+    fetched_at: Optional[datetime] = None
+
 # --- 用户和认证模型 ---
 class UserBase(BaseModel):
     username: str

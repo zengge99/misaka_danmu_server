@@ -167,6 +167,15 @@ async def get_anime_sources_for_anime(
     """获取指定作品关联的所有数据源列表。"""
     return await crud.get_anime_sources(pool, anime_id)
 
+@router.get("/library/source/{source_id}/episodes", response_model=List[models.EpisodeDetail], summary="获取数据源的所有分集")
+async def get_source_episodes(
+    source_id: int,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """获取指定数据源下的所有已收录分集列表。"""
+    return await crud.get_episodes_for_source(pool, source_id)
+
 @router.post("/library/source/{source_id}/refresh", status_code=status.HTTP_202_ACCEPTED, summary="全量刷新指定源的弹幕")
 async def refresh_anime(
     source_id: int,

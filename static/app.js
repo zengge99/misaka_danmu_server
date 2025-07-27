@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const libraryView = document.getElementById('library-view');
     const animeDetailView = document.getElementById('anime-detail-view');
     const editAnimeView = document.getElementById('edit-anime-view');
+    const episodeListView = document.getElementById('episode-list-view');
     const editAnimeForm = document.getElementById('edit-anime-form');
     const librarySearchInput = document.getElementById('library-search-input');
 
@@ -259,6 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadLibrary();
                 animeDetailView.classList.add('hidden');
                 editAnimeView.classList.add('hidden');
+                episodeListView.classList.add('hidden');
             } else if (viewId === 'sources-view') {
                 loadScraperSettings();
             }
@@ -554,6 +556,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showAnimeDetailView(animeId) {
         libraryView.classList.add('hidden');
         editAnimeView.classList.add('hidden');
+        episodeListView.classList.add('hidden');
         animeDetailView.classList.remove('hidden');
         animeDetailView.innerHTML = '<div>加载中...</div>';
 
@@ -606,6 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.insertCell().textContent = new Date(source.created_at).toLocaleString();
                 const actionsCell = row.insertCell();
                 actionsCell.innerHTML = `
+                    <button class="action-btn" title="编辑集数据" onclick="handleSourceAction('view_episodes', ${source.source_id}, '${anime.title}')">📖</button>
                     <button class="action-btn" title="刷新此源" onclick="handleSourceAction('refresh', ${source.source_id}, '${anime.title}')">🔄</button>
                     <button class="action-btn" title="删除此源" onclick="handleSourceAction('delete', ${source.source_id}, '${anime.title}')">🗑️</button>
                 `;
@@ -635,11 +639,89 @@ document.addEventListener('DOMContentLoaded', () => {
     function showEditAnimeView(animeId, currentTitle, currentSeason) {
         libraryView.classList.add('hidden');
         animeDetailView.classList.add('hidden');
+        episodeListView.classList.add('hidden');
         editAnimeView.classList.remove('hidden');
 
         document.getElementById('edit-anime-id').value = animeId;
         document.getElementById('edit-anime-title').value = currentTitle;
         document.getElementById('edit-anime-season').value = currentSeason;
+    }
+
+    // --- Episode List View ---
+    async function showEpisodeListView(sourceId, animeTitle) {
+        animeDetailView.classList.add('hidden');
+        episodeListView.classList.remove('hidden');
+        episodeListView.innerHTML = '<div>加载中...</div>';
+
+        try {
+            const episodes = await apiFetch(`/api/v2/library/source/${source_id}/episodes`);
+            renderEpisodeListView(sourceId, animeTitle, episodes);
+        } catch (error) {
+            episodeListView.innerHTML = `<div class="error">加载分集列表失败: ${error.message}</div>`;
+        }
+    }
+
+    function renderEpisodeListView(sourceId, animeTitle, episodes) {
+        let html = `
+            <div class="episode-list-header">
+                <h3>分集列表: ${animeTitle}</h3>
+                <button id="back-to-detail-view-btn">&lt; 返回作品详情</button>
+            </div>
+            <table id="episode-list-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>剧集名</th>
+                        <th>集数</th>
+                        <th>采集时间</th>
+                        <th>官方链接</th>
+                        <th>剧集操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        `;
+        episodeListView.innerHTML = html;
+
+        const episodeTableBody = episodeListView.querySelector('#episode-list-table tbody');
+        if (episodes.length > 0) {
+            episodes.forEach(ep => {
+                const row = episodeTableBody.insertRow();
+                row.insertCell().textContent = ep.id;
+                row.insertCell().textContent = ep.title;
+                row.insertCell().textContent = ep.episode_index;
+                row.insertCell().textContent = ep.fetched_at ? new Date(ep.fetched_at).toLocaleString() : 'N/A';
+                
+                const linkCell = row.insertCell();
+                if (ep.source_url) {
+                    const link = document.createElement('a');
+                    link.href = ep.source_url;
+                    link.textContent = '跳转';
+                    link.target = '_blank';
+                    linkCell.appendChild(link);
+                } else {
+                    linkCell.textContent = '无';
+                }
+
+                const actionsCell = row.insertCell();
+                actionsCell.innerHTML = `
+                    <button class="action-btn" title="编辑剧集">✏️</button>
+                    <button class="action-btn" title="刷新剧集">🔄</button>
+                    <button class="action-btn" title="查看具体弹幕">💬</button>
+                    <button class="action-btn" title="删除集">🗑️</button>
+                `;
+            });
+        } else {
+            episodeTableBody.innerHTML = `<tr><td colspan="6">未找到任何分集数据。</td></tr>`;
+        }
+
+        document.getElementById('back-to-detail-view-btn').addEventListener('click', () => {
+            // This needs the animeId to go back. We need to pass it through.
+            // For now, it will just hide the view. A better implementation would store the last animeId.
+            episodeListView.classList.add('hidden');
+            animeDetailView.classList.remove('hidden');
+        });
     }
 
     // --- Global Action Handlers ---
@@ -670,6 +752,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.handleSourceAction = (action, sourceId, title) => {
         if (action === 'refresh') {
             refreshSource(sourceId, title);
+        } else if (action === 'view_episodes') {
+            showEpisodeListView(sourceId, title);
         } else if (action === 'delete') {
             // Placeholder for deleting a source
             alert(`功能 '删除源' (ID: ${sourceId}) 尚未实现。`);
