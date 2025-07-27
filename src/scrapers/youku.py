@@ -313,24 +313,23 @@ class YoukuScraper(BaseScraper):
             headers={"Referer": "https://v.youku.com"}
         )
         response.raise_for_status()
-        
-        jsonp_text = response.text
-        match = re.search(r'utility\d+\((.*)\)', jsonp_text)
-        if not match:
-            self.logger.warning(f"Youku: Danmaku response is not valid JSONP: {jsonp_text[:200]}")
+
+        # 修正：优酷API现在直接返回JSON，而不是JSONP。
+        # 我们需要解析两层JSON，因为内层的'result'是一个字符串化的JSON。
+        try:
+            rpc_result = YoukuRpcResult.model_validate(response.json())
+        except (json.JSONDecodeError, ValidationError) as e:
+            self.logger.error(f"Youku: 解析外层弹幕响应失败: {e} - 响应: {response.text[:200]}")
             return []
-        
-        json_str = match.group(1)
-        rpc_result = YoukuRpcResult.model_validate(json.loads(json_str))
-        
+
         if rpc_result.data and rpc_result.data.result:
             try:
                 comment_result = YoukuDanmakuResult.model_validate(json.loads(rpc_result.data.result))
                 if comment_result.data and comment_result.data.result:
                     return comment_result.data.result
             except (json.JSONDecodeError, ValidationError) as e:
-                self.logger.error(f"Youku: Failed to parse inner danmaku result string: {e}")
-        
+                self.logger.error(f"Youku: 解析内层弹幕结果字符串失败: {e}")
+
         return []
 
     def _format_comments(self, comments: List[YoukuComment]) -> List[dict]:
