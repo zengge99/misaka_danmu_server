@@ -242,13 +242,23 @@ async def sync_scrapers_to_db(pool: aiomysql.Pool, provider_names: List[str]):
         return
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
-            # 获取已存在的最大 display_order
+            # 1. 获取所有已存在的爬虫
+            await cursor.execute("SELECT provider_name FROM scrapers")
+            existing_providers = {row[0] for row in await cursor.fetchall()}
+
+            # 2. 找出新发现的爬虫
+            new_providers = [name for name in provider_names if name not in existing_providers]
+
+            if not new_providers:
+                return
+
+            # 3. 如果有新爬虫，则插入它们
             await cursor.execute("SELECT MAX(display_order) FROM scrapers")
             max_order = (await cursor.fetchone())[0] or 0
 
-            # 使用 INSERT IGNORE 来避免重复插入
-            query = "INSERT IGNORE INTO scrapers (provider_name, display_order) VALUES (%s, %s)"
-            data_to_insert = [(name, max_order + i + 1) for i, name in enumerate(provider_names)]
+            # 只插入新的爬虫
+            query = "INSERT INTO scrapers (provider_name, display_order) VALUES (%s, %s)"
+            data_to_insert = [(name, max_order + i + 1) for i, name in enumerate(new_providers)]
             await cursor.executemany(query, data_to_insert)
 
 async def get_all_scraper_settings(pool: aiomysql.Pool) -> List[Dict[str, Any]]:

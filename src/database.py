@@ -119,7 +119,7 @@ async def init_db_tables(app: FastAPI):
             await cursor.execute("""
             CREATE TABLE IF NOT EXISTS `comment` (
               `id` BIGINT NOT NULL AUTO_INCREMENT, `cid` VARCHAR(255) NOT NULL, `episode_id` BIGINT NOT NULL,
-              `p` VARCHAR(255) NOT NULL, `m` TEXT NOT NULL, `t` DECIMAL(10, 2) NOT NULL,
+              `p` VARCHAR(255) NOT NULL, `m` TEXT NOT NULL, `t` DECIMAL(10, 3) NOT NULL,
               PRIMARY KEY (`id`), UNIQUE INDEX `idx_episode_cid_unique` (`episode_id` ASC, `cid` ASC),
               INDEX `idx_episode_time` (`episode_id` ASC, `t` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -181,6 +181,18 @@ async def init_db_tables(app: FastAPI):
                 await cursor.execute("ALTER TABLE `anime` ADD COLUMN `image_url` VARCHAR(512) NULL AFTER `type`;")
                 print("'anime' 表 schema 更新完成。")
             
+            # 迁移检查：comment 表的 t 字段精度
+            await cursor.execute("""
+                SELECT NUMERIC_SCALE 
+                FROM information_schema.COLUMNS 
+                WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'comment' AND COLUMN_NAME = 't'
+            """, (db_name,))
+            t_column_info = await cursor.fetchone()
+            if t_column_info and t_column_info[0] != 3:
+                print("检测到旧的 'comment' 表 schema，正在更新 't' 字段的精度...")
+                await cursor.execute("ALTER TABLE `comment` MODIFY COLUMN `t` DECIMAL(10, 3) NOT NULL;")
+                print("'comment' 表 't' 字段精度更新完成。")
+
             # 主要迁移：从 anime(provider, media_id) 迁移到 anime_sources，并更新 episode 表
             await cursor.execute("SHOW COLUMNS FROM `anime` LIKE 'provider'")
             if await cursor.fetchone():
