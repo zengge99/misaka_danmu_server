@@ -16,10 +16,9 @@ async def get_library_anime(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
                     a.title,
                     a.season,
                     a.created_at as createdAt,
-                    COUNT(e.id) as episodeCount,
+                    (SELECT COUNT(DISTINCT e.id) FROM anime_sources s JOIN episode e ON s.id = e.source_id WHERE s.anime_id = a.id) as episodeCount,
                     (SELECT COUNT(*) FROM anime_sources WHERE anime_id = a.id) as sourceCount
                 FROM anime a
-                LEFT JOIN episode e ON a.id = e.anime_id
                 GROUP BY a.id
                 ORDER BY a.created_at DESC
             """
@@ -46,12 +45,12 @@ async def find_anime_by_title(pool: aiomysql.Pool, title: str) -> Optional[Dict[
             return await cursor.fetchone()
 
 
-async def find_episode(pool: aiomysql.Pool, anime_id: int, episode_index: int) -> Optional[Dict[str, Any]]:
-    """查找特定番剧的特定分集"""
+async def find_episode(pool: aiomysql.Pool, source_id: int, episode_index: int) -> Optional[Dict[str, Any]]:
+    """查找特定源的特定分集"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            query = "SELECT id, title FROM episode WHERE anime_id = %s AND episode_index = %s"
-            await cursor.execute(query, (anime_id, episode_index))
+            query = "SELECT id, title FROM episode WHERE source_id = %s AND episode_index = %s"
+            await cursor.execute(query, (source_id, episode_index))
             return await cursor.fetchone()
 
 
@@ -102,20 +101,20 @@ async def link_source_to_anime(pool: aiomysql.Pool, anime_id: int, provider: str
             source = await cursor.fetchone()
             return source[0]
 
-async def get_or_create_episode(pool: aiomysql.Pool, anime_id: int, episode_index: int, title: str) -> int:
+async def get_or_create_episode(pool: aiomysql.Pool, source_id: int, episode_index: int, title: str) -> int:
     """如果分集不存在则创建，并返回其ID"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             # 检查是否存在
-            await cursor.execute("SELECT id FROM episode WHERE anime_id = %s AND episode_index = %s", (anime_id, episode_index))
+            await cursor.execute("SELECT id FROM episode WHERE source_id = %s AND episode_index = %s", (source_id, episode_index))
             result = await cursor.fetchone()
             if result:
                 return result[0]
             
             # 不存在则创建
             await cursor.execute(
-                "INSERT INTO episode (anime_id, episode_index, title) VALUES (%s, %s, %s)",
-                (anime_id, episode_index, title)
+                "INSERT INTO episode (source_id, episode_index, title) VALUES (%s, %s, %s)",
+                (source_id, episode_index, title)
             )
             return cursor.lastrowid
 
@@ -174,15 +173,23 @@ async def get_anime_source_info(pool: aiomysql.Pool, source_id: int) -> Optional
     """获取指定源ID的详细信息及其关联的作品信息。"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            query = "SELECT s.provider_name, s.media_id, a.title, a.type FROM anime_sources s JOIN anime a ON s.anime_id = a.id WHERE s.id = %s"
+            query = "SELECT s.id as source_id, s.anime_id, s.provider_name, s.media_id, a.title, a.type FROM anime_sources s JOIN anime a ON s.anime_id = a.id WHERE s.id = %s"
             await cursor.execute(query, (source_id,))
             return await cursor.fetchone()
 
-async def clear_anime_data(pool: aiomysql.Pool, anime_id: int):
-    """清空番剧的所有分集和弹幕，用于刷新"""
+async def get_anime_sources(pool: aiomysql.Pool, anime_id: int) -> List[Dict[str, Any]]:
+    """获取指定作品的所有关联数据源。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            query = "SELECT id as source_id, provider_name, media_id, created_at FROM anime_sources WHERE anime_id = %s ORDER BY created_at ASC"
+            await cursor.execute(query, (anime_id,))
+            return await cursor.fetchall()
+
+async def clear_source_data(pool: aiomysql.Pool, source_id: int):
+    """清空指定源的所有分集和弹幕，用于刷新。"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
-            await cursor.execute("SELECT id FROM episode WHERE anime_id = %s", (anime_id,))
+            await cursor.execute("SELECT id FROM episode WHERE source_id = %s", (source_id,))
             episode_ids = [row[0] for row in await cursor.fetchall()]
             if episode_ids:
                 format_strings = ','.join(['%s'] * len(episode_ids))
@@ -207,18 +214,20 @@ async def delete_anime(pool: aiomysql.Pool, anime_id: int) -> bool:
             try:
                 await conn.begin()  # 开始事务
 
-                # 1. 获取该番剧下的所有分集ID
-                await cursor.execute("SELECT id FROM episode WHERE anime_id = %s", (anime_id,))
-                episode_ids = [row[0] for row in await cursor.fetchall()]
+                # 1. 获取该作品关联的所有源ID
+                await cursor.execute("SELECT id FROM anime_sources WHERE anime_id = %s", (anime_id,))
+                source_ids = [row[0] for row in await cursor.fetchall()]
 
-                if episode_ids:
-                    # 2. 删除这些分集的所有弹幕
-                    format_strings = ','.join(['%s'] * len(episode_ids))
-                    await cursor.execute(f"DELETE FROM comment WHERE episode_id IN ({format_strings})", tuple(episode_ids))
-                    # 3. 删除所有分集
-                    await cursor.execute(f"DELETE FROM episode WHERE id IN ({format_strings})", tuple(episode_ids))
+                if source_ids:
+                    # 2. 删除所有源关联的分集和弹幕
+                    for source_id in source_ids:
+                        await clear_source_data(pool, source_id)
 
-                # 4. 删除番剧本身
+                    # 3. 删除所有源记录
+                    format_strings = ','.join(['%s'] * len(source_ids))
+                    await cursor.execute(f"DELETE FROM anime_sources WHERE id IN ({format_strings})", tuple(source_ids))
+
+                # 4. 删除作品本身
                 affected_rows = await cursor.execute("DELETE FROM anime WHERE id = %s", (anime_id,))
                 await conn.commit()  # 提交事务
                 return affected_rows > 0

@@ -1,5 +1,5 @@
 import re
-from typing import Optional, List
+from typing import Optional, List, Any
 import asyncio
 import logging
 
@@ -158,17 +158,26 @@ async def edit_anime_info(
     logger.info(f"用户 '{current_user.username}' 更新了番剧 ID: {anime_id} 的信息。")
     return
 
-@router.post("/library/anime/{anime_id}/refresh", status_code=status.HTTP_202_ACCEPTED, summary="全量刷新番剧弹幕")
+@router.get("/library/anime/{anime_id}/sources", response_model=List[Dict[str, Any]], summary="获取作品的所有数据源")
+async def get_anime_sources_for_anime(
+    anime_id: int,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """获取指定作品关联的所有数据源列表。"""
+    return await crud.get_anime_sources(pool, anime_id)
+
+@router.post("/library/source/{source_id}/refresh", status_code=status.HTTP_202_ACCEPTED, summary="全量刷新指定源的弹幕")
 async def refresh_anime(
-    source_id: int, # 注意：现在我们刷新的是一个具体的源，而不是整个番剧
+    source_id: int,
     background_tasks: BackgroundTasks,
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool),
     manager: ScraperManager = Depends(get_scraper_manager)
 ):
-    """为指定番剧启动一个后台任务，删除其所有旧弹幕并从源重新获取。"""
+    """为指定数据源启动一个后台任务，删除其所有旧弹幕并从源重新获取。"""
     source_info = await crud.get_anime_source_info(pool, source_id)
-    if not source_info or not source_info.get("provider") or not source_info.get("media_id"):
+    if not source_info or not source_info.get("provider_name") or not source_info.get("media_id"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anime not found or missing source information for refresh.")
     
     logger.info(f"用户 '{current_user.username}' 为番剧 '{source_info['title']}' (ID: {anime_id}) 启动了全量刷新任务。")
@@ -279,7 +288,7 @@ async def generic_import_task(
             logger.info(f"--- 开始处理分集 {i+1}/{len(episodes)}: '{episode.title}' (ID: {episode.episodeId}) ---")
             
             # 3.1 在数据库中创建或获取分集ID
-            episode_db_id = await crud.get_or_create_episode(pool, anime_id, episode.episodeIndex, episode.title)
+            episode_db_id = await crud.get_or_create_episode(pool, source_id, episode.episodeIndex, episode.title)
 
             # 3.2 获取弹幕
             comments = await scraper.get_comments(episode.episodeId)
@@ -307,11 +316,12 @@ async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: Scrape
         logger.error(f"刷新失败：在数据库中找不到源 ID: {source_id}")
         return
     
+    anime_id = source_info["anime_id"]
     # 1. 清空旧数据
-    await crud.clear_anime_data(pool, anime_id)
-    logger.info(f"已清空番剧 ID: {anime_id} 的旧分集和弹幕。")
+    await crud.clear_source_data(pool, source_id)
+    logger.info(f"已清空源 ID: {source_id} 的旧分集和弹幕。")
     # 2. 重新执行通用导入逻辑
-    await generic_import_task(source_info["provider"], source_info["media_id"], source_info["title"], source_info["type"], None, pool, manager)
+    await generic_import_task(source_info["provider_name"], source_info["media_id"], source_info["title"], source_info["type"], None, pool, manager)
 
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED, summary="从指定数据源导入弹幕")
 async def import_from_provider(

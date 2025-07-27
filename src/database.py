@@ -98,8 +98,6 @@ async def init_db_tables(app: FastAPI):
               `type` ENUM('tv_series', 'movie', 'ova', 'other') NOT NULL DEFAULT 'tv_series',
               `image_url` VARCHAR(512) NULL,
               `season` INT NOT NULL DEFAULT 1,
-              `provider` VARCHAR(50) NULL,
-              `media_id` VARCHAR(255) NULL,
               `source_url` VARCHAR(512) NULL,
               `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
               PRIMARY KEY (`id`),
@@ -110,11 +108,11 @@ async def init_db_tables(app: FastAPI):
             await cursor.execute("""
             CREATE TABLE IF NOT EXISTS `episode` (
               `id` BIGINT NOT NULL AUTO_INCREMENT,
-              `anime_id` BIGINT NOT NULL,
+              `source_id` BIGINT NOT NULL,
               `title` VARCHAR(255) NOT NULL,
               `episode_index` INT NOT NULL,
               PRIMARY KEY (`id`),
-              UNIQUE INDEX `idx_anime_episode_unique` (`anime_id` ASC, `episode_index` ASC)
+              UNIQUE INDEX `idx_source_episode_unique` (`source_id` ASC, `episode_index` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
             # 创建 comment 表
@@ -148,12 +146,24 @@ async def init_db_tables(app: FastAPI):
               PRIMARY KEY (`provider_name`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
+            # 创建 anime_sources 表
+            await cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `anime_sources` (
+              `id` BIGINT NOT NULL AUTO_INCREMENT,
+              `anime_id` BIGINT NOT NULL,
+              `provider_name` VARCHAR(50) NOT NULL,
+              `media_id` VARCHAR(255) NOT NULL,
+              `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              UNIQUE INDEX `idx_anime_provider_media_unique` (`anime_id` ASC, `provider_name` ASC, `media_id` ASC)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
             print("数据表检查完成。")
 
             # --- 步骤 3.2: 为已存在的表运行 schema 迁移检查 ---
             print("正在检查旧的 schema 是否需要更新...")
             
-            # 检查 users 表是否需要更新
+            # 迁移检查：users 表
             await cursor.execute("SHOW COLUMNS FROM `users` LIKE 'token'")
             if not await cursor.fetchone():
                 print("检测到旧的 'users' 表 schema，正在添加 'token' 和 'token_update' 字段...")
@@ -164,18 +174,40 @@ async def init_db_tables(app: FastAPI):
                 """)
                 print("'users' 表 schema 更新完成。")
 
-            # 检查 anime 表是否需要更新 image_url
+            # 迁移检查：anime 表的 image_url
             await cursor.execute("SHOW COLUMNS FROM `anime` LIKE 'image_url'")
             if not await cursor.fetchone():
                 print("检测到旧的 'anime' 表 schema，正在添加 'image_url' 字段...")
                 await cursor.execute("ALTER TABLE `anime` ADD COLUMN `image_url` VARCHAR(512) NULL AFTER `type`;")
                 print("'anime' 表 schema 更新完成。")
             
-            # 检查 anime 表是否需要更新 provider 和 media_id
+            # 主要迁移：从 anime(provider, media_id) 迁移到 anime_sources，并更新 episode 表
             await cursor.execute("SHOW COLUMNS FROM `anime` LIKE 'provider'")
-            if not await cursor.fetchone():
-                print("检测到旧的 'anime' 表 schema，正在添加 'provider' 和 'media_id' 字段...")
-                await cursor.execute("ALTER TABLE `anime` ADD COLUMN `provider` VARCHAR(50) NULL AFTER `season`, ADD COLUMN `media_id` VARCHAR(255) NULL AFTER `provider`;")
-                print("'anime' 表 schema 更新完成。")
+            if await cursor.fetchone():
+                print("检测到旧的 'anime' 和 'episode' 表 schema，开始进行数据迁移...")
+                
+                # 1. 获取所有需要迁移的旧数据
+                await cursor.execute("SELECT id, provider, media_id FROM anime WHERE provider IS NOT NULL AND media_id IS NOT NULL")
+                old_anime_data = await cursor.fetchall()
 
-            print("Schema 检查完成。")
+                # 2. 为每个旧 anime 记录在 anime_sources 中创建对应的条目
+                if old_anime_data:
+                    insert_query = "INSERT IGNORE INTO anime_sources (anime_id, provider_name, media_id) VALUES (%s, %s, %s)"
+                    await cursor.executemany(insert_query, old_anime_data)
+                    print(f"成功迁移 {len(old_anime_data)} 条源数据到 'anime_sources' 表。")
+
+                # 3. 更新 episode 表结构
+                print("正在更新 'episode' 表结构...")
+                await cursor.execute("ALTER TABLE `episode` ADD COLUMN `source_id` BIGINT NULL AFTER `id`, DROP INDEX `idx_anime_episode_unique`, ADD UNIQUE INDEX `idx_source_episode_unique` (`source_id` ASC, `episode_index` ASC)")
+                
+                # 4. 将 episode.anime_id 的数据填充到新的 episode.source_id
+                # 这里做一个简化假设：一个旧番剧只对应一个源。
+                await cursor.execute("UPDATE episode e JOIN anime_sources s ON e.anime_id = s.anime_id SET e.source_id = s.id")
+                
+                # 5. 移除旧列
+                print("正在从 'anime' 和 'episode' 表中移除旧字段...")
+                await cursor.execute("ALTER TABLE `anime` DROP COLUMN `provider`, DROP COLUMN `media_id`")
+                await cursor.execute("ALTER TABLE `episode` DROP COLUMN `anime_id`, MODIFY COLUMN `source_id` BIGINT NOT NULL")
+                print("Schema 迁移完成。")
+            else:
+                print("Schema 检查完成，无需迁移。")
