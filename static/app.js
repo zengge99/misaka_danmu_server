@@ -25,6 +25,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const libraryTableBody = document.querySelector('#library-table tbody');
 
+    // Sources View Elements
+    const sourcesList = document.getElementById('sources-list');
+    const saveSourcesBtn = document.getElementById('save-sources-btn');
+    const toggleSourceBtn = document.getElementById('toggle-source-btn');
+    const moveSourceUpBtn = document.getElementById('move-source-up-btn');
+    const moveSourceDownBtn = document.getElementById('move-source-down-btn');
+
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
     let logRefreshInterval = null; // For polling server logs
@@ -222,6 +229,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (viewId === 'library-view') {
                 loadLibrary();
+            } else if (viewId === 'sources-view') {
+                loadScraperSettings();
             }
         }
     });
@@ -441,6 +450,90 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(`功能 '${action}' 尚未实现。`);
         }
     };
+
+    // --- Scraper Sources View ---
+    async function loadScraperSettings() {
+        if (!sourcesList) return;
+        sourcesList.innerHTML = '<li>加载中...</li>';
+        try {
+            const settings = await apiFetch('/api/v2/scrapers');
+            renderScraperSettings(settings);
+        } catch (error) {
+            sourcesList.innerHTML = `<li class="error">加载失败: ${error.message}</li>`;
+        }
+    }
+
+    function renderScraperSettings(settings) {
+        sourcesList.innerHTML = '';
+        settings.forEach(setting => {
+            const li = document.createElement('li');
+            li.dataset.providerName = setting.provider_name;
+            li.dataset.isEnabled = setting.is_enabled;
+            li.textContent = setting.provider_name;
+
+            const statusIcon = document.createElement('span');
+            statusIcon.className = 'status-icon';
+            statusIcon.textContent = setting.is_enabled ? '✅' : '❌';
+            li.appendChild(statusIcon);
+
+            li.addEventListener('click', () => {
+                sourcesList.querySelectorAll('li').forEach(item => item.classList.remove('selected'));
+                li.classList.add('selected');
+            });
+            sourcesList.appendChild(li);
+        });
+    }
+
+    toggleSourceBtn.addEventListener('click', () => {
+        const selected = sourcesList.querySelector('li.selected');
+        if (!selected) return;
+        const isEnabled = selected.dataset.isEnabled === 'true';
+        selected.dataset.isEnabled = !isEnabled;
+        selected.querySelector('.status-icon').textContent = !isEnabled ? '✅' : '❌';
+    });
+
+    moveSourceUpBtn.addEventListener('click', () => {
+        const selected = sourcesList.querySelector('li.selected');
+        if (selected && selected.previousElementSibling) {
+            sourcesList.insertBefore(selected, selected.previousElementSibling);
+        }
+    });
+
+    moveSourceDownBtn.addEventListener('click', () => {
+        const selected = sourcesList.querySelector('li.selected');
+        if (selected && selected.nextElementSibling) {
+            sourcesList.insertBefore(selected.nextElementSibling, selected);
+        }
+    });
+
+    saveSourcesBtn.addEventListener('click', async () => {
+        const settingsToSave = [];
+        sourcesList.querySelectorAll('li').forEach((li, index) => {
+            settingsToSave.push({
+                provider_name: li.dataset.providerName,
+                is_enabled: li.dataset.isEnabled === 'true',
+                display_order: index + 1,
+            });
+        });
+
+        try {
+            saveSourcesBtn.disabled = true;
+            saveSourcesBtn.textContent = '保存中...';
+            await apiFetch('/api/v2/scrapers', {
+                method: 'PUT',
+                body: JSON.stringify(settingsToSave),
+            });
+            alert('搜索源设置已保存！');
+            // 重新加载以确认顺序
+            loadScraperSettings();
+        } catch (error) {
+            alert(`保存失败: ${error.message}`);
+        } finally {
+            saveSourcesBtn.disabled = false;
+            saveSourcesBtn.textContent = '保存设置';
+        }
+    });
+
 
     // Logout
     logoutBtn.addEventListener('click', logout);

@@ -182,6 +182,25 @@ async def delete_anime_from_library(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An error occurred while deleting the anime.")
     return
 
+@router.get("/scrapers", response_model=List[models.ScraperSetting], summary="获取所有爬虫源的设置")
+async def get_scraper_settings(
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """获取所有可用爬虫源的列表及其配置（启用状态、顺序）。"""
+    settings = await crud.get_all_scraper_settings(pool)
+    return [models.ScraperSetting.model_validate(s) for s in settings]
+
+@router.put("/scrapers", status_code=status.HTTP_204_NO_CONTENT, summary="更新爬虫源的设置")
+async def update_scraper_settings(
+    settings: List[models.ScraperSetting],
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """批量更新爬虫源的启用状态和显示顺序。"""
+    await crud.update_scrapers_settings(pool, settings)
+    return
+
 @router.get("/logs", response_model=List[str], summary="获取最新的服务器日志")
 async def get_server_logs(current_user: models.User = Depends(security.get_current_user)):
     """获取存储在内存中的最新日志条目。"""

@@ -78,6 +78,13 @@ class AnimeInfoUpdate(BaseModel):
     title: str = Field(..., min_length=1, description="新的影视名称")
     season: int = Field(..., ge=1, description="新的季数")
 
+# --- 爬虫源管理模型 ---
+class ScraperSetting(BaseModel):
+    provider_name: str
+    is_enabled: bool
+    display_order: int
+
+
 # --- 媒体库（弹幕情况）模型 ---
 class LibraryAnimeInfo(BaseModel):
     """代表媒体库中的一个番剧条目。"""

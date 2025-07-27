@@ -20,9 +20,10 @@ async def startup_event():
     # 初始化日志系统
     setup_logging()
     # 创建数据库连接池
-    await create_db_pool(app)
+    pool = await create_db_pool(app)
     # 创建 Scraper 管理器
-    app.state.scraper_manager = ScraperManager()
+    app.state.scraper_manager = ScraperManager(pool)
+    await app.state.scraper_manager.load_and_sync_scrapers()
     # 在创建连接池后初始化表
     await init_db_tables(app)
     # 创建初始管理员用户（如果需要）

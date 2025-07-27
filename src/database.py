@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from .config import settings
 
 
-async def create_db_pool(app: FastAPI):
+async def create_db_pool(app: FastAPI) -> aiomysql.Pool:
     """创建数据库连接池并存储在 app.state 中"""
     app.state.db_pool = await aiomysql.create_pool(
         host=settings.database.host,
@@ -16,6 +16,7 @@ async def create_db_pool(app: FastAPI):
         autocommit=True  # 建议在Web应用中开启自动提交
     )
     print("数据库连接池创建成功。")
+    return app.state.db_pool
 
 async def get_db_pool(request: Request) -> aiomysql.Pool:
     """依赖项：从应用状态获取数据库连接池"""

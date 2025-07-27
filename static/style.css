@@ -313,3 +313,56 @@ header {
 .message.error {
     color: var(--error-color);
 }
+
+/* Sources View Styles */
+.source-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.source-actions button {
+    margin-left: 10px;
+    background-color: #6c757d;
+}
+
+#save-sources-btn {
+    background-color: var(--success-color);
+}
+
+#sources-list {
+    list-style: none;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+#sources-list li {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#sources-list li:last-child {
+    border-bottom: none;
+}
+
+#sources-list li:hover {
+    background-color: #f8f9fa;
+}
+
+#sources-list li.selected {
+    background-color: #e9ecef;
+    border-left: 3px solid var(--primary-color);
+}
+
+.status-icon {
+    margin-left: auto;
+    font-size: 1.2em;
+}

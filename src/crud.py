@@ -213,3 +213,34 @@ async def delete_anime(pool: aiomysql.Pool, anime_id: int) -> bool:
             except Exception as e:
                 await conn.rollback()  # 如果出错则回滚
                 raise e
+
+
+async def sync_scrapers_to_db(pool: aiomysql.Pool, provider_names: List[str]):
+    """将发现的爬虫同步到数据库，新爬虫会被添加进去。"""
+    if not provider_names:
+        return
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            # 获取已存在的最大 display_order
+            await cursor.execute("SELECT MAX(display_order) FROM scrapers")
+            max_order = (await cursor.fetchone())[0] or 0
+
+            # 使用 INSERT IGNORE 来避免重复插入
+            query = "INSERT IGNORE INTO scrapers (provider_name, display_order) VALUES (%s, %s)"
+            data_to_insert = [(name, max_order + i + 1) for i, name in enumerate(provider_names)]
+            await cursor.executemany(query, data_to_insert)
+
+async def get_all_scraper_settings(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
+    """获取所有爬虫的设置，按顺序排列。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("SELECT provider_name, is_enabled, display_order FROM scrapers ORDER BY display_order ASC")
+            return await cursor.fetchall()
+
+async def update_scrapers_settings(pool: aiomysql.Pool, settings: List[models.ScraperSetting]):
+    """批量更新爬虫的设置。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            query = "UPDATE scrapers SET is_enabled = %s, display_order = %s WHERE provider_name = %s"
+            data_to_update = [(s.is_enabled, s.display_order, s.provider_name) for s in settings]
+            await cursor.executemany(query, data_to_update)

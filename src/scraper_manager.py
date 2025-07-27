@@ -1,17 +1,20 @@
 import asyncio
 import importlib
 import inspect
+import aiomysql
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 from .scrapers.base import BaseScraper
 from .models import ProviderSearchInfo
+from . import crud
 
 
 class ScraperManager:
-    def __init__(self):
+    def __init__(self, pool: aiomysql.Pool):
         self.scrapers: Dict[str, BaseScraper] = {}
-        self._load_scrapers()
+        self.pool = pool
+        # 注意：加载逻辑现在是异步的，将在应用启动时调用
 
     def _load_scrapers(self):
         """
@@ -34,6 +37,33 @@ class ScraperManager:
                         print(f"爬虫 '{scraper_instance.provider_name}' 已加载。")
             except Exception as e:
                 print(f"从 {file.name} 加载爬虫失败: {e}")
+    
+    async def load_and_sync_scrapers(self):
+        """
+        动态发现、同步到数据库并根据数据库设置加载爬虫。
+        """
+        scrapers_dir = Path(__file__).parent / "scrapers"
+        discovered_providers = []
+        scraper_classes = {}
+
+        for file in scrapers_dir.glob("*.py"):
+            if file.name.startswith("_") or file.name == "base.py": continue
+            module_name = f".scrapers.{file.stem}"
+            module = importlib.import_module(module_name, package="src")
+            for name, obj in inspect.getmembers(module, inspect.isclass):
+                if issubclass(obj, BaseScraper) and obj is not BaseScraper:
+                    provider_name = obj().provider_name # 临时实例化以获取名称
+                    discovered_providers.append(provider_name)
+                    scraper_classes[provider_name] = obj
+        
+        await crud.sync_scrapers_to_db(self.pool, discovered_providers)
+        settings = await crud.get_all_scraper_settings(self.pool)
+
+        for setting in settings:
+            if setting['is_enabled'] and setting['provider_name'] in scraper_classes:
+                provider_name = setting['provider_name']
+                self.scrapers[provider_name] = scraper_classes[provider_name]()
+                print(f"已启用爬虫 '{provider_name}' (顺序: {setting['display_order']})。")
 
     async def search_all(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[ProviderSearchInfo]:
         """

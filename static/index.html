@@ -46,6 +46,7 @@
                     <ul>
                         <li><a href="#" class="nav-link active" data-view="home-view">主页</a></li>
                         <li><a href="#" class="nav-link" data-view="library-view">弹幕库</a></li>
+                        <li><a href="#" class="nav-link" data-view="sources-view">搜索源</a></li>
                         <li><a href="#" class="nav-link" data-view="account-view">账户设置</a></li>
                     </ul>
                 </nav>
@@ -83,6 +84,20 @@
                             </thead>
                             <tbody></tbody>
                         </table>
+                    </div>
+                    <div id="sources-view" class="content-view hidden">
+                        <h2>搜索源管理</h2>
+                        <div class="source-controls">
+                            <button id="save-sources-btn">保存设置</button>
+                            <div class="source-actions">
+                                <button id="toggle-source-btn">启用/禁用</button>
+                                <button id="move-source-up-btn">上移</button>
+                                <button id="move-source-down-btn">下移</button>
+                            </div>
+                        </div>
+                        <ul id="sources-list">
+                            <!-- 爬虫源将在这里动态生成 -->
+                        </ul>
                     </div>
                     <div id="account-view" class="content-view hidden">
                         <div class="account-management-section">
