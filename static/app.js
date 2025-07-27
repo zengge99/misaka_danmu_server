@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const animeDetailView = document.getElementById('anime-detail-view');
     const editAnimeView = document.getElementById('edit-anime-view');
     const episodeListView = document.getElementById('episode-list-view');
+    const danmakuListView = document.getElementById('danmaku-list-view');
     const editAnimeForm = document.getElementById('edit-anime-form');
     const librarySearchInput = document.getElementById('library-search-input');
 
@@ -37,10 +38,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleSourceBtn = document.getElementById('toggle-source-btn');
     const moveSourceUpBtn = document.getElementById('move-source-up-btn');
     const moveSourceDownBtn = document.getElementById('move-source-down-btn');
-
-    const danmakuViewModal = document.getElementById('danmaku-view-modal');
-    const danmakuContentPre = document.getElementById('danmaku-content-pre');
-    const closeDanmakuModalBtn = document.getElementById('close-danmaku-modal-btn');
 
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
@@ -181,11 +178,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('back-to-library-from-edit-btn').addEventListener('click', () => {
             editAnimeView.classList.add('hidden');
             libraryView.classList.remove('hidden');
-        });
-
-        // Modal close button
-        closeDanmakuModalBtn.addEventListener('click', () => {
-            danmakuViewModal.classList.add('hidden');
         });
 
         // Inputs
@@ -715,10 +707,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const actionsCell = row.insertCell();
                 actionsCell.innerHTML = `
-                    <button class="action-btn" title="编辑剧集" onclick="handleEpisodeAction('edit', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">✏️</button>
-                    <button class="action-btn" title="刷新剧集" onclick="handleEpisodeAction('refresh', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">🔄</button>
-                    <button class="action-btn" title="查看具体弹幕" onclick="handleEpisodeAction('view_danmaku', ${ep.id})">💬</button>
-                    <button class="action-btn" title="删除集" onclick="handleEpisodeAction('delete', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">🗑️</button>
+                    <button class="action-btn" title="编辑剧集" onclick="handleEpisodeAction('edit', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}', ${sourceId}, '${animeTitle.replace(/'/g, "\\'")}', ${animeId})">✏️</button>
+                    <button class="action-btn" title="刷新剧集" onclick="handleEpisodeAction('refresh', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}', ${sourceId}, '${animeTitle.replace(/'/g, "\\'")}', ${animeId})">🔄</button>
+                    <button class="action-btn" title="查看具体弹幕" onclick="handleEpisodeAction('view_danmaku', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}', ${sourceId}, '${animeTitle.replace(/'/g, "\\'")}', ${animeId})">💬</button>
+                    <button class="action-btn" title="删除集" onclick="handleEpisodeAction('delete', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}', ${sourceId}, '${animeTitle.replace(/'/g, "\\'")}', ${animeId})">🗑️</button>
                 `;
             });
         } else {
@@ -731,20 +723,41 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function showDanmakuView(episodeId) {
-        danmakuViewModal.classList.remove('hidden');
-        danmakuContentPre.textContent = '加载中...';
+    async function showDanmakuListView(episodeId, episodeTitle, sourceId, animeTitle, animeId) {
+        episodeListView.classList.add('hidden');
+        danmakuListView.classList.remove('hidden');
+        danmakuListView.innerHTML = '<div>加载中...</div>';
+
         try {
             const data = await apiFetch(`/api/v2/comment/${episodeId}`);
-            if (data.comments.length === 0) {
-                danmakuContentPre.textContent = '该分集没有弹幕。';
-            } else {
-                const formattedText = data.comments.map(c => `${c.p} | ${c.m}`).join('\n');
-                danmakuContentPre.textContent = formattedText;
-            }
+            renderDanmakuListView(episodeId, episodeTitle, sourceId, animeTitle, animeId, data.comments);
         } catch (error) {
-            danmakuContentPre.textContent = `加载弹幕失败: ${error.message}`;
+            danmakuListView.innerHTML = `<div class="error">加载弹幕失败: ${error.message}</div>`;
         }
+    }
+
+    function renderDanmakuListView(episodeId, episodeTitle, sourceId, animeTitle, animeId, comments) {
+        let html = `
+            <div class="episode-list-header">
+                <h3>弹幕列表: ${animeTitle} - ${episodeTitle}</h3>
+                <button id="back-to-episodes-from-danmaku-btn">&lt; 返回分集列表</button>
+            </div>
+            <pre id="danmaku-content-pre"></pre>
+        `;
+        danmakuListView.innerHTML = html;
+
+        const danmakuContentPre = document.getElementById('danmaku-content-pre');
+        if (comments.length === 0) {
+            danmakuContentPre.textContent = '该分集没有弹幕。';
+        } else {
+            const formattedText = comments.map(c => `${c.p} | ${c.m}`).join('\n');
+            danmakuContentPre.textContent = formattedText;
+        }
+
+        document.getElementById('back-to-episodes-from-danmaku-btn').addEventListener('click', () => {
+            danmakuListView.classList.add('hidden');
+            showEpisodeListView(sourceId, animeTitle, animeId);
+        });
     }
 
     // --- Global Action Handlers ---
@@ -772,39 +785,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.handleEpisodeAction = (action, episodeId, title) => {
+    window.handleEpisodeAction = (action, episodeId, title, sourceId, animeTitle, animeId) => {
         if (action === 'delete') {
             if (confirm(`您确定要删除分集 '${title}' 吗？\n此操作将删除该分集及其所有弹幕，且不可恢复。`)) {
                 apiFetch(`/api/v2/library/episode/${episodeId}`, {
                     method: 'DELETE',
                 }).then(() => {
-                    const row = document.querySelector(`#episode-list-table button[onclick*="handleEpisodeAction('delete', ${episodeId})"]`).closest('tr');
+                    const row = document.querySelector(`#episode-list-table button[onclick*="handleEpisodeAction('delete', ${episodeId},"]`).closest('tr');
                     if (row) row.remove();
                 }).catch(error => {
                     alert(`删除失败: ${error.message}`);
                 });
             }
         } else if (action === 'edit') {
-            const newTitle = prompt("请输入新的剧集名：", title);
+            const newTitle = prompt("请输入新的分集标题：", title);
             if (newTitle && newTitle.trim() !== "") {
                 apiFetch(`/api/v2/library/episode/${episodeId}`, {
                     method: 'PUT',
                     body: JSON.stringify({ title: newTitle.trim() })
                 }).then(() => {
-                    const row = document.querySelector(`#episode-list-table button[onclick*="handleEpisodeAction('edit', ${episodeId})"]`).closest('tr');
+                    const row = document.querySelector(`#episode-list-table button[onclick*="handleEpisodeAction('edit', ${episodeId},"]`).closest('tr');
                     if (row) row.cells[1].textContent = newTitle.trim();
                 }).catch(error => {
                     alert(`更新失败: ${error.message}`);
                 });
             }
         } else if (action === 'refresh') {
-            if (confirm(`您确定要刷新分集 '${title}' 的弹幕吗？`)) {
+            if (confirm(`您确定要刷新分集 '${title}' 的弹幕吗？\n这将清空现有弹幕并从源重新获取。`)) {
                 apiFetch(`/api/v2/library/episode/${episodeId}/refresh`, { method: 'POST' })
                     .then(response => alert(response.message || "刷新任务已开始。"))
                     .catch(error => alert(`启动刷新任务失败: ${error.message}`));
             }
         } else if (action === 'view_danmaku') {
-            showDanmakuView(episodeId);
+            showDanmakuListView(episodeId, title, sourceId, animeTitle, animeId);
         }
     };
 
