@@ -31,10 +31,14 @@ class TencentComment(BaseModel):
 
 
 # --- 用于搜索API的新模型 ---
+class TencentSubjectDoc(BaseModel):
+    video_num: int = Field(0, alias="videoNum")
+
 class TencentSearchVideoInfo(BaseModel):
     title: str
     year: Optional[int] = None
     type_name: str = Field(alias="typeName")
+    subject_doc: Optional[TencentSubjectDoc] = Field(None, alias="subjectDoc")
 
 class TencentSearchDoc(BaseModel):
     id: str  # 这是 cid
@@ -100,7 +104,7 @@ class TencentScraper(BaseScraper):
         """关闭HTTP客户端"""
         await self.client.aclose()
 
-    async def search(self, keyword: str) -> List[models.ProviderSearchInfo]:
+    async def search(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:
         """通过腾讯搜索API查找番剧。"""
         url = "https://pbaccess.video.qq.com/trpc.videosearch.mobile_search.HttpMobileRecall/MbSearchHttp"
         request_model = TencentSearchRequest(query=keyword)
@@ -127,6 +131,14 @@ class TencentScraper(BaseScraper):
                     # 将腾讯的类型映射到我们内部的类型
                     media_type = "movie" if "电影" in video_info.type_name else "tv_series"
 
+                    # 新增：提取总集数
+                    episode_count = None
+                    if video_info.subject_doc:
+                        episode_count = video_info.subject_doc.video_num
+
+                    # 新增：如果搜索时指定了集数，则将其附加到结果中
+                    current_episode = episode_info.get("episode") if episode_info else None
+
                     results.append(
                         models.ProviderSearchInfo(
                             provider=self.provider_name,
@@ -134,7 +146,8 @@ class TencentScraper(BaseScraper):
                             title=cleaned_title,
                             type=media_type,
                             year=video_info.year,
-                            episodeCount=None  # 搜索API不提供总集数
+                            episodeCount=episode_count,
+                            currentEpisodeIndex=current_episode
                         )
                     )
         except httpx.HTTPStatusError as e:

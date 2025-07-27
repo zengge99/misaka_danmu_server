@@ -52,6 +52,7 @@ class ProviderSearchInfo(BaseModel):
     type: str = Field(..., description="节目类型, e.g., 'tv_series', 'movie'")
     year: Optional[int] = Field(None, description="发行年份")
     episodeCount: Optional[int] = Field(None, description="总集数")
+    currentEpisodeIndex: Optional[int] = Field(None, description="如果搜索词指定了集数，则为当前集数")
 
 
 class ProviderSearchResponse(BaseModel):

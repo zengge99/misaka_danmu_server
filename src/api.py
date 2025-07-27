@@ -18,6 +18,23 @@ router = APIRouter()
 auth_router = APIRouter()
 logger = logging.getLogger(__name__)
 
+def parse_search_keyword(keyword: str) -> dict:
+    """
+    解析搜索关键词，提取标题、季数和集数。
+    例如: "吞噬星空 S01E172" -> {'title': '吞噬星空', 'season': 1, 'episode': 172}
+    """
+    # Pattern for "Title S01E172"
+    pattern = re.compile(r"^(?P<title>.+?)\s*S(?P<season>\d{1,2})E(?P<episode>\d{1,4})$", re.IGNORECASE)
+    match = pattern.match(keyword.strip())
+    if match:
+        data = match.groupdict()
+        return {
+            "title": data["title"].strip(),
+            "season": int(data["season"]),
+            "episode": int(data["episode"]),
+        }
+    return {"title": keyword, "season": None, "episode": None}
+
 async def get_scraper_manager(request: Request) -> ScraperManager:
     """依赖项：从应用状态获取 Scraper 管理器"""
     return request.app.state.scraper_manager
@@ -63,8 +80,18 @@ async def search_anime_provider(
     keyword: str = Query(..., min_length=1, description="搜索关键词"),
     manager: ScraperManager = Depends(get_scraper_manager)
 ):
-    """从所有已配置的数据源（如腾讯、B站等）搜索节目信息。"""
-    results = await manager.search_all(keyword)
+    """
+    从所有已配置的数据源（如腾讯、B站等）搜索节目信息。
+    支持 "标题 SXXEXX" 格式来指定集数。
+    """
+    parsed_keyword = parse_search_keyword(keyword)
+    search_title = parsed_keyword["title"]
+    episode_info = {
+        "season": parsed_keyword["season"],
+        "episode": parsed_keyword["episode"]
+    } if parsed_keyword["episode"] is not None else None
+
+    results = await manager.search_all(search_title, episode_info=episode_info)
     return models.ProviderSearchResponse(results=results)
 
 @router.get(
@@ -202,6 +229,11 @@ async def generic_import_task(
         if not episodes:
             logger.warning(f"未能为 provider='{provider}' media_id='{media_id}' 获取到任何分集。任务终止。")
             return
+
+        # 新增逻辑：如果媒体类型是电影，只处理找到的第一个“分集”（通常是正片的不同版本）
+        if media_type == "movie" and episodes:
+            logger.info(f"检测到媒体类型为电影，将只处理第一个分集 '{episodes[0].title}'。")
+            episodes = episodes[:1]
 
         # 3. 为每个分集获取并存储弹幕
         for i, episode in enumerate(episodes):

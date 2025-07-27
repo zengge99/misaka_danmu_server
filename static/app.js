@@ -262,7 +262,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const metaP = document.createElement('p');
             metaP.className = 'meta';
-            metaP.textContent = `源: ${item.provider} | 类型: ${item.type} | 年份: ${item.year || 'N/A'}`;
+            let metaText = `源: ${item.provider} | 类型: ${item.type} | 年份: ${item.year || 'N/A'}`;
+            if (item.type === 'tv_series' && item.episodeCount) {
+                metaText += ` | 总集数: ${item.episodeCount}`;
+            }
+            if (item.currentEpisodeIndex) {
+                metaText += ` | 当前集: ${item.currentEpisodeIndex}`;
+            }
+            metaP.textContent = metaText;
             
             infoDiv.appendChild(titleP);
             infoDiv.appendChild(metaP);

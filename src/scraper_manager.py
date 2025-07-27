@@ -2,7 +2,7 @@ import asyncio
 import importlib
 import inspect
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Any
 
 from .scrapers.base import BaseScraper
 from .models import ProviderSearchInfo
@@ -35,14 +35,14 @@ class ScraperManager:
             except Exception as e:
                 print(f"从 {file.name} 加载爬虫失败: {e}")
 
-    async def search_all(self, keyword: str) -> List[ProviderSearchInfo]:
+    async def search_all(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[ProviderSearchInfo]:
         """
         在所有已注册的爬虫上并发搜索关键词。
         """
         if not self.scrapers:
             return []
 
-        tasks = [scraper.search(keyword) for scraper in self.scrapers.values()]
+        tasks = [scraper.search(keyword, episode_info=episode_info) for scraper in self.scrapers.values()]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         all_search_results = []

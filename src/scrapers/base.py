@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional, Dict, Any
 
 from .. import models
 
@@ -19,9 +19,10 @@ class BaseScraper(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def search(self, keyword: str) -> List[models.ProviderSearchInfo]:
+    async def search(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:
         """
         根据关键词搜索媒体。
+        episode_info: 可选字典，包含 'season' 和 'episode'。
         """
         raise NotImplementedError
 
