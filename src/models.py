@@ -72,6 +72,7 @@ class ImportRequest(BaseModel):
     media_id: str = Field(..., description="数据源中的媒体ID (e.g., tencent的cid)")
     anime_title: str = Field(..., description="要存储在数据库中的番剧标题")
     type: str = Field(..., description="媒体类型, e.g., 'tv_series', 'movie'")
+    current_episode_index: Optional[int] = Field(None, description="如果搜索时指定了集数，则只导入此分集")
 
 class AnimeInfoUpdate(BaseModel):
     """用于更新番剧信息的模型"""

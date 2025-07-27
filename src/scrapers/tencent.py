@@ -182,7 +182,7 @@ class TencentScraper(BaseScraper):
                     "page_size": str(page_size),
                     "lid": "0",
                     "req_from": "web_mobile",
-                    "pageContext": page_context,
+                    "page_context": page_context,
                 },
             }
             try:

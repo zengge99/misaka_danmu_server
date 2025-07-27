@@ -295,7 +295,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             provider: item.provider,
                             media_id: item.mediaId,
                             anime_title: item.title,
-                            type: item.type, // 新增：将媒体类型一同提交
+                            type: item.type,
+                            current_episode_index: item.currentEpisodeIndex, // 新增：将当前集数一同提交
                         }),
                     });
                     alert(data.message);

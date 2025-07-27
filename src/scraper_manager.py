@@ -41,7 +41,12 @@ class ScraperManager:
     async def load_and_sync_scrapers(self):
         """
         动态发现、同步到数据库并根据数据库设置加载爬虫。
+        此方法可以被再次调用以重新加载爬虫。
         """
+        # 清理现有爬虫以确保全新加载
+        await self.close_all()
+        self.scrapers.clear()
+
         scrapers_dir = Path(__file__).parent / "scrapers"
         discovered_providers = []
         scraper_classes = {}

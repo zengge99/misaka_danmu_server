@@ -195,10 +195,14 @@ async def get_scraper_settings(
 async def update_scraper_settings(
     settings: List[models.ScraperSetting],
     current_user: models.User = Depends(security.get_current_user),
-    pool: aiomysql.Pool = Depends(get_db_pool)
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    manager: ScraperManager = Depends(get_scraper_manager)
 ):
     """批量更新爬虫源的启用状态和显示顺序。"""
     await crud.update_scrapers_settings(pool, settings)
+    # 更新数据库后，触发 ScraperManager 重新加载爬虫
+    await manager.load_and_sync_scrapers()
+    logger.info(f"用户 '{current_user.username}' 更新了爬虫源设置，已重新加载。")
     return
 
 @router.get("/logs", response_model=List[str], summary="获取最新的服务器日志")
@@ -229,6 +233,7 @@ async def generic_import_task(
     media_id: str,
     anime_title: str,
     media_type: str,
+    current_episode_index: Optional[int],
     pool: aiomysql.Pool,
     manager: ScraperManager
 ):
@@ -253,6 +258,15 @@ async def generic_import_task(
         if media_type == "movie" and episodes:
             logger.info(f"检测到媒体类型为电影，将只处理第一个分集 '{episodes[0].title}'。")
             episodes = episodes[:1]
+        
+        # 新增逻辑：如果指定了当前集数，则只处理该分集
+        if current_episode_index is not None and media_type == "tv_series":
+            target_episode = next((ep for ep in episodes if ep.episodeIndex == current_episode_index), None)
+            if target_episode:
+                logger.info(f"检测到指定集数 {current_episode_index}，将只处理分集 '{target_episode.title}'。")
+                episodes = [target_episode]
+            else:
+                logger.warning(f"指定了集数 {current_episode_index}，但在找到的 {len(episodes)} 个分集中未匹配到。将继续处理所有分集。")
 
         # 3. 为每个分集获取并存储弹幕
         for i, episode in enumerate(episodes):
@@ -291,7 +305,7 @@ async def full_refresh_task(anime_id: int, pool: aiomysql.Pool, manager: Scraper
     await crud.clear_anime_data(pool, anime_id)
     logger.info(f"已清空番剧 ID: {anime_id} 的旧分集和弹幕。")
     # 2. 重新执行通用导入逻辑
-    await generic_import_task(source_info["provider"], source_info["media_id"], source_info["title"], source_info["type"], pool, manager)
+    await generic_import_task(source_info["provider"], source_info["media_id"], source_info["title"], source_info["type"], None, pool, manager)
 
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED, summary="从指定数据源导入弹幕")
 async def import_from_provider(
@@ -314,6 +328,7 @@ async def import_from_provider(
         request_data.media_id,
         request_data.anime_title,
         request_data.type,
+        request_data.current_episode_index,
         pool,
         manager
     )
