@@ -182,6 +182,7 @@ async def generic_import_task(
     provider: str,
     media_id: str,
     anime_title: str,
+    media_type: str,
     pool: aiomysql.Pool,
     manager: ScraperManager
 ):
@@ -193,8 +194,8 @@ async def generic_import_task(
         scraper = manager.get_scraper(provider)
 
         # 1. 在数据库中创建或获取番剧ID
-        anime_id = await crud.get_or_create_anime(pool, anime_title, provider, media_id)
-        logger.info(f"番剧 '{anime_title}' (ID: {anime_id}) 已准备就绪。")
+        anime_id = await crud.get_or_create_anime(pool, anime_title, provider, media_id, media_type)
+        logger.info(f"媒体 '{anime_title}' (ID: {anime_id}, 类型: {media_type}) 已准备就绪。")
 
         # 2. 获取所有分集信息
         episodes = await scraper.get_episodes(media_id)
@@ -239,7 +240,7 @@ async def full_refresh_task(anime_id: int, pool: aiomysql.Pool, manager: Scraper
     await crud.clear_anime_data(pool, anime_id)
     logger.info(f"已清空番剧 ID: {anime_id} 的旧分集和弹幕。")
     # 2. 重新执行通用导入逻辑
-    await generic_import_task(source_info["provider"], source_info["media_id"], source_info["title"], pool, manager)
+    await generic_import_task(source_info["provider"], source_info["media_id"], source_info["title"], source_info["type"], pool, manager)
 
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED, summary="从指定数据源导入弹幕")
 async def import_from_provider(
@@ -261,6 +262,7 @@ async def import_from_provider(
         request_data.provider,
         request_data.media_id,
         request_data.anime_title,
+        request_data.type,
         pool,
         manager
     )

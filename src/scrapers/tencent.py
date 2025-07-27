@@ -192,8 +192,9 @@ class TencentScraper(BaseScraper):
                 # --- 解析逻辑健壮性改造结束 ---
 
                 if not item_datas:
-                    self.logger.warning(f"cid='{cid}': 未找到更多分集，或API结构已更改。")
-                    self.logger.debug(f"完整响应内容 (cid={cid}): {data}")
+                    self.logger.warning(f"cid='{cid}': 在响应中未找到分集数据。对于电影，这可能意味着正片信息在不同的数据结构中；对于剧集，则表示获取失败。")
+                    # 将日志级别提升为 WARNING，以便在标准配置下也能看到原始响应，方便调试
+                    self.logger.warning(f"来自腾讯的原始响应 (cid={cid}): {data}")
                     break
 
                 new_episodes_found = 0

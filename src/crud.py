@@ -72,7 +72,7 @@ async def fetch_comments(pool: aiomysql.Pool, episode_id: int) -> List[Dict[str,
             await cursor.execute(query, (episode_id,))
             return await cursor.fetchall()
 
-async def get_or_create_anime(pool: aiomysql.Pool, title: str, provider: str, media_id: str) -> int:
+async def get_or_create_anime(pool: aiomysql.Pool, title: str, provider: str, media_id: str, media_type: str) -> int:
     """通过 provider 和 media_id 查找番剧，如果不存在则创建，并返回其ID"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
@@ -84,8 +84,8 @@ async def get_or_create_anime(pool: aiomysql.Pool, title: str, provider: str, me
             
             # 不存在则创建
             await cursor.execute(
-                "INSERT INTO anime (title, provider, media_id) VALUES (%s, %s, %s)",
-                (title, provider, media_id)
+                "INSERT INTO anime (title, provider, media_id, type) VALUES (%s, %s, %s, %s)",
+                (title, provider, media_id, media_type)
             )
             return cursor.lastrowid
 
@@ -150,7 +150,7 @@ async def update_user_password(pool: aiomysql.Pool, username: str, new_hashed_pa
             await cursor.execute(query, (new_hashed_password, username))
 
 
-async def update_user_login_info(pool: aiomysql.Pool, username: str, token: str) -> None:
+async def update_user_login_info(pool: aiomysql.Pool, username: str, token: str):
     """更新用户的最后登录时间和当前令牌"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
@@ -159,10 +159,10 @@ async def update_user_login_info(pool: aiomysql.Pool, username: str, token: str)
             await cursor.execute(query, (token, username))
 
 async def get_anime_source_info(pool: aiomysql.Pool, anime_id: int) -> Optional[Dict[str, Any]]:
-    """获取番剧的源信息（provider, media_id, title）"""
+    """获取番剧的源信息（provider, media_id, title, type）"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            query = "SELECT provider, media_id, title FROM anime WHERE id = %s"
+            query = "SELECT provider, media_id, title, type FROM anime WHERE id = %s"
             await cursor.execute(query, (anime_id,))
             return await cursor.fetchone()
 
