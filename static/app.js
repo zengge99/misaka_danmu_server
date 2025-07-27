@@ -212,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             registerForm.reset();
             showLoginLink.click();
         } catch (error) {
-            authError.textContent = `注册失败: ${error.message}`;
+            authError.textContent = `注册失败: ${(error.message || error)}`;
         }
     }
 
@@ -248,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loginForm.reset();
             await checkLogin();
         } catch (error) {
-            authError.textContent = `登录失败: ${error.message}`;
+            authError.textContent = `登录失败: ${(error.message || error)}`;
         }
     }
 
@@ -270,9 +270,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (viewId === 'library-view') {
                 loadLibrary();
-                animeDetailView.classList.add('hidden');
-                editAnimeView.classList.add('hidden');
-                episodeListView.classList.add('hidden');
             } else if (viewId === 'sources-view') {
                 loadScraperSettings();
             }
@@ -291,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch(`/api/v2/search/provider?keyword=${encodeURIComponent(keyword)}`);
             displayResults(data.results);
         } catch (error) {
-            alert(`搜索失败: ${error.message}`);
+            alert(`搜索失败: ${(error.message || error)}`);
         } finally {
             toggleLoader(false);
         }
@@ -330,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
             passwordChangeMessage.classList.add('success');
             changePasswordForm.reset();
         } catch (error) {
-            passwordChangeMessage.textContent = `修改失败: ${error.message}`;
+            passwordChangeMessage.textContent = `修改失败: ${(error.message || error)}`;
             passwordChangeMessage.classList.add('error');
         }
     }
@@ -377,7 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('搜索源设置已保存！');
             loadScraperSettings();
         } catch (error) {
-            alert(`保存失败: ${error.message}`);
+            alert(`保存失败: ${(error.message || error)}`);
         } finally {
             saveSourcesBtn.disabled = false;
             saveSourcesBtn.textContent = '保存设置';
@@ -420,7 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('back-to-library-from-edit-btn').click();
             loadLibrary();
         } catch (error) {
-            alert(`更新失败: ${error.message}`);
+            alert(`更新失败: ${(error.message || error)}`);
         } finally {
             saveButton.disabled = false;
             saveButton.textContent = '保存更改';
@@ -455,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("分集信息更新成功！");
             document.getElementById('back-to-episodes-from-edit-btn').click();
         } catch (error) {
-            alert(`更新失败: ${error.message}`);
+            alert(`更新失败: ${(error.message || error)}`);
         } finally {
             saveButton.disabled = false;
             saveButton.textContent = '保存更改';
@@ -511,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                     alert(data.message);
                 } catch (error) {
-                    alert(`提交导入任务失败: ${error.message}`);
+                    alert(`提交导入任务失败: ${(error.message || error)}`);
                 } finally {
                     importBtn.disabled = false;
                     importBtn.textContent = '导入弹幕';
@@ -531,7 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch('/api/v2/library');
             renderLibrary(data.animes);
         } catch (error) {
-            libraryTableBody.innerHTML = `<tr><td colspan="7" class="error">加载失败: ${error.message}</td></tr>`;
+            libraryTableBody.innerHTML = `<tr><td colspan="7" class="error">加载失败: ${(error.message || error)}</td></tr>`;
         }
     }
 
@@ -575,7 +572,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const settings = await apiFetch('/api/v2/scrapers');
             renderScraperSettings(settings);
         } catch (error) {
-            sourcesList.innerHTML = `<li class="error">加载失败: ${error.message}</li>`;
+            sourcesList.innerHTML = `<li class="error">加载失败: ${(error.message || error)}</li>`;
         }
     }
 
@@ -618,7 +615,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderAnimeDetailView(anime, sources);
 
         } catch (error) {
-            animeDetailView.innerHTML = `<div class="error">加载详情失败: ${error.message}</div>`;
+            animeDetailView.innerHTML = `<div class="error">加载详情失败: ${(error.message || error)}</div>`;
         }
     }
 
@@ -679,7 +676,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }).then(response => {
                 alert(response.message || "刷新任务已开始，请在日志中查看进度。");
             }).catch(error => {
-                alert(`启动刷新任务失败: ${error.message}`);
+                alert(`启动刷新任务失败: ${(error.message || error)}`);
             });
         }
     }
@@ -706,7 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const episodes = await apiFetch(`/api/v2/library/source/${sourceId}/episodes`);
             renderEpisodeListView(sourceId, animeTitle, episodes, animeId);
         } catch (error) {
-            episodeListView.innerHTML = `<div class="error">加载分集列表失败: ${error.message}</div>`;
+            episodeListView.innerHTML = `<div class="error">加载分集列表失败: ${(error.message || error)}</div>`;
         }
     }
 
@@ -732,6 +729,11 @@ document.addEventListener('DOMContentLoaded', () => {
             </table>
         `;
         episodeListView.innerHTML = html;
+
+        // Store context on the view container for handleEpisodeAction to use
+        episodeListView.dataset.sourceId = sourceId;
+        episodeListView.dataset.animeTitle = animeTitle;
+        episodeListView.dataset.animeId = animeId;
 
         const episodeTableBody = episodeListView.querySelector('#episode-list-table tbody');
         if (episodes.length > 0) {
@@ -781,7 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch(`/api/v2/comment/${episodeId}`);
             renderDanmakuListView(episodeId, episodeTitle, sourceId, animeTitle, animeId, data.comments);
         } catch (error) {
-            danmakuListView.innerHTML = `<div class="error">加载弹幕失败: ${error.message}</div>`;
+            danmakuListView.innerHTML = `<div class="error">加载弹幕失败: ${(error.message || error)}</div>`;
         }
     }
 
@@ -838,7 +840,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }).then(() => {
                     loadLibrary();
                 }).catch(error => {
-                    alert(`删除失败: ${error.message}`);
+                    alert(`删除失败: ${(error.message || error)}`);
                 });
             }
         } else if (action === 'edit') {
@@ -853,10 +855,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.handleEpisodeAction = (action, episodeId, title) => {
         const row = document.querySelector(`#episode-list-table button[onclick*="handleEpisodeAction('${action}', ${episodeId},"]`).closest('tr');
-        const backButton = document.getElementById('back-to-detail-view-btn');
-        const sourceId = backButton.dataset.sourceId;
-        const animeTitle = backButton.dataset.animeTitle;
-        const animeId = backButton.dataset.animeId;
+        
+        // Retrieve context from the view container's dataset
+        const sourceId = episodeListView.dataset.sourceId;
+        const animeTitle = episodeListView.dataset.animeTitle;
+        const animeId = episodeListView.dataset.animeId;
 
         if (action === 'delete') {
             if (confirm(`您确定要删除分集 '${title}' 吗？\n此操作将删除该分集及其所有弹幕，且不可恢复。`)) {
@@ -865,7 +868,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }).then(() => {
                     if (row) row.remove();
                 }).catch(error => {
-                    alert(`删除失败: ${error.message}`);
+                    alert(`删除失败: ${(error.message || error)}`);
                 });
             }
         } else if (action === 'edit') {
@@ -876,7 +879,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (confirm(`您确定要刷新分集 '${title}' 的弹幕吗？\n这将清空现有弹幕并从源重新获取。`)) {
                 apiFetch(`/api/v2/library/episode/${episodeId}/refresh`, { method: 'POST' })
                     .then(response => alert(response.message || "刷新任务已开始。"))
-                    .catch(error => alert(`启动刷新任务失败: ${error.message}`));
+                    .catch(error => alert(`启动刷新任务失败: ${(error.message || error)}`));
             }
         } else if (action === 'view_danmaku') {
             showDanmakuListView(episodeId, title, sourceId, animeTitle, animeId);
