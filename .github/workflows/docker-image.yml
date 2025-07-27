@@ -1,44 +1,69 @@
-# 工作流名称
+# .github/workflows/docker-publish.yml
 name: Publish to Docker Hub
 
-# 触发条件：当创建并推送一个以 'v' 开头的标签时触发 (例如 v1.0.0)
+# 触发条件：当推送到 main 分支时触发
 on:
   push:
-    tags:
-      - 'v*' # 匹配 v1, v1.2, v1.2.3 等版本标签
+    branches:
+      - 'main'
+
+#on:
+#  push:
+#    tags:
+#      - 'v*' # 匹配 v1, v1.2, v1.2.3 等版本标签
 
 jobs:
-  # 定义一个名为 build-and-push 的作业
   build-and-push:
     # 在最新的 Ubuntu 虚拟机上运行
     runs-on: ubuntu-latest
     steps:
       # 步骤1: 检出代码
-      # 拉取你的仓库代码到虚拟机中
+      # fetch-depth: 0 会拉取所有历史记录和标签，这对于版本计算至关重要
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # 步骤2: 设置 Docker Buildx
-      # Buildx 是一个 Docker CLI 插件，用于启用更高级的构建功能
+      # 步骤2: 计算下一个版本标签
+      # 这个脚本会查找最新的 vX.Y.Z 标签并增加Z的值
+      - name: Calculate next version tag
+        id: calculate_tag
+        run: |
+          # 使用 version-sort (-V) 来正确处理 v1.10.0 和 v1.2.0 这样的版本号
+          latest_tag=$(git tag -l "v*.*.*" | sort -V | tail -n 1)
+          if [ -z "$latest_tag" ]; then
+            new_tag="v0.0.1"
+            echo "No existing version tags found. Starting with $new_tag"
+          else
+            echo "Latest tag is $latest_tag"
+            version_string=${latest_tag#v}
+            IFS='.' read -r -a version_parts <<< "$version_string"
+            new_patch=$((version_parts[2] + 1))
+            new_tag="v${version_parts[0]}.${version_parts[1]}.${new_patch}"
+            echo "Calculated new tag: $new_tag"
+          fi
+          # 将新标签设置为一个输出变量，供后续步骤使用
+          echo "tag=${new_tag}" >> $GITHUB_OUTPUT
+
+      # 步骤3: 设置 Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 步骤3: 登录到 Docker Hub
-      # 使用我们之前在 GitHub Secrets 中设置的凭据
+      # 步骤4: 登录到 Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 步骤4: 构建并推送 Docker 镜像
-      # 使用 build-push-action 来执行构建和推送
+      # 步骤5: 构建并推送 Docker 镜像
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
-          push: true # 确认执行推送操作
+          push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/danmu_api_server:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/danmu_api_server:${{ github.ref_name }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/danmu_api_server:${{ steps.calculate_tag.outputs.tag }}
+
