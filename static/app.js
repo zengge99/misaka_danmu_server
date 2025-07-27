@@ -24,6 +24,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const passwordChangeMessage = document.getElementById('password-change-message');
 
     const libraryTableBody = document.querySelector('#library-table tbody');
+    const libraryView = document.getElementById('library-view');
+    const animeDetailView = document.getElementById('anime-detail-view');
+    const backToLibraryBtn = document.getElementById('back-to-library-btn');
+
 
     // Sources View Elements
     const sourcesList = document.getElementById('sources-list');
@@ -229,6 +233,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (viewId === 'library-view') {
                 loadLibrary();
+                // 确保详情页被隐藏
+                libraryView.classList.remove('hidden');
+                animeDetailView.classList.add('hidden');
+
             } else if (viewId === 'sources-view') {
                 loadScraperSettings();
             }
@@ -452,6 +460,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    backToLibraryBtn.addEventListener('click', () => {
+        animeDetailView.classList.add('hidden');
+        libraryView.classList.remove('hidden');
+    });
+
     // --- Scraper Sources View ---
     async function loadScraperSettings() {
         if (!sourcesList) return;
@@ -534,6 +547,70 @@ document.addEventListener('DOMContentLoaded', () => {
             saveSourcesBtn.textContent = '保存设置';
         }
     });
+
+    // --- Anime Detail View ---
+    async function showAnimeDetail(animeId) {
+        libraryView.classList.add('hidden');
+        animeDetailView.classList.remove('hidden');
+        animeDetailView.innerHTML = '<button id="back-to-library-btn"> &lt; 返回弹幕库</button><div>加载中...</div>';
+        // Re-bind the back button event since we just overwrote the innerHTML
+        document.getElementById('back-to-library-btn').addEventListener('click', () => {
+            animeDetailView.classList.add('hidden');
+            libraryView.classList.remove('hidden');
+        });
+
+        try {
+            // NOTE: We need a new API endpoint to get sources for a specific anime
+            // For now, we'll filter from the full library list as a workaround.
+            // A real implementation would be: const sources = await apiFetch(`/api/v2/library/anime/${animeId}/sources`);
+            const fullLibrary = await apiFetch('/api/v2/library');
+            const anime = fullLibrary.animes.find(a => a.animeId === animeId);
+            
+            // This is a placeholder. A real implementation requires a dedicated API endpoint.
+            // Let's assume a new endpoint `/api/v2/library/anime/{animeId}/sources` exists
+            // and it returns a list of sources.
+            // For this example, we'll just show a message.
+            renderAnimeDetailView(anime, []); // Pass empty sources for now
+
+        } catch (error) {
+            animeDetailView.innerHTML += `<div class="error">加载详情失败: ${error.message}</div>`;
+        }
+    }
+
+    function renderAnimeDetailView(anime, sources) {
+        // This is a mock-up of what the detail view would look like.
+        // A full implementation requires backend changes to support getting sources per anime.
+        let html = `
+            <button id="back-to-library-btn"> &lt; 返回弹幕库</button>
+            <div class="anime-detail-header">
+                <img src="${anime.imageUrl || '/static/placeholder.png'}" alt="${anime.title}">
+                <div>
+                    <h2>${anime.title}</h2>
+                    <p>季: ${anime.season} | 总集数: ${anime.episodeCount}</p>
+                </div>
+            </div>
+            <h3>关联的数据源</h3>
+            <table id="source-detail-table">
+                <thead>
+                    <tr>
+                        <th>数据源</th>
+                        <th>源ID</th>
+                        <th>收录时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- This part would be populated by a new API call -->
+                    <tr><td colspan="4">功能待实现：此处将显示 '${anime.title}' 的所有弹幕源。</td></tr>
+                </tbody>
+            </table>
+        `;
+        animeDetailView.innerHTML = html;
+        document.getElementById('back-to-library-btn').addEventListener('click', () => {
+            animeDetailView.classList.add('hidden');
+            libraryView.classList.remove('hidden');
+        });
+    }
 
 
     // Logout

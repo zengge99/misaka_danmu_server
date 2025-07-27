@@ -16,7 +16,8 @@ async def get_library_anime(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
                     a.title,
                     a.season,
                     a.created_at as createdAt,
-                    COUNT(e.id) as episodeCount
+                    COUNT(e.id) as episodeCount,
+                    (SELECT COUNT(*) FROM anime_sources WHERE anime_id = a.id) as sourceCount
                 FROM anime a
                 LEFT JOIN episode e ON a.id = e.anime_id
                 GROUP BY a.id
@@ -72,23 +73,34 @@ async def fetch_comments(pool: aiomysql.Pool, episode_id: int) -> List[Dict[str,
             await cursor.execute(query, (episode_id,))
             return await cursor.fetchall()
 
-async def get_or_create_anime(pool: aiomysql.Pool, title: str, provider: str, media_id: str, media_type: str) -> int:
-    """通过 provider 和 media_id 查找番剧，如果不存在则创建，并返回其ID"""
+async def get_or_create_anime(pool: aiomysql.Pool, title: str, media_type: str) -> int:
+    """通过标题查找番剧，如果不存在则创建，并返回其ID。"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
-            # 检查是否存在
-            await cursor.execute("SELECT id FROM anime WHERE provider = %s AND media_id = %s", (provider, media_id))
+            await cursor.execute("SELECT id FROM anime WHERE title = %s", (title,))
             result = await cursor.fetchone()
             if result:
                 return result[0]
             
-            # 不存在则创建
             await cursor.execute(
-                "INSERT INTO anime (title, provider, media_id, type) VALUES (%s, %s, %s, %s)",
-                (title, provider, media_id, media_type)
+                "INSERT INTO anime (title, type) VALUES (%s, %s)",
+                (title, media_type)
             )
             return cursor.lastrowid
 
+async def link_source_to_anime(pool: aiomysql.Pool, anime_id: int, provider: str, media_id: str) -> int:
+    """将一个外部数据源链接到一个番剧，如果链接已存在则直接返回，否则创建新链接。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            # 使用 INSERT IGNORE 来安全地插入，如果唯一键冲突则什么都不做
+            await cursor.execute(
+                "INSERT IGNORE INTO anime_sources (anime_id, provider_name, media_id) VALUES (%s, %s, %s)",
+                (anime_id, provider, media_id)
+            )
+            # 获取刚刚插入或已存在的源ID
+            await cursor.execute("SELECT id FROM anime_sources WHERE anime_id = %s AND provider_name = %s AND media_id = %s", (anime_id, provider, media_id))
+            source = await cursor.fetchone()
+            return source[0]
 
 async def get_or_create_episode(pool: aiomysql.Pool, anime_id: int, episode_index: int, title: str) -> int:
     """如果分集不存在则创建，并返回其ID"""
@@ -158,12 +170,12 @@ async def update_user_login_info(pool: aiomysql.Pool, username: str, token: str)
             query = "UPDATE users SET token = %s, token_update = NOW() WHERE username = %s"
             await cursor.execute(query, (token, username))
 
-async def get_anime_source_info(pool: aiomysql.Pool, anime_id: int) -> Optional[Dict[str, Any]]:
-    """获取番剧的源信息（provider, media_id, title, type）"""
+async def get_anime_source_info(pool: aiomysql.Pool, source_id: int) -> Optional[Dict[str, Any]]:
+    """获取指定源ID的详细信息及其关联的作品信息。"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            query = "SELECT provider, media_id, title, type FROM anime WHERE id = %s"
-            await cursor.execute(query, (anime_id,))
+            query = "SELECT s.provider_name, s.media_id, a.title, a.type FROM anime_sources s JOIN anime a ON s.anime_id = a.id WHERE s.id = %s"
+            await cursor.execute(query, (source_id,))
             return await cursor.fetchone()
 
 async def clear_anime_data(pool: aiomysql.Pool, anime_id: int):

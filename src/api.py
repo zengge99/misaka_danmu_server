@@ -160,14 +160,14 @@ async def edit_anime_info(
 
 @router.post("/library/anime/{anime_id}/refresh", status_code=status.HTTP_202_ACCEPTED, summary="全量刷新番剧弹幕")
 async def refresh_anime(
-    anime_id: int,
+    source_id: int, # 注意：现在我们刷新的是一个具体的源，而不是整个番剧
     background_tasks: BackgroundTasks,
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool),
     manager: ScraperManager = Depends(get_scraper_manager)
 ):
     """为指定番剧启动一个后台任务，删除其所有旧弹幕并从源重新获取。"""
-    source_info = await crud.get_anime_source_info(pool, anime_id)
+    source_info = await crud.get_anime_source_info(pool, source_id)
     if not source_info or not source_info.get("provider") or not source_info.get("media_id"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anime not found or missing source information for refresh.")
     
@@ -253,8 +253,10 @@ async def generic_import_task(
     try:
         scraper = manager.get_scraper(provider)
 
-        # 1. 在数据库中创建或获取番剧ID
-        anime_id = await crud.get_or_create_anime(pool, anime_title, provider, media_id, media_type)
+        # 1. 在数据库中创建或获取番剧ID，并链接数据源
+        anime_id = await crud.get_or_create_anime(pool, anime_title, media_type)
+        source_id = await crud.link_source_to_anime(pool, anime_id, provider, media_id)
+
         logger.info(f"媒体 '{anime_title}' (ID: {anime_id}, 类型: {media_type}) 已准备就绪。")
 
         # 2. 获取所有分集信息
@@ -295,14 +297,14 @@ async def generic_import_task(
     finally:
         logger.info(f"--- {provider} 导入任务完成 (media_id={media_id})。总共新增 {total_comments_added} 条弹幕。 ---")
 
-async def full_refresh_task(anime_id: int, pool: aiomysql.Pool, manager: ScraperManager):
+async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: ScraperManager):
     """
     后台任务：全量刷新一个已存在的番剧。
     """
-    logger.info(f"开始刷新番剧 ID: {anime_id}")
-    source_info = await crud.get_anime_source_info(pool, anime_id)
+    logger.info(f"开始刷新源 ID: {source_id}")
+    source_info = await crud.get_anime_source_info(pool, source_id)
     if not source_info:
-        logger.error(f"刷新失败：在数据库中找不到番剧 ID: {anime_id}")
+        logger.error(f"刷新失败：在数据库中找不到源 ID: {source_id}")
         return
     
     # 1. 清空旧数据
