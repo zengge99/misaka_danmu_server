@@ -29,10 +29,17 @@ body {
 }
 
 h1, h2 {
-    color: var(--primary-color);
+    color: var(--text-color);
     border-bottom: 2px solid var(--primary-color);
     padding-bottom: 10px;
     margin-bottom: 20px;
+}
+
+h1 {
+    /* 移除h1的独立下边框，统一由header控制 */
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
 }
 
 /* Auth View */
@@ -102,7 +109,21 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    padding-bottom: 15px;
     margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.header-title-group {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* logo和标题之间的间距 */
+}
+
+#header-logo {
+    width: 50px;  /* 您可以按需修改为 120px */
+    height: 50px; /* 您可以按需修改为 120px */
+    border-radius: 8px; /* 轻微的圆角效果 */
 }
 
 .header-user-info {

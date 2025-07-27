@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Danmu API Frontend</title>
+    <!-- 新增：设置浏览器的标签页图标 -->
+    <link rel="icon" href="/static/logo.png" type="image/png">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -35,7 +37,10 @@
         <!-- 主应用视图 -->
         <div id="main-view" class="hidden">
             <header>
-                <h1>弹幕API控制台</h1>
+                <div class="header-title-group">
+                    <img src="/static/logo.png" alt="Logo" id="header-logo">
+                    <h1>弹幕API控制台</h1>
+                </div>
                 <div class="header-user-info">
                     <span id="current-user"></span>
                     <button id="logout-btn">退出登录</button>
