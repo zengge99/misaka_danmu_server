@@ -2,8 +2,10 @@
 FROM python:3.10-slim
 
 # 设置环境变量，防止生成 .pyc 文件并启用无缓冲输出
+# 设置时区为亚洲/上海，以确保日志等时间正确显示
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
+ENV TZ=Asia/Shanghai
 
 # 设置工作目录
 WORKDIR /app
@@ -14,6 +16,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     default-libmysqlclient-dev \
+    tzdata \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

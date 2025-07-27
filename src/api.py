@@ -3,7 +3,7 @@ from typing import Optional, List
 import asyncio
 import logging
 
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 import aiomysql
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
