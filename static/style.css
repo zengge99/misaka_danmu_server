@@ -105,6 +105,17 @@ header {
     margin-bottom: 20px;
 }
 
+.header-user-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#logout-btn {
+    background-color: var(--error-color);
+    padding: 8px 12px;
+}
+
 #search-form {
     display: flex;
     gap: 10px;
@@ -258,45 +269,4 @@ header {
 
 .message.error {
     color: var(--error-color);
-}
-
-/* User Menu Dropdown */
-.user-menu {
-    position: relative;
-}
-
-.user-menu-button {
-    background: none;
-    border: 1px solid var(--border-color);
-    padding: 8px 12px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.user-menu-button:hover {
-    background-color: var(--secondary-color);
-}
-
-.user-menu-dropdown {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    box-shadow: var(--shadow);
-    z-index: 100;
-    min-width: 150px;
-}
-
-.user-menu-dropdown a {
-    display: block;
-    padding: 10px 15px;
-    color: var(--text-color);
-    text-decoration: none;
-}
-
-.user-menu-dropdown a:hover {
-    background-color: var(--secondary-color);
 }

@@ -12,11 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const logOutput = document.getElementById('log-output');
     const currentUserSpan = document.getElementById('current-user');
     const loader = document.getElementById('loader');
-
-    // UI elements for user menu and password form
-    const userMenuTrigger = document.getElementById('user-menu-trigger');
-    const userMenuContent = document.getElementById('user-menu-content');
-    const logoutLink = document.getElementById('logout-link');
+    
+    // UI elements for user actions
+    const logoutBtn = document.getElementById('logout-btn');
     const changePasswordForm = document.getElementById('change-password-form');
     const passwordChangeMessage = document.getElementById('password-change-message');
 
@@ -353,20 +351,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- User Menu Logic ---
-    userMenuTrigger.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent click from bubbling to document
-        userMenuContent.classList.toggle('hidden');
-    });
-
-    document.addEventListener('click', (e) => {
-        // 当点击位置不在用户菜单触发器内部，并且菜单是可见的，则关闭菜单
-        if (!userMenuTrigger.contains(e.target) && !userMenuContent.classList.contains('hidden')) {
-            userMenuContent.classList.add('hidden');
-        }
-    });
-
-    logoutLink.addEventListener('click', (e) => { e.preventDefault(); logout(); });
+    // --- Logout Button Logic ---
+    logoutBtn.addEventListener('click', logout);
 
     // Initial check
     checkLogin();
