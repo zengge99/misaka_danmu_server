@@ -1,29 +1,37 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- Element Selectors ---
+    // Auth View
     const authView = document.getElementById('auth-view');
-    const mainView = document.getElementById('main-view');
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
     const showRegisterLink = document.getElementById('show-register-link');
     const showLoginLink = document.getElementById('show-login-link');
     const authError = document.getElementById('auth-error');
+
+    // Main View
+    const mainView = document.getElementById('main-view');
+    const currentUserSpan = document.getElementById('current-user');
+    const logoutBtn = document.getElementById('logout-btn');
+    
+    // Sidebar and Content
+    const sidebar = document.getElementById('sidebar');
+    const contentViews = document.querySelectorAll('.content-view');
+
+    // Home View elements
     const searchForm = document.getElementById('search-form');
     const searchKeywordInput = document.getElementById('search-keyword');
     const resultsList = document.getElementById('results-list');
     const logOutput = document.getElementById('log-output');
-    const currentUserSpan = document.getElementById('current-user');
     const loader = document.getElementById('loader');
     
-    // UI elements for user actions
-    const logoutBtn = document.getElementById('logout-btn');
+    // Account View elements
     const changePasswordForm = document.getElementById('change-password-form');
     const passwordChangeMessage = document.getElementById('password-change-message');
 
-    // UI elements for sidebar navigation
-    const sidebar = document.getElementById('sidebar');
-    const contentViews = document.querySelectorAll('.content-view');
-
+    // --- State ---
     let token = localStorage.getItem('danmu_api_token');
 
+    // --- Core Functions ---
     function log(message) {
         const timestamp = new Date().toLocaleTimeString();
         logOutput.textContent = `[${timestamp}] ${message}\n` + logOutput.textContent;
@@ -44,30 +52,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const response = await fetch(url, { ...options, headers });
 
-        // 集中处理认证失败
         if (response.status === 401) {
-            logout(); // 执行登出操作
-            // 抛出错误，中断后续代码执行
+            logout();
             throw new Error("会话已过期或无效，请重新登录。");
         }
 
-        // 对于非OK响应，尝试解析错误信息
         if (!response.ok) {
             let errorMessage = `HTTP error! status: ${response.status}`;
             try {
                 const errorData = await response.json();
-                // 使用 'detail' 字段（FastAPI标准），否则将错误对象转为字符串
                 errorMessage = errorData.detail || JSON.stringify(errorData);
             } catch (e) {
-                // 如果解析JSON失败，则直接使用响应文本
                 errorMessage = await response.text().catch(() => errorMessage);
             }
             throw new Error(errorMessage);
         }
-
-        // 对于成功的响应，如果响应体可能为空，先获取文本
+        
         const responseText = await response.text();
-        // 如果文本不为空则尝试解析为JSON，否则返回空对象
         return responseText ? JSON.parse(responseText) : {};
     }
 
@@ -88,17 +89,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         try {
             const user = await apiFetch('/api/v2/auth/users/me');
-            // 增加健壮性检查，防止 user 为 null 或缺少 username 导致脚本崩溃
             if (!user || !user.username) {
                 throw new Error('未能获取到有效的用户信息。');
             }
             currentUserSpan.textContent = `用户: ${user.username}`;
             showView('main');
         } catch (error) {
-            // 捕获到任何错误（包括上面抛出的错误或apiFetch中的网络/认证错误）
-            // 都应执行登出操作以清理状态。
             log(`自动登录失败: ${error.message}`);
-            logout(); // 统一在这里处理登出，确保状态被重置
+            logout();
         }
     }
 
@@ -109,7 +107,9 @@ document.addEventListener('DOMContentLoaded', () => {
         log('已登出。');
     }
 
-    // --- Auth Form Switching Logic ---
+    // --- Event Listeners ---
+
+    // Auth Form Switching
     showRegisterLink.addEventListener('click', (e) => {
         e.preventDefault();
         loginForm.classList.add('hidden');
@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
         authError.textContent = '';
     });
 
+    // Registration
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         authError.textContent = '';
@@ -137,12 +138,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             log(`用户 '${username}' 注册成功，请登录。`);
             registerForm.reset();
+            // Switch back to login form
+            showLoginLink.click();
         } catch (error) {
             authError.textContent = `注册失败: ${error.message}`;
             log(`注册失败: ${error.message}`);
         }
     });
 
+    // Login
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         authError.textContent = '';
@@ -160,20 +164,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: formData,
             });
 
-            // 首先，检查请求是否成功
             if (!response.ok) {
-                // 如果不成功，尝试从JSON响应体中解析错误详情
                 let errorDetail = '用户名或密码错误';
                 try {
                     const errorData = await response.json();
                     errorDetail = errorData.detail || errorDetail;
-                } catch (jsonError) {
-                    // 如果响应体不是JSON或为空，则使用默认错误信息
-                }
+                } catch (jsonError) { /* ignore */ }
                 throw new Error(errorDetail);
             }
 
-            // 如果请求成功，再解析令牌
             const data = await response.json();
             token = data.access_token;
             localStorage.setItem('danmu_api_token', token);
@@ -186,69 +185,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Sidebar Navigation Logic ---
-    if (sidebar) {
-        sidebar.addEventListener('click', (e) => {
-            // 使用 .closest() 确保即使用户点击了链接内的图标等元素也能正确触发
-            const navLink = e.target.closest('.nav-link');
-            if (navLink) {
-                e.preventDefault();
-                const viewId = navLink.getAttribute('data-view');
-                if (!viewId) return;
-    
-                // 更新导航链接的激活状态
-                sidebar.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
-                navLink.classList.add('active');
-    
-                // 切换主内容区域的视图
-                contentViews.forEach(view => view.classList.add('hidden'));
-                const targetView = document.getElementById(viewId);
-                if (targetView) {
-                    targetView.classList.remove('hidden');
-                }
+    // Sidebar Navigation
+    sidebar.addEventListener('click', (e) => {
+        const navLink = e.target.closest('.nav-link');
+        if (navLink) {
+            e.preventDefault();
+            const viewId = navLink.getAttribute('data-view');
+            if (!viewId) return;
+
+            sidebar.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+            navLink.classList.add('active');
+
+            contentViews.forEach(view => view.classList.add('hidden'));
+            const targetView = document.getElementById(viewId);
+            if (targetView) {
+                targetView.classList.remove('hidden');
             }
-        });
-    }
-
-    // --- User Menu and Modal Logic ---
-    userMenuTrigger.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent click from bubbling to document
-        userMenuContent.classList.toggle('hidden');
-    });
-
-    document.addEventListener('click', (e) => {
-        // 当点击位置不在用户菜单触发器内部，并且菜单是可见的，则关闭菜单
-        if (!userMenuTrigger.contains(e.target) && !userMenuContent.classList.contains('hidden')) {
-            userMenuContent.classList.add('hidden');
         }
     });
 
-    logoutLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        logout();
-    });
-
-    function showPasswordModal() {
-        userMenuContent.classList.add('hidden'); // 确保在打开弹窗时，下拉菜单是关闭的
-        modalOverlay.classList.remove('hidden');
-        // 重置表单状态
-        passwordChangeMessage.textContent = '';
-        passwordChangeMessage.className = 'message';
-        changePasswordForm.reset();
-    }
-
-    function hidePasswordModal() {
-        modalOverlay.classList.add('hidden');
-    }
-
-    changePasswordLink.addEventListener('click', (e) => { e.preventDefault(); showPasswordModal(); });
-    modalCloseBtn.addEventListener('click', hidePasswordModal);
-    modalOverlay.addEventListener('click', (e) => {
-        if (e.target === modalOverlay) { // Only close if overlay itself is clicked
-            hidePasswordModal();
-        }
-    });
-
+    // Search
     searchForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const keyword = searchKeywordInput.value;
@@ -321,10 +277,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Change Password
     changePasswordForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         passwordChangeMessage.textContent = '';
-        passwordChangeMessage.className = 'message'; // Reset class
+        passwordChangeMessage.className = 'message';
 
         const oldPassword = document.getElementById('old-password').value;
         const newPassword = document.getElementById('new-password').value;
@@ -361,9 +318,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Logout Button Logic ---
+    // Logout
     logoutBtn.addEventListener('click', logout);
 
-    // Initial check
+    // --- Initial Load ---
     checkLogin();
 });
