@@ -36,9 +36,15 @@
         <div id="main-view" class="hidden">
             <header>
                 <h1>弹幕API控制台</h1>
-                <div>
-                    <span id="current-user"></span>
-                    <button id="logout-btn">登出</button>
+                <div class="user-menu">
+                    <button id="user-menu-trigger" class="user-menu-button">
+                        <span id="current-user"></span>
+                        <span>&#9662;</span> <!-- Downward arrow -->
+                    </button>
+                    <div id="user-menu-content" class="user-menu-dropdown hidden">
+                        <a href="#" id="change-password-link">修改密码</a>
+                        <a href="#" id="logout-link">退出登录</a>
+                    </div>
                 </div>
             </header>
             
@@ -61,20 +67,27 @@
                     <h2>日志/状态</h2>
                     <pre id="log-output"></pre>
                 </div>
-
-                <div id="account-section">
-                    <h2>账户管理</h2>
-                    <form id="change-password-form">
-                        <h3>修改密码</h3>
-                        <p>如果您是使用初始随机密码登录的，建议您在此修改为自己的密码。</p>
-                        <input type="password" id="old-password" placeholder="当前密码" required>
-                        <input type="password" id="new-password" placeholder="新密码 (至少8位)" required>
-                        <input type="password" id="confirm-password" placeholder="确认新密码" required>
-                        <button type="submit">确认修改</button>
-                        <p id="password-change-message" class="message"></p>
-                    </form>
-                </div>
             </main>
+        </div>
+    </div>
+
+    <!-- 密码修改模态框 -->
+    <div id="modal-overlay" class="hidden">
+        <div id="password-change-modal" class="modal">
+            <div class="modal-header">
+                <h2>修改密码</h2>
+                <button id="modal-close-btn" class="close-button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="change-password-form">
+                    <p>如果您是使用初始随机密码登录的，建议您在此修改为自己的密码。</p>
+                    <input type="password" id="old-password" placeholder="当前密码" required>
+                    <input type="password" id="new-password" placeholder="新密码 (至少8位)" required>
+                    <input type="password" id="confirm-password" placeholder="确认新密码" required>
+                    <button type="submit">确认修改</button>
+                    <p id="password-change-message" class="message"></p>
+                </form>
+            </div>
         </div>
     </div>
 

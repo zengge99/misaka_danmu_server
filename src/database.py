@@ -64,25 +64,35 @@ async def create_initial_admin_user(app: FastAPI):
 
 async def init_db_tables(app: FastAPI):
     """初始化数据库和表"""
+    db_name = settings.database.name
     # 1. 先尝试连接MySQL实例，但不指定数据库
     try:
         conn = await aiomysql.connect(
             host=settings.database.host, port=settings.database.port,
             user=settings.database.user, password=settings.database.password
-        ) 
+        )
     except Exception as e:
-        print(f"数据库连接失败，请检查 config.yml 中的配置: {e}") 
+        print(f"数据库连接失败，请检查配置: {e}")
         raise RuntimeError(f"无法连接到数据库: {e}") from e
 
     async with conn.cursor() as cursor:
         # 2. 创建数据库 (如果不存在)
-        await cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{settings.database.name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+        await cursor.execute("SHOW DATABASES LIKE %s", (db_name,))
+        if not await cursor.fetchone():
+            print(f"数据库 '{db_name}' 不存在，正在创建...")
+            await cursor.execute(f"CREATE DATABASE `{db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+            print(f"数据库 '{db_name}' 创建成功。")
     conn.close()
 
-    # 3. 连接到指定数据库，并创建表
-    # 使用 app.state 中的连接池
+    # 3. 检查核心表 'users' 是否存在，如果存在则跳过所有表的创建
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor() as cursor:
+            await cursor.execute("SHOW TABLES LIKE 'users'")
+            if await cursor.fetchone():
+                print("数据库和表已存在，跳过初始化。")
+                return
+
+            print("正在初始化数据表...")
             # 创建 anime 表
             await cursor.execute("""
             CREATE TABLE IF NOT EXISTS `anime` (
@@ -127,4 +137,4 @@ async def init_db_tables(app: FastAPI):
               UNIQUE INDEX `idx_username_unique` (`username` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
-    print("数据库和表初始化完成。")
+            print("数据库和表初始化完成。")

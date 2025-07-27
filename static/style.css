@@ -105,18 +105,6 @@ header {
     margin-bottom: 20px;
 }
 
-#current-user {
-    margin-right: 15px;
-}
-
-#logout-btn {
-    background-color: #f56c6c;
-}
-
-#logout-btn:hover {
-    background-color: #d63434;
-}
-
 main > div {
     margin-bottom: 30px;
     padding: 20px;
@@ -214,13 +202,100 @@ main > div {
     color: var(--error-color);
 }
 
-/* Account Section */
-#account-section form {
-    width: auto; /* Override the fixed width from auth form */
-    max-width: 400px;
-    margin: 0 auto; /* Center the form */
+/* User Menu Dropdown */
+.user-menu {
+    position: relative;
 }
 
-#account-section form h3 {
+.user-menu-button {
+    background: none;
+    border: 1px solid var(--border-color);
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.user-menu-button:hover {
+    background-color: var(--secondary-color);
+}
+
+.user-menu-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    box-shadow: var(--shadow);
+    z-index: 100;
+    min-width: 150px;
+}
+
+.user-menu-dropdown a {
+    display: block;
+    padding: 10px 15px;
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.user-menu-dropdown a:hover {
+    background-color: var(--secondary-color);
+}
+
+/* Modal Styles */
+#modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal {
+    background: var(--bg-color);
+    padding: 0;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    width: 90%;
+    max-width: 450px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h2 {
     margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 1.25em;
+}
+
+.close-button {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #aaa;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-body form {
+    width: auto;
+    border: none;
+    padding: 0;
+    box-shadow: none;
 }

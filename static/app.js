@@ -11,9 +11,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsList = document.getElementById('results-list');
     const logOutput = document.getElementById('log-output');
     const currentUserSpan = document.getElementById('current-user');
-    const logoutBtn = document.getElementById('logout-btn');
     const loader = document.getElementById('loader');
+
+    // New UI elements for dropdown and modal
+    const userMenuTrigger = document.getElementById('user-menu-trigger');
+    const userMenuContent = document.getElementById('user-menu-content');
+    const changePasswordLink = document.getElementById('change-password-link');
+    const logoutLink = document.getElementById('logout-link');
+    const modalOverlay = document.getElementById('modal-overlay');
     const changePasswordForm = document.getElementById('change-password-form');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
     const passwordChangeMessage = document.getElementById('password-change-message');
 
     let token = localStorage.getItem('danmu_api_token');
@@ -157,7 +164,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    logoutBtn.addEventListener('click', logout);
+    // --- User Menu and Modal Logic ---
+    userMenuTrigger.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent click from bubbling to document
+        userMenuContent.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', () => {
+        // Hide dropdown if clicked outside
+        if (!userMenuContent.classList.contains('hidden')) {
+            userMenuContent.classList.add('hidden');
+        }
+    });
+
+    logoutLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        logout();
+    });
+
+    function showPasswordModal() {
+        modalOverlay.classList.remove('hidden');
+        passwordChangeMessage.textContent = '';
+        passwordChangeMessage.className = 'message';
+        changePasswordForm.reset();
+    }
+
+    function hidePasswordModal() {
+        modalOverlay.classList.add('hidden');
+    }
+
+    changePasswordLink.addEventListener('click', (e) => { e.preventDefault(); showPasswordModal(); });
+    modalCloseBtn.addEventListener('click', hidePasswordModal);
+    modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) { // Only close if overlay itself is clicked
+            hidePasswordModal();
+        }
+    });
 
     searchForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -264,6 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
             passwordChangeMessage.classList.add('success');
             log('密码已成功修改。');
             changePasswordForm.reset();
+            setTimeout(hidePasswordModal, 1500); // On success, close modal after a short delay
         } catch (error) {
             passwordChangeMessage.textContent = `修改失败: ${error.message}`;
             passwordChangeMessage.classList.add('error');
