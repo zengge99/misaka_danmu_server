@@ -75,3 +75,6 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/danmu_api_server:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/danmu_api_server:${{ steps.calculate_tag.outputs.tag }}
+          build-args: |
+            PUID=1000
+            PGID=1000
