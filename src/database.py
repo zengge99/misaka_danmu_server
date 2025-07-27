@@ -89,7 +89,20 @@ async def init_db_tables(app: FastAPI):
         async with conn.cursor() as cursor:
             await cursor.execute("SHOW TABLES LIKE 'users'")
             if await cursor.fetchone():
-                print("数据库和表已存在，跳过初始化。")
+                print("数据库和表已存在，正在检查 schema 是否需要更新...")
+                # 检查 'current_token' 列是否存在，如果不存在，则更新表结构
+                # 这是一种简单的数据库迁移，以确保旧数据库也能平滑升级
+                await cursor.execute("SHOW COLUMNS FROM `users` LIKE 'token'")
+                if not await cursor.fetchone():
+                    print("检测到旧的 'users' 表 schema，正在添加 'token' 和 'token_update' 字段...")
+                    await cursor.execute("""
+                        ALTER TABLE `users`
+                        ADD COLUMN `token` TEXT NULL AFTER `hashed_password`,
+                        ADD COLUMN `token_update` TIMESTAMP NULL AFTER `token`;
+                    """)
+                    print("Schema 更新完成。")
+                else:
+                    print("Schema 已是最新，无需更新。")
                 return
 
             print("正在初始化数据表...")
@@ -132,6 +145,8 @@ async def init_db_tables(app: FastAPI):
               `id` BIGINT NOT NULL AUTO_INCREMENT,
               `username` VARCHAR(50) NOT NULL,
               `hashed_password` VARCHAR(255) NOT NULL,
+              `token` TEXT NULL,
+              `token_update` TIMESTAMP NULL,
               `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
               PRIMARY KEY (`id`),
               UNIQUE INDEX `idx_username_unique` (`username` ASC)

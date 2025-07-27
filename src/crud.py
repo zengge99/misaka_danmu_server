@@ -105,7 +105,7 @@ async def get_user_by_username(pool: aiomysql.Pool, username: str) -> Optional[D
     """通过用户名查找用户"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            query = "SELECT id, username, hashed_password, current_token FROM users WHERE username = %s"
+            query = "SELECT id, username, hashed_password, token FROM users WHERE username = %s"
             await cursor.execute(query, (username,))
             return await cursor.fetchone()
 
@@ -133,5 +133,5 @@ async def update_user_login_info(pool: aiomysql.Pool, username: str, token: str)
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             # 使用 NOW() 获取数据库服务器的当前时间
-            query = "UPDATE users SET current_token = %s, last_login_at = NOW() WHERE username = %s"
+            query = "UPDATE users SET token = %s, token_update = NOW() WHERE username = %s"
             await cursor.execute(query, (token, username))

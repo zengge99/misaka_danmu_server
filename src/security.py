@@ -61,7 +61,7 @@ async def get_current_user(
     
     # 新增：检查客户端提供的令牌是否与数据库中存储的最新令牌匹配
     # 这可以防止旧令牌被重用，并实现“单点登录”或“踢掉其他设备”的效果
-    if user["current_token"] != token:
+    if user["token"] != token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token is outdated, please log in again.",
