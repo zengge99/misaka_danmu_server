@@ -101,7 +101,7 @@ async def link_source_to_anime(pool: aiomysql.Pool, anime_id: int, provider: str
             source = await cursor.fetchone()
             return source[0]
 
-async def get_or_create_episode(pool: aiomysql.Pool, source_id: int, episode_index: int, title: str) -> int:
+async def get_or_create_episode(pool: aiomysql.Pool, source_id: int, episode_index: int, title: str, url: Optional[str]) -> int:
     """如果分集不存在则创建，并返回其ID"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
@@ -113,8 +113,8 @@ async def get_or_create_episode(pool: aiomysql.Pool, source_id: int, episode_ind
             
             # 不存在则创建
             await cursor.execute(
-                "INSERT INTO episode (source_id, episode_index, title) VALUES (%s, %s, %s)",
-                (source_id, episode_index, title)
+                "INSERT INTO episode (source_id, episode_index, title, source_url) VALUES (%s, %s, %s, %s)",
+                (source_id, episode_index, title, url)
             )
             return cursor.lastrowid
 

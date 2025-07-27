@@ -288,7 +288,8 @@ class TencentScraper(BaseScraper):
                 provider=self.provider_name,
                 episodeId=ep.vid,
                 title=ep.title,
-                episodeIndex=i + 1
+                episodeIndex=i + 1,
+                url=f"https://v.qq.com/x/cover/{media_id}/{ep.vid}.html"
             )
             for i, ep in enumerate(tencent_episodes)
         ]

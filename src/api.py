@@ -288,7 +288,7 @@ async def generic_import_task(
             logger.info(f"--- 开始处理分集 {i+1}/{len(episodes)}: '{episode.title}' (ID: {episode.episodeId}) ---")
             
             # 3.1 在数据库中创建或获取分集ID
-            episode_db_id = await crud.get_or_create_episode(pool, source_id, episode.episodeIndex, episode.title)
+            episode_db_id = await crud.get_or_create_episode(pool, source_id, episode.episodeIndex, episode.title, episode.url)
 
             # 3.2 获取弹幕
             comments = await scraper.get_comments(episode.episodeId)

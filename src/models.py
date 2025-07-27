@@ -66,6 +66,7 @@ class ProviderEpisodeInfo(BaseModel):
     episodeId: str = Field(..., description="该数据源中的分集ID (e.g., tencent的vid)")
     title: str = Field(..., description="分集标题")
     episodeIndex: int = Field(..., description="分集序号")
+    url: Optional[str] = Field(None, description="分集原始URL")
 
 class ImportRequest(BaseModel):
     provider: str = Field(..., description="要导入的数据源, e.g., 'tencent'")

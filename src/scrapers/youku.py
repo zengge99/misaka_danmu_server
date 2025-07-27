@@ -40,6 +40,7 @@ class YoukuEpisodeInfo(BaseModel):
     title: str
     duration: str
     category: str
+    link: str
 
     @property
     def total_mat(self) -> int:
@@ -186,7 +187,8 @@ class YoukuScraper(BaseScraper):
                 provider=self.provider_name,
                 episodeId=ep.id.replace("=", "_"),
                 title=ep.title,
-                episodeIndex=i + 1
+                episodeIndex=i + 1,
+                url=ep.link
             ) for i, ep in enumerate(all_episodes)
         ]
 

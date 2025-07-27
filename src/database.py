@@ -111,6 +111,8 @@ async def init_db_tables(app: FastAPI):
               `source_id` BIGINT NOT NULL,
               `title` VARCHAR(255) NOT NULL,
               `episode_index` INT NOT NULL,
+              `source_url` VARCHAR(512) NULL,
+              `fetched_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
               PRIMARY KEY (`id`),
               UNIQUE INDEX `idx_source_episode_unique` (`source_id` ASC, `episode_index` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -192,6 +194,17 @@ async def init_db_tables(app: FastAPI):
                 print("检测到旧的 'comment' 表 schema，正在更新 't' 字段的精度...")
                 await cursor.execute("ALTER TABLE `comment` MODIFY COLUMN `t` DECIMAL(10, 3) NOT NULL;")
                 print("'comment' 表 't' 字段精度更新完成。")
+
+            # 迁移检查：episode 表的 source_url 和 fetched_at
+            await cursor.execute("SHOW COLUMNS FROM `episode` LIKE 'source_url'")
+            if not await cursor.fetchone():
+                print("检测到旧的 'episode' 表 schema，正在添加 'source_url' 和 'fetched_at' 字段...")
+                await cursor.execute("""
+                    ALTER TABLE `episode`
+                    ADD COLUMN `source_url` VARCHAR(512) NULL AFTER `episode_index`,
+                    ADD COLUMN `fetched_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `source_url`;
+                """)
+                print("'episode' 表 schema 更新完成。")
 
             # 主要迁移：从 anime(provider, media_id) 迁移到 anime_sources，并更新 episode 表
             await cursor.execute("SHOW COLUMNS FROM `anime` LIKE 'provider'")
