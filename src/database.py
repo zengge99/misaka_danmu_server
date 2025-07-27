@@ -88,41 +88,8 @@ async def init_db_tables(app: FastAPI):
     # 3. 检查并创建/更新表
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor() as cursor:
-            await cursor.execute("SHOW TABLES LIKE 'users'")
-            if await cursor.fetchone():
-                # 表已存在，执行 schema 迁移检查
-                print("数据库和表已存在，正在检查 schema 是否需要更新...")
-                
-                # 检查 users 表是否需要更新
-                await cursor.execute("SHOW COLUMNS FROM `users` LIKE 'token'")
-                if not await cursor.fetchone():
-                    print("检测到旧的 'users' 表 schema，正在添加 'token' 和 'token_update' 字段...")
-                    await cursor.execute("""
-                        ALTER TABLE `users`
-                        ADD COLUMN `token` TEXT NULL AFTER `hashed_password`,
-                        ADD COLUMN `token_update` TIMESTAMP NULL AFTER `token`;
-                    """)
-                    print("'users' 表 schema 更新完成。")
-
-                # 检查 anime 表是否需要更新 image_url
-                await cursor.execute("SHOW COLUMNS FROM `anime` LIKE 'image_url'")
-                if not await cursor.fetchone():
-                    print("检测到旧的 'anime' 表 schema，正在添加 'image_url' 字段...")
-                    await cursor.execute("ALTER TABLE `anime` ADD COLUMN `image_url` VARCHAR(512) NULL AFTER `type`;")
-                    print("'anime' 表 schema 更新完成。")
-                
-                # 检查 anime 表是否需要更新 provider 和 media_id
-                await cursor.execute("SHOW COLUMNS FROM `anime` LIKE 'provider'")
-                if not await cursor.fetchone():
-                    print("检测到旧的 'anime' 表 schema，正在添加 'provider' 和 'media_id' 字段...")
-                    await cursor.execute("ALTER TABLE `anime` ADD COLUMN `provider` VARCHAR(50) NULL AFTER `season`, ADD COLUMN `media_id` VARCHAR(255) NULL AFTER `provider`;")
-                    print("'anime' 表 schema 更新完成。")
-
-                print("Schema 检查完成。")
-                return
-            
-            # 表不存在，执行首次初始化
-            print("正在初始化数据表...")
+            # --- 步骤 3.1: 使用幂等的 "CREATE TABLE IF NOT EXISTS" 确保所有表都存在 ---
+            print("正在确保所有数据表都存在...")
             # 创建 anime 表
             await cursor.execute("""
             CREATE TABLE IF NOT EXISTS `anime` (
@@ -172,4 +139,43 @@ async def init_db_tables(app: FastAPI):
               UNIQUE INDEX `idx_username_unique` (`username` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
-            print("数据库和表初始化完成。")
+            # 创建 scrapers 表
+            await cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `scrapers` (
+              `provider_name` VARCHAR(50) NOT NULL,
+              `is_enabled` BOOLEAN NOT NULL DEFAULT TRUE,
+              `display_order` INT NOT NULL DEFAULT 0,
+              PRIMARY KEY (`provider_name`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
+            print("数据表检查完成。")
+
+            # --- 步骤 3.2: 为已存在的表运行 schema 迁移检查 ---
+            print("正在检查旧的 schema 是否需要更新...")
+            
+            # 检查 users 表是否需要更新
+            await cursor.execute("SHOW COLUMNS FROM `users` LIKE 'token'")
+            if not await cursor.fetchone():
+                print("检测到旧的 'users' 表 schema，正在添加 'token' 和 'token_update' 字段...")
+                await cursor.execute("""
+                    ALTER TABLE `users`
+                    ADD COLUMN `token` TEXT NULL AFTER `hashed_password`,
+                    ADD COLUMN `token_update` TIMESTAMP NULL AFTER `token`;
+                """)
+                print("'users' 表 schema 更新完成。")
+
+            # 检查 anime 表是否需要更新 image_url
+            await cursor.execute("SHOW COLUMNS FROM `anime` LIKE 'image_url'")
+            if not await cursor.fetchone():
+                print("检测到旧的 'anime' 表 schema，正在添加 'image_url' 字段...")
+                await cursor.execute("ALTER TABLE `anime` ADD COLUMN `image_url` VARCHAR(512) NULL AFTER `type`;")
+                print("'anime' 表 schema 更新完成。")
+            
+            # 检查 anime 表是否需要更新 provider 和 media_id
+            await cursor.execute("SHOW COLUMNS FROM `anime` LIKE 'provider'")
+            if not await cursor.fetchone():
+                print("检测到旧的 'anime' 表 schema，正在添加 'provider' 和 'media_id' 字段...")
+                await cursor.execute("ALTER TABLE `anime` ADD COLUMN `provider` VARCHAR(50) NULL AFTER `season`, ADD COLUMN `media_id` VARCHAR(255) NULL AFTER `provider`;")
+                print("'anime' 表 schema 更新完成。")
+
+            print("Schema 检查完成。")
