@@ -21,11 +21,11 @@ async def startup_event():
     setup_logging()
     # 创建数据库连接池
     pool = await create_db_pool(app)
+    # 在进行任何依赖表的数据库操作前，先确保表已存在
+    await init_db_tables(app)
     # 创建 Scraper 管理器
     app.state.scraper_manager = ScraperManager(pool)
     await app.state.scraper_manager.load_and_sync_scrapers()
-    # 在创建连接池后初始化表
-    await init_db_tables(app)
     # 创建初始管理员用户（如果需要）
     await create_initial_admin_user(app)
 
