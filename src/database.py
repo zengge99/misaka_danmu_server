@@ -3,8 +3,6 @@ import secrets
 import string
 from fastapi import FastAPI, Request
 from .config import settings
-from . import crud
-from . import models
 
 
 async def create_db_pool(app: FastAPI):
@@ -32,6 +30,10 @@ async def close_db_pool(app: FastAPI):
 
 async def create_initial_admin_user(app: FastAPI):
     """在应用启动时创建初始管理员用户（如果已配置且不存在）"""
+    # 将导入移到函数内部以避免循环导入
+    from . import crud
+    from . import models
+
     admin_user = settings.admin.initial_user
     if not admin_user:
         return
