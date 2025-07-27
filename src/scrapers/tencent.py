@@ -300,7 +300,12 @@ class TencentScraper(BaseScraper):
                 
                 barrage_list = comment_data.get("barrage_list", [])
                 for comment_item in barrage_list:
-                    all_comments.append(TencentComment.model_validate(comment_item))
+                    try:
+                        all_comments.append(TencentComment.model_validate(comment_item))
+                    except ValidationError as e:
+                        # 腾讯的弹幕列表里有时会混入非弹幕数据（如广告、推荐等），这些数据结构不同
+                        # 我们在这里捕获验证错误，记录并跳过这些无效数据，以保证程序健壮性
+                        self.logger.debug(f"跳过一个无效的弹幕项目，因为它不符合预期的格式。原始数据: {comment_item}, 错误: {e}")
                 
                 await asyncio.sleep(0.2) # 礼貌性等待
 
