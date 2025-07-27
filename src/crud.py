@@ -72,18 +72,21 @@ async def fetch_comments(pool: aiomysql.Pool, episode_id: int) -> List[Dict[str,
             await cursor.execute(query, (episode_id,))
             return await cursor.fetchall()
 
-async def get_or_create_anime(pool: aiomysql.Pool, title: str) -> int:
-    """如果番剧不存在则创建，并返回其ID"""
+async def get_or_create_anime(pool: aiomysql.Pool, title: str, provider: str, media_id: str) -> int:
+    """通过 provider 和 media_id 查找番剧，如果不存在则创建，并返回其ID"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             # 检查是否存在
-            await cursor.execute("SELECT id FROM anime WHERE title = %s", (title,))
+            await cursor.execute("SELECT id FROM anime WHERE provider = %s AND media_id = %s", (provider, media_id))
             result = await cursor.fetchone()
             if result:
                 return result[0]
             
             # 不存在则创建
-            await cursor.execute("INSERT INTO anime (title, type) VALUES (%s, %s)", (title, 'tv_series'))
+            await cursor.execute(
+                "INSERT INTO anime (title, provider, media_id) VALUES (%s, %s, %s)",
+                (title, provider, media_id)
+            )
             return cursor.lastrowid
 
 
@@ -155,6 +158,32 @@ async def update_user_login_info(pool: aiomysql.Pool, username: str, token: str)
             query = "UPDATE users SET token = %s, token_update = NOW() WHERE username = %s"
             await cursor.execute(query, (token, username))
 
+async def get_anime_source_info(pool: aiomysql.Pool, anime_id: int) -> Optional[Dict[str, Any]]:
+    """获取番剧的源信息（provider, media_id, title）"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            query = "SELECT provider, media_id, title FROM anime WHERE id = %s"
+            await cursor.execute(query, (anime_id,))
+            return await cursor.fetchone()
+
+async def clear_anime_data(pool: aiomysql.Pool, anime_id: int):
+    """清空番剧的所有分集和弹幕，用于刷新"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT id FROM episode WHERE anime_id = %s", (anime_id,))
+            episode_ids = [row[0] for row in await cursor.fetchall()]
+            if episode_ids:
+                format_strings = ','.join(['%s'] * len(episode_ids))
+                await cursor.execute(f"DELETE FROM comment WHERE episode_id IN ({format_strings})", tuple(episode_ids))
+                await cursor.execute(f"DELETE FROM episode WHERE id IN ({format_strings})", tuple(episode_ids))
+
+async def update_anime_info(pool: aiomysql.Pool, anime_id: int, title: str, season: int) -> bool:
+    """更新番剧信息"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            query = "UPDATE anime SET title = %s, season = %s WHERE id = %s"
+            affected_rows = await cursor.execute(query, (title, season, anime_id))
+            return affected_rows > 0
 
 async def delete_anime(pool: aiomysql.Pool, anime_id: int) -> bool:
     """

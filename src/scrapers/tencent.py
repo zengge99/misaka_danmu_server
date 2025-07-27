@@ -6,6 +6,7 @@ from datetime import datetime
 
 from .base import BaseScraper
 from .. import models
+from ..log_manager import log_manager
  
 # --- Pydantic 模型，用于解析腾讯API的响应 ---
 
@@ -61,8 +62,8 @@ class TencentScraper(BaseScraper):
             "video_omgid": "0a1ff6bc9407c0b1cff86ee5d359614d"
         }
         self.client = httpx.AsyncClient(headers=self.base_headers, cookies=self.cookies, timeout=20.0)
-        # 新增一个带时间戳的日志记录函数
-        self.logger = lambda message: print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [TencentScraper] {message}")
+        # 使用中央日志管理器
+        self.logger = lambda message: log_manager.add_log(f"[TencentScraper] {message}")
 
     @property
     def provider_name(self) -> str:
@@ -138,7 +139,11 @@ class TencentScraper(BaseScraper):
                 }
             }
             try:
+                self.logger(f"准备请求分集列表 (cid={cid})")
+                self.logger(f"  - URL: {url}")
+                self.logger(f"  - Payload: {payload}")
                 response = await self.client.post(url, json=payload)
+                self.logger(f"收到响应 (cid={cid}), Status Code: {response.status_code}")
                 response.raise_for_status()
                 data = response.json()
 
@@ -162,6 +167,7 @@ class TencentScraper(BaseScraper):
 
                 if not item_datas:
                     self.logger(f"cid='{cid}': 未找到更多分集，或API结构已更改。")
+                    self.logger(f"完整响应内容 (cid={cid}): {data}")
                     break
 
                 new_episodes_found = 0
@@ -200,9 +206,12 @@ class TencentScraper(BaseScraper):
 
             except httpx.HTTPStatusError as e:
                 self.logger(f"请求分集列表失败 (cid={cid}): {e}")
+                self.logger(f"失败响应内容: {e.response.text}")
                 break
-            except (KeyError, IndexError) as e:
+            except (KeyError, IndexError, ValidationError) as e:
                 self.logger(f"解析分集列表JSON失败 (cid={cid}): {e}")
+                if 'data' in locals():
+                    self.logger(f"导致解析失败的JSON数据: {data}")
                 break
 
         self.logger(f"分集列表获取完成 (cid={cid})，共 {len(all_episodes)} 个。")

@@ -380,25 +380,53 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 将操作函数暴露到全局，以便内联onclick可以调用
     window.handleAction = (action, animeId) => {
-        if (action === 'delete') {
-            // 从表格行中获取番剧标题，让确认提示更友好
-            const row = document.querySelector(`#library-table button[onclick*="handleAction('delete', ${animeId})"]`).closest('tr');
-            const title = row ? row.cells[1].textContent : `ID: ${animeId}`;
+        const row = document.querySelector(`#library-table button[onclick*="handleAction('${action}', ${animeId})"]`).closest('tr');
+        const title = row ? row.cells[1].textContent : `ID: ${animeId}`;
 
+        if (action === 'delete') {
             if (confirm(`您确定要删除番剧 '${title}' 吗？\n此操作将删除其所有分集和弹幕，且不可恢复。`)) {
-                log(`开始删除番剧 '${title}' (ID: ${animeId})...`);
                 apiFetch(`/api/v2/library/anime/${animeId}`, {
                     method: 'DELETE',
                 }).then(() => {
-                    log(`番剧 '${title}' (ID: ${animeId}) 已成功删除。`);
                     loadLibrary(); // 重新加载列表以反映删除
                 }).catch(error => {
-                    log(`删除番剧 '${title}' (ID: ${animeId}) 失败: ${error.message}`);
                     alert(`删除失败: ${error.message}`);
                 });
             }
+        } else if (action === 'edit') {
+            const currentSeason = row ? row.cells[2].textContent : '1';
+            const newTitle = prompt("请输入新的影视名称：", title);
+            if (newTitle === null) return; // 用户取消
+            const newSeasonStr = prompt("请输入新的季数：", currentSeason);
+            if (newSeasonStr === null) return; // 用户取消
+
+            const newSeason = parseInt(newSeasonStr, 10);
+            if (isNaN(newSeason) || newSeason < 1) {
+                alert("季数必须是一个大于0的数字。");
+                return;
+            }
+
+            apiFetch(`/api/v2/library/anime/${animeId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ title: newTitle, season: newSeason }),
+            }).then(() => {
+                alert("信息更新成功！");
+                loadLibrary();
+            }).catch(error => {
+                alert(`更新失败: ${error.message}`);
+            });
+
+        } else if (action === 'refresh_full') {
+            if (confirm(`您确定要为 '${title}' 执行全量刷新吗？\n这将删除所有现有弹幕并从源重新获取。`)) {
+                apiFetch(`/api/v2/library/anime/${animeId}/refresh`, {
+                    method: 'POST',
+                }).then(response => {
+                    alert(response.message || "全量刷新任务已开始，请在日志中查看进度。");
+                }).catch(error => {
+                    alert(`启动刷新任务失败: ${error.message}`);
+                });
+            }
         } else {
-            log(`操作: ${action}, 番剧ID: ${animeId}`);
             alert(`功能 '${action}' 尚未实现。`);
         }
     };
