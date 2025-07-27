@@ -30,6 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const editAnimeForm = document.getElementById('edit-anime-form');
     const librarySearchInput = document.getElementById('library-search-input');
 
+
+
     // Sources View Elements
     const sourcesList = document.getElementById('sources-list');
     const saveSourcesBtn = document.getElementById('save-sources-btn');
@@ -236,6 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 libraryView.classList.remove('hidden');
                 animeDetailView.classList.add('hidden');
                 editAnimeView.classList.add('hidden');
+                animeDetailView.classList.add('hidden');
             } else if (viewId === 'sources-view') {
                 loadScraperSettings();
             }
@@ -405,19 +408,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Library Search Filter
-    librarySearchInput.addEventListener('input', () => {
-        const searchTerm = librarySearchInput.value.toLowerCase();
-        const rows = libraryTableBody.querySelectorAll('tr');
-        rows.forEach(row => {
-            const titleCell = row.cells[1];
-            if (titleCell) {
-                const title = titleCell.textContent.toLowerCase();
-                row.style.display = title.includes(searchTerm) ? '' : 'none';
-            }
-        });
-    });
-
     // --- Scraper Sources View ---
     async function loadScraperSettings() {
         if (!sourcesList) return;
@@ -504,7 +494,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showAnimeDetailView(animeId) {
         libraryView.classList.add('hidden');
         animeDetailView.classList.remove('hidden');
-        editAnimeView.classList.add('hidden');
         animeDetailView.innerHTML = '<div>加载中...</div>';
 
         try {
@@ -585,7 +574,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Edit Anime View ---
     function showEditAnimeView(animeId, currentTitle, currentSeason) {
         libraryView.classList.add('hidden');
-        animeDetailView.classList.add('hidden');
         editAnimeView.classList.remove('hidden');
 
         document.getElementById('edit-anime-id').value = animeId;
