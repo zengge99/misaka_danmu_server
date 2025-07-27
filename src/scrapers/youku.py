@@ -232,26 +232,37 @@ class YoukuScraper(BaseScraper):
             return []
 
     async def _ensure_token_cookie(self):
-        cna_cookie = self.client.cookies.get("cna", domain="mmstat.com")
+        # 步骤 1: 尝试通过访问优酷主站获取 'cna' cookie，这比直接访问 mmstat 更健壮
+        cna_cookie = self.client.cookies.get("cna") # 在整个 cookie jar 中查找
         if not cna_cookie:
             try:
-                await self.client.get("https://log.mmstat.com/eg.js")
+                self.logger.info("Youku: 'cna' cookie 未找到, 正在访问 youku.com 以获取...")
+                await self.client.get("https://www.youku.com/")
             except httpx.ConnectError as e:
-                self.logger.warning(f"Youku: 无法连接到 mmstat 获取 'cna' cookie。这可能是 DNS 或网络问题。将尝试继续。错误: {e}")
-        
-        self._cna = self.client.cookies.get("cna", domain="mmstat.com") or ""
+                self.logger.warning(f"Youku: 无法连接到 youku.com 获取 'cna' cookie。错误: {e}")
 
-        token_cookie = self.client.cookies.get("_m_h5_tk", domain="youku.com")
+        # 在所有域中搜索 cna cookie 的值
+        cna_val = None
+        for cookie in self.client.cookies:
+            if cookie.name == 'cna':
+                cna_val = cookie.value
+                break
+        self._cna = cna_val or ""
+
+        # 步骤 2: 获取 _m_h5_tk 令牌, 这可能依赖于 'cna' cookie
+        token_cookie = self.client.cookies.get("_m_h5_tk")
         if not token_cookie:
             try:
+                self.logger.info("Youku: '_m_h5_tk' cookie 未找到, 正在从 acs.youku.com 请求...")
                 await self.client.get("https://acs.youku.com/h5/mtop.com.youku.aplatform.weakget/1.0/?jsv=2.5.1&appKey=24679788")
             except httpx.ConnectError as e:
                 self.logger.error(f"Youku: 无法连接到 acs.youku.com 获取令牌 cookie。弹幕获取很可能会失败。错误: {e}")
         
-        self._token = (self.client.cookies.get("_m_h5_tk", domain="youku.com") or "").split("_")[0]
+        token_val = self.client.cookies.get("_m_h5_tk")
+        self._token = token_val.split("_")[0] if token_val else ""
 
         if not self._cna or not self._token:
-            self.logger.warning("Youku: 未能获取到弹幕签名所需的 cookie (cna, _m_h5_tk)。")
+            self.logger.warning(f"Youku: 未能获取到弹幕签名所需的 cookie。 cna: '{self._cna}', token: '{self._token}'")
 
     def _generate_msg_sign(self, msg_enc: str) -> str:
         s = msg_enc + "MkmC9SoIw6xCkSKHhJ7b5D2r51kBiREr"
