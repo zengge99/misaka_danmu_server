@@ -229,7 +229,7 @@ header {
 }
 
 /* Edit Anime Form */
-#edit-anime-form {
+#edit-anime-form, #edit-episode-form {
     max-width: 500px;
     margin: 20px auto;
     border: 1px solid var(--border-color);

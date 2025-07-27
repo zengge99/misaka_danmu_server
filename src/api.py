@@ -183,8 +183,14 @@ async def edit_episode_info(
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
-    """更新指定分集的标题。"""
-    updated = await crud.update_episode_title(pool, episode_id, update_data.title)
+    """更新指定分集的标题、集数和链接。"""
+    updated = await crud.update_episode_info(
+        pool,
+        episode_id,
+        update_data.title,
+        update_data.episode_index,
+        update_data.source_url
+    )
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
     logger.info(f"用户 '{current_user.username}' 更新了分集 ID: {episode_id} 的信息。")

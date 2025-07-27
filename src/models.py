@@ -83,6 +83,8 @@ class AnimeInfoUpdate(BaseModel):
 class EpisodeInfoUpdate(BaseModel):
     """用于更新分集信息的模型"""
     title: str = Field(..., min_length=1, description="新的分集标题")
+    episode_index: int = Field(..., ge=1, description="新的集数")
+    source_url: Optional[str] = Field(None, description="新的官方链接")
 
 # --- 爬虫源管理模型 ---
 class ScraperSetting(BaseModel):

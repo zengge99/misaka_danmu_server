@@ -234,12 +234,12 @@ async def update_anime_info(pool: aiomysql.Pool, anime_id: int, title: str, seas
             affected_rows = await cursor.execute(query, (title, season, anime_id))
             return affected_rows > 0
 
-async def update_episode_title(pool: aiomysql.Pool, episode_id: int, new_title: str) -> bool:
-    """更新分集的标题"""
+async def update_episode_info(pool: aiomysql.Pool, episode_id: int, title: str, episode_index: int, source_url: Optional[str]) -> bool:
+    """更新分集信息"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
-            query = "UPDATE episode SET title = %s WHERE id = %s"
-            affected_rows = await cursor.execute(query, (new_title, episode_id))
+            query = "UPDATE episode SET title = %s, episode_index = %s, source_url = %s WHERE id = %s"
+            affected_rows = await cursor.execute(query, (title, episode_index, source_url, episode_id))
             return affected_rows > 0
 
 async def delete_anime(pool: aiomysql.Pool, anime_id: int) -> bool:
