@@ -90,20 +90,26 @@ async def init_db_tables(app: FastAPI):
             await cursor.execute("SHOW TABLES LIKE 'users'")
             if await cursor.fetchone():
                 print("数据库和表已存在，正在检查 schema 是否需要更新...")
-                # 检查 'current_token' 列是否存在，如果不存在，则更新表结构
-                # 这是一种简单的数据库迁移，以确保旧数据库也能平滑升级
+                
+                # 检查 users 表是否需要更新
                 await cursor.execute("SHOW COLUMNS FROM `users` LIKE 'token'")
                 if not await cursor.fetchone():
-                    print("检测到旧的 schema，正在更新 'users' 和 'anime' 表...")
+                    print("检测到旧的 'users' 表 schema，正在添加 'token' 和 'token_update' 字段...")
                     await cursor.execute("""
                         ALTER TABLE `users`
                         ADD COLUMN `token` TEXT NULL AFTER `hashed_password`,
                         ADD COLUMN `token_update` TIMESTAMP NULL AFTER `token`;
                     """)
+                    print("'users' 表 schema 更新完成。")
+
+                # 检查 anime 表是否需要更新
+                await cursor.execute("SHOW COLUMNS FROM `anime` LIKE 'image_url'")
+                if not await cursor.fetchone():
+                    print("检测到旧的 'anime' 表 schema，正在添加 'image_url' 字段...")
                     await cursor.execute("ALTER TABLE `anime` ADD COLUMN `image_url` VARCHAR(512) NULL AFTER `type`;")
-                    print("Schema 更新完成。")
-                else:
-                    print("Schema 已是最新，无需更新。")
+                    print("'anime' 表 schema 更新完成。")
+
+                print("Schema 检查完成。")
                 return
 
             print("正在初始化数据表...")
