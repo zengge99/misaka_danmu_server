@@ -60,15 +60,25 @@ class Settings(BaseSettings):
 
     @classmethod
     def settings_customise_sources(
-        cls, settings_cls: type[BaseSettings], **kwargs
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         # 定义加载源的优先级:
         # 1. 环境变量 (最高)
-        # 2. YAML 文件
-        # 3. Pydantic 模型中的默认值 (最低)
+        # 2. .env 文件
+        # 3. YAML 文件
+        # 4. 文件密钥
+        # 5. Pydantic 模型中的默认值 (最低)
         return (
-            EnvSettingsSource(settings_cls, **kwargs),
+            env_settings,
+            dotenv_settings,
             YamlConfigSettingsSource(settings_cls),
+            file_secret_settings,
+            init_settings,
         )
 
 
