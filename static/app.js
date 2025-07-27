@@ -23,6 +23,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalCloseBtn = document.getElementById('modal-close-btn');
     const passwordChangeMessage = document.getElementById('password-change-message');
 
+    // --- New UI elements for sidebar navigation ---
+    const sidebar = document.getElementById('sidebar');
+    const contentViews = document.querySelectorAll('.content-view');
+
+    // 确保模态框在启动时是隐藏的，作为一道保险，防止因缓存等问题导致其意外显示
+    if (modalOverlay) modalOverlay.classList.add('hidden');
+
     let token = localStorage.getItem('danmu_api_token');
 
     function log(message) {
@@ -89,12 +96,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         try {
             const user = await apiFetch('/api/v2/auth/users/me');
-            // 如果apiFetch成功，user对象一定是有效的
+            // 增加健壮性检查，防止 user 为 null 或缺少 username 导致脚本崩溃
+            if (!user || !user.username) {
+                throw new Error('未能获取到有效的用户信息。');
+            }
             currentUserSpan.textContent = `用户: ${user.username}`;
             showView('main');
         } catch (error) {
-            // 此处无需再调用logout()，因为它已在apiFetch中处理
+            // 捕获到任何错误（包括上面抛出的错误或apiFetch中的网络/认证错误）
+            // 都应执行登出操作以清理状态。
             log(`自动登录失败: ${error.message}`);
+            logout(); // 统一在这里处理登出，确保状态被重置
         }
     }
 
@@ -171,6 +183,30 @@ document.addEventListener('DOMContentLoaded', () => {
             log(`登录失败: ${error.message}`);
         }
     });
+
+    // --- Sidebar Navigation Logic ---
+    if (sidebar) {
+        sidebar.addEventListener('click', (e) => {
+            // 使用 .closest() 确保即使用户点击了链接内的图标等元素也能正确触发
+            const navLink = e.target.closest('.nav-link');
+            if (navLink) {
+                e.preventDefault();
+                const viewId = navLink.getAttribute('data-view');
+                if (!viewId) return;
+    
+                // 更新导航链接的激活状态
+                sidebar.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+                navLink.classList.add('active');
+    
+                // 切换主内容区域的视图
+                contentViews.forEach(view => view.classList.add('hidden'));
+                const targetView = document.getElementById(viewId);
+                if (targetView) {
+                    targetView.classList.remove('hidden');
+                }
+            }
+        });
+    }
 
     // --- User Menu and Modal Logic ---
     userMenuTrigger.addEventListener('click', (e) => {

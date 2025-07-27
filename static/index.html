@@ -47,27 +47,38 @@
                     </div>
                 </div>
             </header>
-            
-            <main>
-                <div class="search-section">
-                    <h2>从外部数据源搜索</h2>
-                    <form id="search-form">
-                        <input type="text" id="search-keyword" placeholder="输入番剧名称..." required>
-                        <button type="submit">搜索</button>
-                    </form>
-                </div>
-
-                <div id="results-section">
-                    <h2>搜索结果</h2>
-                    <div id="loader" class="hidden"></div>
-                    <ul id="results-list"></ul>
-                </div>
-
-                <div id="logs-section">
-                    <h2>日志/状态</h2>
-                    <pre id="log-output"></pre>
-                </div>
-            </main>
+            <div class="main-layout">
+                <nav id="sidebar">
+                    <ul>
+                        <li><a href="#" class="nav-link active" data-view="home-view">主页</a></li>
+                        <!-- 其它导航项可以加在这里 -->
+                    </ul>
+                </nav>
+                <main id="main-content">
+                    <div id="home-view" class="content-view">
+                        <div class="search-section">
+                            <h2>从外部数据源搜索</h2>
+                            <form id="search-form">
+                                <input type="text" id="search-keyword" placeholder="输入番剧名称..." required>
+                                <button type="submit">搜索</button>
+                            </form>
+                        </div>
+        
+                        <div id="results-section">
+                            <h2>搜索结果</h2>
+                            <div id="loader" class="hidden"></div>
+                            <ul id="results-list"></ul>
+                        </div>
+        
+                        <div id="logs-section">
+                            <h2>日志/状态</h2>
+                            <pre id="log-output"></pre>
+                        </div>
+                    </div>
+                    <!-- 其它视图可以加在这里 -->
+                    <!-- <div id="settings-view" class="content-view hidden">...</div> -->
+                </main>
+            </div>
         </div>
     </div>
 

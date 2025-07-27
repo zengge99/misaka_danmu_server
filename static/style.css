@@ -105,14 +105,6 @@ header {
     margin-bottom: 20px;
 }
 
-main > div {
-    margin-bottom: 30px;
-    padding: 20px;
-    background: var(--card-bg);
-    border-radius: 8px;
-    box-shadow: var(--shadow);
-}
-
 #search-form {
     display: flex;
     gap: 10px;
@@ -120,6 +112,62 @@ main > div {
 
 #search-keyword {
     flex-grow: 1;
+}
+
+/* New Main Layout */
+.main-layout {
+    display: flex;
+    /* 视口高度减去顶部内边距和header的大致高度 */
+    height: calc(100vh - 120px); 
+}
+
+#sidebar {
+    width: 200px;
+    background-color: var(--secondary-color);
+    padding: 20px 0;
+    border-right: 1px solid var(--border-color);
+    flex-shrink: 0; /* 防止侧边栏被压缩 */
+}
+
+#sidebar ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#sidebar .nav-link {
+    display: block;
+    padding: 12px 20px;
+    color: var(--text-color);
+    text-decoration: none;
+    font-weight: 500;
+    border-left: 3px solid transparent;
+    transition: all 0.2s ease-in-out;
+}
+
+#sidebar .nav-link:hover {
+    background-color: #e9ecef;
+}
+
+#sidebar .nav-link.active {
+    color: var(--primary-color);
+    background-color: #e9ecef;
+    border-left-color: var(--primary-color);
+}
+
+#main-content {
+    flex-grow: 1;
+    padding: 20px;
+    overflow-y: auto; /* 当内容超出时显示滚动条 */
+}
+
+/* 为每个视图内的卡片部分应用样式 */
+.content-view > div {
+    margin-bottom: 30px;
+    padding: 20px;
+    background: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
 }
 
 #results-list {
