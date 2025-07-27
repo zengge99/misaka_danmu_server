@@ -63,7 +63,7 @@ async def create_initial_admin_user(app: FastAPI):
     print("="*60 + "\n")
 
 async def init_db_tables(app: FastAPI):
-    """初始化数据库和表"""
+    """初始化数据库和表，并处理简单的 schema 迁移"""
     db_name = settings.database.name
     # 1. 先尝试连接MySQL实例，但不指定数据库
     try:
@@ -84,11 +84,12 @@ async def init_db_tables(app: FastAPI):
             print(f"数据库 '{db_name}' 创建成功。")
     conn.close()
 
-    # 3. 检查核心表 'users' 是否存在，如果存在则跳过所有表的创建
+    # 3. 检查并创建/更新表
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SHOW TABLES LIKE 'users'")
             if await cursor.fetchone():
+                # 表已存在，执行 schema 迁移检查
                 print("数据库和表已存在，正在检查 schema 是否需要更新...")
                 
                 # 检查 users 表是否需要更新
@@ -102,24 +103,35 @@ async def init_db_tables(app: FastAPI):
                     """)
                     print("'users' 表 schema 更新完成。")
 
-                # 检查 anime 表是否需要更新
+                # 检查 anime 表是否需要更新 image_url
                 await cursor.execute("SHOW COLUMNS FROM `anime` LIKE 'image_url'")
                 if not await cursor.fetchone():
                     print("检测到旧的 'anime' 表 schema，正在添加 'image_url' 字段...")
                     await cursor.execute("ALTER TABLE `anime` ADD COLUMN `image_url` VARCHAR(512) NULL AFTER `type`;")
                     print("'anime' 表 schema 更新完成。")
+                
+                # 检查 anime 表是否需要更新 provider 和 media_id
+                await cursor.execute("SHOW COLUMNS FROM `anime` LIKE 'provider'")
+                if not await cursor.fetchone():
+                    print("检测到旧的 'anime' 表 schema，正在添加 'provider' 和 'media_id' 字段...")
+                    await cursor.execute("ALTER TABLE `anime` ADD COLUMN `provider` VARCHAR(50) NULL AFTER `season`, ADD COLUMN `media_id` VARCHAR(255) NULL AFTER `provider`;")
+                    print("'anime' 表 schema 更新完成。")
 
                 print("Schema 检查完成。")
                 return
-
+            
+            # 表不存在，执行首次初始化
             print("正在初始化数据表...")
             # 创建 anime 表
             await cursor.execute("""
             CREATE TABLE IF NOT EXISTS `anime` (
               `id` BIGINT NOT NULL AUTO_INCREMENT,
               `title` VARCHAR(255) NOT NULL,
-              `type` ENUM('tv_series', 'movie', 'ova', 'other') NOT NULL DEFAULT 'tv_series', `image_url` VARCHAR(512) NULL,
+              `type` ENUM('tv_series', 'movie', 'ova', 'other') NOT NULL DEFAULT 'tv_series',
+              `image_url` VARCHAR(512) NULL,
               `season` INT NOT NULL DEFAULT 1,
+              `provider` VARCHAR(50) NULL,
+              `media_id` VARCHAR(255) NULL,
               `source_url` VARCHAR(512) NULL,
               `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
               PRIMARY KEY (`id`),
