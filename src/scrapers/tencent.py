@@ -177,13 +177,13 @@ class TencentScraper(BaseScraper):
                 # 以找到第一个包含有效项目列表 (itemDatas) 的模块。
                 # 这避免了因页面结构变动导致解析失败的问题。
                 item_datas = []
-                module_list_datas = data.get("data", {}).get("moduleListDatas", [])
+                module_list_datas = data.get("data", {}).get("module_list_datas", [])
                 
                 for module_list_data in module_list_datas:
-                    module_datas = module_list_data.get("moduleDatas", [])
+                    module_datas = module_list_data.get("module_datas", [])
                     for module_data in module_datas:
-                        item_data_lists = module_data.get("itemDataLists", {})
-                        found_items = item_data_lists.get("itemDatas")
+                        item_data_lists = module_data.get("item_data_lists", {})
+                        found_items = item_data_lists.get("item_datas")
                         if found_items:
                             item_datas = found_items
                             break 
@@ -200,7 +200,7 @@ class TencentScraper(BaseScraper):
                 new_episodes_found = 0
                 current_page_vids = []
                 for item in item_datas:
-                    params = item.get("itemParams", {})
+                    params = item.get("item_params", {})
                     if not params.get("vid"):
                         continue
                     
