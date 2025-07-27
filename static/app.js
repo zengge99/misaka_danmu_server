@@ -160,11 +160,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: formData,
             });
 
-            const data = await response.json();
+            // 首先，检查请求是否成功
             if (!response.ok) {
-                throw new Error(data.detail || '用户名或密码错误');
+                // 如果不成功，尝试从JSON响应体中解析错误详情
+                let errorDetail = '用户名或密码错误';
+                try {
+                    const errorData = await response.json();
+                    errorDetail = errorData.detail || errorDetail;
+                } catch (jsonError) {
+                    // 如果响应体不是JSON或为空，则使用默认错误信息
+                }
+                throw new Error(errorDetail);
             }
-            
+
+            // 如果请求成功，再解析令牌
+            const data = await response.json();
             token = data.access_token;
             localStorage.setItem('danmu_api_token', token);
             log('登录成功。');

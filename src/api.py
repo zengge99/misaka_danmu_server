@@ -215,6 +215,9 @@ async def login_for_access_token(
     access_token = security.create_access_token(
         data={"sub": user["username"]}, expires_delta=access_token_expires
     )
+    # 更新用户的登录信息
+    await crud.update_user_login_info(pool, user["username"], access_token)
+    
     return {"access_token": access_token, "token_type": "bearer"}
 
 

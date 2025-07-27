@@ -38,7 +38,7 @@ async def get_current_user(
     pool: aiomysql.Pool = Depends(get_db_pool)
 ) -> models.User:
     """
-    依赖项：解码JWT并获取当前用户。
+    依赖项：解码JWT，验证其有效性，并获取当前用户。
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -52,9 +52,20 @@ async def get_current_user(
             raise credentials_exception
         token_data = models.TokenData(username=username)
     except JWTError:
+        # 这将捕获过期的令牌、无效的签名等
         raise credentials_exception
     
     user = await crud.get_user_by_username(pool, username=token_data.username)
     if user is None:
         raise credentials_exception
+    
+    # 新增：检查客户端提供的令牌是否与数据库中存储的最新令牌匹配
+    # 这可以防止旧令牌被重用，并实现“单点登录”或“踢掉其他设备”的效果
+    if user["current_token"] != token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token is outdated, please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return models.User.model_validate(user)
