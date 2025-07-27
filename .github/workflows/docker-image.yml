@@ -45,14 +45,6 @@ jobs:
           # 将新标签设置为一个输出变量，供后续步骤使用
           echo "tag=${new_tag}" >> $GITHUB_OUTPUT
 
-      # 步骤3: 创建并推送新的 Git 标签
-      # 这一步会将计算出的新版本号作为标签推送到你的 GitHub 仓库
-      - name: Create and push Git tag
-        run: |
-          git config user.name "${{ github.actor }}"
-          git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
-          git tag ${{ steps.calculate_tag.outputs.tag }}
-          git push origin ${{ steps.calculate_tag.outputs.tag }}
 
       # 步骤4: 设置 Docker Buildx
       - name: Set up Docker Buildx
@@ -75,6 +67,4 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/danmu_api_server:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/danmu_api_server:${{ steps.calculate_tag.outputs.tag }}
-          build-args: |
-            PUID=1000
-            PGID=1000
+
