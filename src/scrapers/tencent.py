@@ -38,6 +38,7 @@ class TencentSearchVideoInfo(BaseModel):
     title: str
     year: Optional[int] = None
     type_name: str = Field(alias="typeName")
+    poster_url: Optional[str] = Field(None, alias="posterUrl")
     subject_doc: Optional[TencentSubjectDoc] = Field(None, alias="subjectDoc")
 
 class TencentSearchDoc(BaseModel):
@@ -146,6 +147,7 @@ class TencentScraper(BaseScraper):
                             title=cleaned_title,
                             type=media_type,
                             year=video_info.year,
+                            imageUrl=video_info.poster_url,
                             episodeCount=episode_count,
                             currentEpisodeIndex=current_episode
                         )

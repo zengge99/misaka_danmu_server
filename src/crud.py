@@ -73,18 +73,24 @@ async def fetch_comments(pool: aiomysql.Pool, episode_id: int) -> List[Dict[str,
             await cursor.execute(query, (episode_id,))
             return await cursor.fetchall()
 
-async def get_or_create_anime(pool: aiomysql.Pool, title: str, media_type: str) -> int:
-    """通过标题查找番剧，如果不存在则创建，并返回其ID。"""
+async def get_or_create_anime(pool: aiomysql.Pool, title: str, media_type: str, image_url: Optional[str]) -> int:
+    """通过标题查找番剧，如果不存在则创建。如果存在但缺少海报，则更新海报。返回其ID。"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
-            await cursor.execute("SELECT id FROM anime WHERE title = %s", (title,))
+            await cursor.execute("SELECT id, image_url FROM anime WHERE title = %s", (title,))
             result = await cursor.fetchone()
             if result:
-                return result[0]
+                anime_id = result[0]
+                existing_image_url = result[1]
+                # 如果番剧已存在，但没有海报，而这次导入提供了海报，则更新它
+                if not existing_image_url and image_url:
+                    await cursor.execute("UPDATE anime SET image_url = %s WHERE id = %s", (image_url, anime_id))
+                return anime_id
             
+            # 番剧不存在，创建新记录
             await cursor.execute(
-                "INSERT INTO anime (title, type, created_at) VALUES (%s, %s, %s)",
-                (title, media_type, datetime.now())
+                "INSERT INTO anime (title, type, image_url, created_at) VALUES (%s, %s, %s, %s)",
+                (title, media_type, image_url, datetime.now())
             )
             return cursor.lastrowid
 

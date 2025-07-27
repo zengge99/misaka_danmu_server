@@ -25,6 +25,7 @@ class YoukuSearchCommonData(BaseModel):
     episode_total: int = Field(alias="episodeTotal")
     feature: str
     is_youku: int = Field(alias="isYouku")
+    poster: Optional[str] = None
     has_youku: int = Field(alias="hasYouku")
     title_dto: YoukuSearchTitleDTO = Field(alias="titleDTO")
 
@@ -142,6 +143,7 @@ class YoukuScraper(BaseScraper):
                     title=cleaned_title,
                     type=media_type,
                     year=year,
+                    imageUrl=common_data.poster,
                     episodeCount=common_data.episode_total,
                     currentEpisodeIndex=current_episode
                 ))

@@ -469,6 +469,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         results.forEach(item => {
             const li = document.createElement('li');
+
+            const posterImg = document.createElement('img');
+            posterImg.className = 'poster';
+            posterImg.src = item.imageUrl || '/static/placeholder.png';
+            posterImg.alt = item.title;
+            li.appendChild(posterImg);
+
             const infoDiv = document.createElement('div');
             infoDiv.className = 'info';
             
@@ -503,6 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             media_id: item.mediaId,
                             anime_title: item.title,
                             type: item.type,
+                            image_url: item.imageUrl,
                             current_episode_index: item.currentEpisodeIndex,
                         }),
                     });

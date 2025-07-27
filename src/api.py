@@ -310,6 +310,7 @@ async def generic_import_task(
     anime_title: str,
     media_type: str,
     current_episode_index: Optional[int],
+    image_url: Optional[str],
     pool: aiomysql.Pool,
     manager: ScraperManager
 ):
@@ -321,7 +322,7 @@ async def generic_import_task(
         scraper = manager.get_scraper(provider)
 
         # 1. 在数据库中创建或获取番剧ID，并链接数据源
-        anime_id = await crud.get_or_create_anime(pool, anime_title, media_type)
+        anime_id = await crud.get_or_create_anime(pool, anime_title, media_type, image_url)
         source_id = await crud.link_source_to_anime(pool, anime_id, provider, media_id)
 
         logger.info(f"媒体 '{anime_title}' (ID: {anime_id}, 类型: {media_type}) 已准备就绪。")
@@ -377,9 +378,9 @@ async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: Scrape
     anime_id = source_info["anime_id"]
     # 1. 清空旧数据
     await crud.clear_source_data(pool, source_id)
-    logger.info(f"已清空源 ID: {source_id} 的旧分集和弹幕。")
+    logger.info(f"已清空源 ID: {source_id} 的旧分集和弹幕。") # image_url 在这里不会被传递，因为刷新时我们不希望覆盖已有的海报
     # 2. 重新执行通用导入逻辑
-    await generic_import_task(source_info["provider_name"], source_info["media_id"], source_info["title"], source_info["type"], None, pool, manager)
+    await generic_import_task(source_info["provider_name"], source_info["media_id"], source_info["title"], source_info["type"], None, None, pool, manager)
 
 async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: ScraperManager):
     """后台任务：刷新单个分集的弹幕"""
@@ -430,6 +431,7 @@ async def import_from_provider(
         request_data.anime_title,
         request_data.type,
         request_data.current_episode_index,
+        request_data.image_url,
         pool,
         manager
     )
