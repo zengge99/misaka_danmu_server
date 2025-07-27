@@ -142,8 +142,23 @@ class TencentScraper(BaseScraper):
                 response.raise_for_status()
                 data = response.json()
 
-                # 解析深层嵌套的JSON数据
-                item_datas = data.get("data", {}).get("moduleListDatas", [{}])[0].get("moduleDatas", [{}])[0].get("itemDataLists", {}).get("itemDatas", [])
+                # --- 新的、更健壮的解析逻辑 ---
+                # 电影和电视剧的页面模块结构不同，此逻辑会遍历所有模块，
+                # 以找到第一个包含有效项目列表 (itemDatas) 的模块。
+                item_datas = []
+                module_list_datas = data.get("data", {}).get("moduleListDatas", [])
+                
+                for module_list_data in module_list_datas:
+                    module_datas = module_list_data.get("moduleDatas", [])
+                    for module_data in module_datas:
+                        item_data_lists = module_data.get("itemDataLists", {})
+                        found_items = item_data_lists.get("itemDatas")
+                        if found_items:
+                            item_datas = found_items
+                            break 
+                    if item_datas:
+                        break
+                # --- 解析逻辑结束 ---
 
                 if not item_datas:
                     self.logger(f"cid='{cid}': 未找到更多分集，或API结构已更改。")
