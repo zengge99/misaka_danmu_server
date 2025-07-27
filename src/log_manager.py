@@ -1,27 +1,60 @@
 import collections
-from datetime import datetime
+import logging
+import logging.handlers
+from pathlib import Path
+from typing import List
 
-class LogManager:
-    _instance = None
+# 这个双端队列将用于在内存中存储最新的日志，以供Web界面展示
+_logs_deque = collections.deque(maxlen=200)
 
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(LogManager, cls).__new__(cls)
-            # Store up to 200 recent log entries
-            cls._instance.logs = collections.deque(maxlen=200)
-        return cls._instance
+# 自定义一个日志处理器，它会将日志记录发送到我们的双端队列中
+class DequeHandler(logging.Handler):
+    def __init__(self, deque):
+        super().__init__()
+        self.deque = deque
 
-    def add_log(self, message: str):
-        """Adds a new log entry with a timestamp."""
-        log_entry = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}"
-        # Prepend to the deque so newest logs are first
-        self.logs.appendleft(log_entry)
-        # Also print to the console for live debugging
-        print(log_entry)
+    def emit(self, record):
+        # 我们只存储格式化后的消息字符串
+        self.deque.appendleft(self.format(record))
 
-    def get_all_logs(self) -> list[str]:
-        """Returns a list of all stored log entries."""
-        return list(self.logs)
+def setup_logging():
+    """
+    配置根日志记录器，使其能够将日志输出到控制台、一个可轮转的文件，
+    以及一个用于API的内存双端队列。
+    此函数应在应用启动时被调用一次。
+    """
+    log_dir = Path(__file__).parent.parent / "config" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "app.log"
 
-# A single, globally accessible instance of the log manager
-log_manager = LogManager()
+    # 为控制台和文件日志定义详细的格式
+    verbose_formatter = logging.Formatter(
+        '[%(asctime)s] [%(name)s:%(lineno)d] [%(levelname)s] - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    # 为Web界面定义一个更简洁的格式
+    ui_formatter = logging.Formatter('[%(asctime)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    # 清理已存在的处理器，以避免在热重载时重复添加
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
+    logger.addHandler(logging.StreamHandler()) # 控制台处理器
+    logger.addHandler(logging.handlers.RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=5, encoding='utf-8')) # 文件处理器
+    logger.addHandler(DequeHandler(_logs_deque)) # Web界面日志处理器
+
+    # 为所有处理器设置格式
+    for handler in logger.handlers:
+        if isinstance(handler, DequeHandler):
+            handler.setFormatter(ui_formatter)
+        else:
+            handler.setFormatter(verbose_formatter)
+    
+    logging.info("日志系统已初始化，日志将输出到控制台和 %s", log_file)
+
+def get_logs() -> List[str]:
+    """返回为API存储的所有日志条目列表。"""
+    return list(_logs_deque)

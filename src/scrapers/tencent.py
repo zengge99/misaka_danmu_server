@@ -1,12 +1,12 @@
 import asyncio
 import httpx
+import logging
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, ValidationError
 from datetime import datetime
 
 from .base import BaseScraper
 from .. import models
-from ..log_manager import log_manager
  
 # --- Pydantic 模型，用于解析腾讯API的响应 ---
 
@@ -62,8 +62,8 @@ class TencentScraper(BaseScraper):
             "video_omgid": "0a1ff6bc9407c0b1cff86ee5d359614d"
         }
         self.client = httpx.AsyncClient(headers=self.base_headers, cookies=self.cookies, timeout=20.0)
-        # 使用中央日志管理器
-        self.logger = lambda message: log_manager.add_log(f"[TencentScraper] {message}")
+        # 获取一个专用的 logger 实例
+        self.logger = logging.getLogger(__name__)
 
     @property
     def provider_name(self) -> str:
@@ -107,9 +107,9 @@ class TencentScraper(BaseScraper):
                         )
                     )
         except httpx.HTTPStatusError as e:
-            self.logger(f"搜索请求失败: {e}")
+            self.logger.error(f"搜索请求失败: {e}")
         except (ValidationError, KeyError) as e:
-            self.logger(f"解析搜索结果失败: {e}")
+            self.logger.error(f"解析搜索结果失败: {e}", exc_info=True)
 
         return results
 
@@ -126,7 +126,7 @@ class TencentScraper(BaseScraper):
         page_context = "" # 首次请求为空
         last_vid_of_page = ""
 
-        self.logger(f"开始为 cid='{cid}' 获取分集列表...")
+        self.logger.info(f"开始为 cid='{cid}' 获取分集列表...")
 
         while True:
             payload = {
@@ -139,11 +139,11 @@ class TencentScraper(BaseScraper):
                 }
             }
             try:
-                self.logger(f"准备请求分集列表 (cid={cid})")
-                self.logger(f"  - URL: {url}")
-                self.logger(f"  - Payload: {payload}")
+                self.logger.debug(f"准备请求分集列表 (cid={cid})")
+                self.logger.debug(f"  - URL: {url}")
+                self.logger.debug(f"  - Payload: {payload}")
                 response = await self.client.post(url, json=payload)
-                self.logger(f"收到响应 (cid={cid}), Status Code: {response.status_code}")
+                self.logger.debug(f"收到响应 (cid={cid}), Status Code: {response.status_code}")
                 response.raise_for_status()
                 data = response.json()
 
@@ -166,8 +166,8 @@ class TencentScraper(BaseScraper):
                 # --- 解析逻辑结束 ---
 
                 if not item_datas:
-                    self.logger(f"cid='{cid}': 未找到更多分集，或API结构已更改。")
-                    self.logger(f"完整响应内容 (cid={cid}): {data}")
+                    self.logger.warning(f"cid='{cid}': 未找到更多分集，或API结构已更改。")
+                    self.logger.debug(f"完整响应内容 (cid={cid}): {data}")
                     break
 
                 new_episodes_found = 0
@@ -188,11 +188,11 @@ class TencentScraper(BaseScraper):
                     
                     current_page_vids.append(episode.vid)
 
-                self.logger(f"cid='{cid}': 当前页获取 {len(item_datas)} 个项目，新增 {new_episodes_found} 个有效分集。总数: {len(all_episodes)}")
+                self.logger.info(f"cid='{cid}': 当前页获取 {len(item_datas)} 个项目，新增 {new_episodes_found} 个有效分集。总数: {len(all_episodes)}")
 
                 # 检查是否需要翻页以及防止死循环
                 if len(item_datas) < page_size or not current_page_vids or current_page_vids[-1] == last_vid_of_page:
-                    self.logger(f"cid='{cid}': 已到达最后一页或检测到重复数据，停止翻页。")
+                    self.logger.info(f"cid='{cid}': 已到达最后一页或检测到重复数据，停止翻页。")
                     break
 
                 last_vid_of_page = current_page_vids[-1]
@@ -205,16 +205,16 @@ class TencentScraper(BaseScraper):
                 await asyncio.sleep(0.5)  # 礼貌性等待
 
             except httpx.HTTPStatusError as e:
-                self.logger(f"请求分集列表失败 (cid={cid}): {e}")
-                self.logger(f"失败响应内容: {e.response.text}")
+                self.logger.error(f"请求分集列表失败 (cid={cid}): {e}")
+                self.logger.debug(f"失败响应内容: {e.response.text}")
                 break
             except (KeyError, IndexError, ValidationError) as e:
-                self.logger(f"解析分集列表JSON失败 (cid={cid}): {e}")
+                self.logger.error(f"解析分集列表JSON失败 (cid={cid}): {e}", exc_info=True)
                 if 'data' in locals():
-                    self.logger(f"导致解析失败的JSON数据: {data}")
+                    self.logger.debug(f"导致解析失败的JSON数据: {data}")
                 break
 
-        self.logger(f"分集列表获取完成 (cid={cid})，共 {len(all_episodes)} 个。")
+        self.logger.info(f"分集列表获取完成 (cid={cid})，共 {len(all_episodes)} 个。")
         # 某些综艺节目可能会返回重复的剧集，这里进行去重
         return list(all_episodes.values())
 
@@ -248,14 +248,14 @@ class TencentScraper(BaseScraper):
             index_data = response.json()
             segment_index = index_data.get("segment_index", {})
             if not segment_index:
-                self.logger(f"vid='{vid}' 没有找到弹幕分段索引。")
+                self.logger.warning(f"vid='{vid}' 没有找到弹幕分段索引。")
                 return []
         except Exception as e:
-            self.logger(f"获取弹幕索引失败 (vid={vid}): {e}")
+            self.logger.error(f"获取弹幕索引失败 (vid={vid}): {e}", exc_info=True)
             return []
 
         # 2. 遍历分段，获取弹幕内容
-        self.logger(f"为 vid='{vid}' 找到 {len(segment_index)} 个弹幕分段，开始获取...")
+        self.logger.info(f"为 vid='{vid}' 找到 {len(segment_index)} 个弹幕分段，开始获取...")
         # 确保按时间顺序处理分段
         sorted_keys = sorted(segment_index.keys(), key=int)
         for key in sorted_keys:
@@ -277,10 +277,10 @@ class TencentScraper(BaseScraper):
                 await asyncio.sleep(0.2) # 礼貌性等待
 
             except Exception as e:
-                self.logger(f"获取分段 {segment_name} 失败 (vid={vid}): {e}")
+                self.logger.error(f"获取分段 {segment_name} 失败 (vid={vid}): {e}", exc_info=True)
                 continue
         
-        self.logger(f"vid='{vid}' 弹幕获取完成，共 {len(all_comments)} 条。")
+        self.logger.info(f"vid='{vid}' 弹幕获取完成，共 {len(all_comments)} 条。")
         return all_comments
 
     async def get_comments(self, episode_id: str) -> List[dict]:

@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- Element Selectors ---
-    // Auth View
     const authView = document.getElementById('auth-view');
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
@@ -8,40 +7,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const showLoginLink = document.getElementById('show-login-link');
     const authError = document.getElementById('auth-error');
 
-    // Main View
     const mainView = document.getElementById('main-view');
     const currentUserSpan = document.getElementById('current-user');
     const logoutBtn = document.getElementById('logout-btn');
     
-    // Sidebar and Content
     const sidebar = document.getElementById('sidebar');
     const contentViews = document.querySelectorAll('.content-view');
 
-    // Home View elements
     const searchForm = document.getElementById('search-form');
     const searchKeywordInput = document.getElementById('search-keyword');
     const resultsList = document.getElementById('results-list');
     const logOutput = document.getElementById('log-output');
     const loader = document.getElementById('loader');
     
-    // Account View elements
     const changePasswordForm = document.getElementById('change-password-form');
     const passwordChangeMessage = document.getElementById('password-change-message');
 
-    // Library View elements
     const libraryTableBody = document.querySelector('#library-table tbody');
-
 
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
+    let logRefreshInterval = null; // For polling server logs
 
     // --- Core Functions ---
-    function log(message) {
-        const timestamp = new Date().toLocaleTimeString();
-        logOutput.textContent = `[${timestamp}] ${message}\n` + logOutput.textContent;
-    }
-
     function toggleLoader(show) {
+        if (!loader) return;
         loader.classList.toggle('hidden', !show);
     }
 
@@ -72,6 +62,10 @@ document.addEventListener('DOMContentLoaded', () => {
             throw new Error(errorMessage);
         }
         
+        if (response.status === 204) { // Handle No Content response
+            return {};
+        }
+        
         const responseText = await response.text();
         return responseText ? JSON.parse(responseText) : {};
     }
@@ -98,8 +92,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             currentUserSpan.textContent = `用户: ${user.username}`;
             showView('main');
+            startLogRefresh(); // Start polling for logs on successful login
         } catch (error) {
-            log(`自动登录失败: ${error.message}`);
+            console.error(`自动登录失败: ${error.message}`);
             logout();
         }
     }
@@ -108,7 +103,30 @@ document.addEventListener('DOMContentLoaded', () => {
         token = null;
         localStorage.removeItem('danmu_api_token');
         showView('auth');
-        log('已登出。');
+        stopLogRefresh(); // Stop polling for logs on logout
+    }
+
+    // --- Log Polling ---
+    function startLogRefresh() {
+        refreshServerLogs(); // Initial fetch
+        if (logRefreshInterval) clearInterval(logRefreshInterval);
+        logRefreshInterval = setInterval(refreshServerLogs, 3000);
+    }
+
+    function stopLogRefresh() {
+        if (logRefreshInterval) clearInterval(logRefreshInterval);
+        logRefreshInterval = null;
+    }
+
+    async function refreshServerLogs() {
+        if (!token || !logOutput) return;
+        try {
+            const logs = await apiFetch('/api/v2/logs');
+            logOutput.textContent = logs.join('\n');
+        } catch (error) {
+            // This will be caught by apiFetch which calls logout() on 401
+            console.error("刷新日志失败:", error.message);
+        }
     }
 
     // --- Event Listeners ---
@@ -140,13 +158,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 body: JSON.stringify({ username, password }),
             });
-            log(`用户 '${username}' 注册成功，请登录。`);
+            alert(`用户 '${username}' 注册成功，请登录。`);
             registerForm.reset();
-            // Switch back to login form
             showLoginLink.click();
         } catch (error) {
             authError.textContent = `注册失败: ${error.message}`;
-            log(`注册失败: ${error.message}`);
         }
     });
 
@@ -180,12 +196,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             token = data.access_token;
             localStorage.setItem('danmu_api_token', token);
-            log('登录成功。');
             loginForm.reset();
             await checkLogin();
         } catch (error) {
             authError.textContent = `登录失败: ${error.message}`;
-            log(`登录失败: ${error.message}`);
         }
     });
 
@@ -206,7 +220,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 targetView.classList.remove('hidden');
             }
 
-            // 如果切换到弹幕库视图，则加载数据
             if (viewId === 'library-view') {
                 loadLibrary();
             }
@@ -221,14 +234,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         resultsList.innerHTML = '';
         toggleLoader(true);
-        log(`正在搜索: ${keyword}`);
 
         try {
             const data = await apiFetch(`/api/v2/search/provider?keyword=${encodeURIComponent(keyword)}`);
             displayResults(data.results);
-            log(`搜索到 ${data.results.length} 个结果。`);
         } catch (error) {
-            log(`搜索失败: ${error.message}`);
+            alert(`搜索失败: ${error.message}`);
         } finally {
             toggleLoader(false);
         }
@@ -261,7 +272,6 @@ document.addEventListener('DOMContentLoaded', () => {
             importBtn.addEventListener('click', async () => {
                 importBtn.disabled = true;
                 importBtn.textContent = '导入中...';
-                log(`开始从 [${item.provider}] 导入 [${item.title}]...`);
                 try {
                     const data = await apiFetch('/api/v2/import', {
                         method: 'POST',
@@ -271,9 +281,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             anime_title: item.title,
                         }),
                     });
-                    log(data.message);
+                    alert(data.message);
                 } catch (error) {
-                    log(`导入失败: ${error.message}`);
+                    alert(`提交导入任务失败: ${error.message}`);
                 } finally {
                     importBtn.disabled = false;
                     importBtn.textContent = '导入弹幕';
@@ -318,16 +328,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             passwordChangeMessage.textContent = '密码修改成功！';
             passwordChangeMessage.classList.add('success');
-            log('密码已成功修改。');
             changePasswordForm.reset();
         } catch (error) {
             passwordChangeMessage.textContent = `修改失败: ${error.message}`;
             passwordChangeMessage.classList.add('error');
-            log(`修改密码失败: ${error.message}`);
         }
     });
 
-    // --- Library View Logic ---
+    // Library View
     async function loadLibrary() {
         if (!libraryTableBody) return;
         libraryTableBody.innerHTML = '<tr><td colspan="6">加载中...</td></tr>';
@@ -335,7 +343,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch('/api/v2/library');
             renderLibrary(data.animes);
         } catch (error) {
-            log(`加载弹幕库失败: ${error.message}`);
             libraryTableBody.innerHTML = `<tr><td colspan="6" class="error">加载失败: ${error.message}</td></tr>`;
         }
     }
@@ -350,21 +357,18 @@ document.addEventListener('DOMContentLoaded', () => {
         animes.forEach(anime => {
             const row = libraryTableBody.insertRow();
             
-            // 海报
             const posterCell = row.insertCell();
             posterCell.className = 'poster-cell';
             const img = document.createElement('img');
-            img.src = anime.imageUrl || '/static/placeholder.png'; // 使用占位符图片
+            img.src = anime.imageUrl || '/static/placeholder.png';
             img.alt = anime.title;
             posterCell.appendChild(img);
 
-            // 其他信息
             row.insertCell().textContent = anime.title;
             row.insertCell().textContent = anime.season;
             row.insertCell().textContent = anime.episodeCount;
             row.insertCell().textContent = new Date(anime.createdAt).toLocaleString();
 
-            // 操作按钮
             const actionsCell = row.insertCell();
             actionsCell.className = 'actions-cell';
             actionsCell.innerHTML = `
@@ -378,7 +382,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 将操作函数暴露到全局，以便内联onclick可以调用
     window.handleAction = (action, animeId) => {
         const row = document.querySelector(`#library-table button[onclick*="handleAction('${action}', ${animeId})"]`).closest('tr');
         const title = row ? row.cells[1].textContent : `ID: ${animeId}`;
@@ -388,7 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 apiFetch(`/api/v2/library/anime/${animeId}`, {
                     method: 'DELETE',
                 }).then(() => {
-                    loadLibrary(); // 重新加载列表以反映删除
+                    loadLibrary();
                 }).catch(error => {
                     alert(`删除失败: ${error.message}`);
                 });
@@ -396,9 +399,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (action === 'edit') {
             const currentSeason = row ? row.cells[2].textContent : '1';
             const newTitle = prompt("请输入新的影视名称：", title);
-            if (newTitle === null) return; // 用户取消
+            if (newTitle === null) return;
             const newSeasonStr = prompt("请输入新的季数：", currentSeason);
-            if (newSeasonStr === null) return; // 用户取消
+            if (newSeasonStr === null) return;
 
             const newSeason = parseInt(newSeasonStr, 10);
             if (isNaN(newSeason) || newSeason < 1) {

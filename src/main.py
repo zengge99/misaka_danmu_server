@@ -6,6 +6,7 @@ from .database import create_db_pool, close_db_pool, init_db_tables, create_init
 from .api import router as api_router, auth_router
 from .scraper_manager import ScraperManager
 from .config import settings
+from .log_manager import setup_logging
 
 app = FastAPI(
     title="Danmaku API",
@@ -16,6 +17,8 @@ app = FastAPI(
 @app.on_event("startup")
 async def startup_event():
     """应用启动时，创建数据库连接池、Scraper管理器并初始化表"""
+    # 初始化日志系统
+    setup_logging()
     # 创建数据库连接池
     await create_db_pool(app)
     # 创建 Scraper 管理器
