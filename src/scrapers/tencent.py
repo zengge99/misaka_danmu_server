@@ -1,5 +1,6 @@
 import asyncio
 import httpx
+import re
 import logging
 from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel, Field, ValidationError
@@ -18,15 +19,15 @@ class TencentCommentContentStyle(BaseModel):
 class TencentEpisode(BaseModel):
     vid: str = Field(..., description="分集视频ID")
     title: str = Field(..., description="分集标题")
-    is_trailer: str = Field("0", alias="isTrailer")
+    is_trailer: str = Field("0")
 
 class TencentComment(BaseModel):
     id: str = Field(..., description="弹幕ID")
     # API 返回的是字符串，我们直接接收字符串，在后续处理中转为数字
-    time_offset: str = Field(..., alias="timeOffset", description="弹幕时间偏移(毫秒)")
+    time_offset: str = Field(..., description="弹幕时间偏移(毫秒)")
     content: str = Field(..., description="弹幕内容")
     # API 对普通弹幕返回空字符串 ""，对特殊弹幕返回对象。Union可以同时处理这两种情况。
-    content_style: Union[TencentCommentContentStyle, str, None] = Field(None, alias="contentStyle")
+    content_style: Union[TencentCommentContentStyle, str, None] = Field(None)
 
 
 # --- 用于搜索API的新模型 ---
@@ -120,6 +121,9 @@ class TencentScraper(BaseScraper):
                         continue
 
                     video_info = item.video_info
+                    # 清理标题中的HTML高亮标签 (如 <em>)，这是模仿C#参考代码中的逻辑
+                    cleaned_title = re.sub(r'<.*?>', '', video_info.title)
+
                     # 将腾讯的类型映射到我们内部的类型
                     media_type = "movie" if "电影" in video_info.type_name else "tv_series"
 
@@ -127,7 +131,7 @@ class TencentScraper(BaseScraper):
                         models.ProviderSearchInfo(
                             provider=self.provider_name,
                             mediaId=item.doc.id,
-                            title=video_info.title,
+                            title=cleaned_title,
                             type=media_type,
                             year=video_info.year,
                             episodeCount=None  # 搜索API不提供总集数
