@@ -20,13 +20,16 @@ from .base import BaseScraper
 class YoukuSearchTitleDTO(BaseModel):
     display_name: str = Field(alias="displayName")
 
+class YoukuPosterDTO(BaseModel):
+    v_thumb_url: Optional[str] = Field(None, alias="vThumbUrl")
+
 class YoukuSearchCommonData(BaseModel):
     show_id: str = Field(alias="showId")
     episode_total: int = Field(alias="episodeTotal")
     feature: str
     is_youku: int = Field(alias="isYouku")
-    poster: Optional[str] = None
     has_youku: int = Field(alias="hasYouku")
+    poster_dto: Optional[YoukuPosterDTO] = Field(None, alias="posterDTO")
     title_dto: YoukuSearchTitleDTO = Field(alias="titleDTO")
 
 class YoukuSearchComponent(BaseModel):
@@ -143,7 +146,7 @@ class YoukuScraper(BaseScraper):
                     title=cleaned_title,
                     type=media_type,
                     year=year,
-                    imageUrl=common_data.poster,
+                    imageUrl=common_data.poster_dto.v_thumb_url if common_data.poster_dto else None,
                     episodeCount=common_data.episode_total,
                     currentEpisodeIndex=current_episode
                 ))
