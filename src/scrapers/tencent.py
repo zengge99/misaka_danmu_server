@@ -1,7 +1,7 @@
 import asyncio
 import httpx
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel, Field, ValidationError
 from datetime import datetime
 
@@ -22,9 +22,12 @@ class TencentEpisode(BaseModel):
 
 class TencentComment(BaseModel):
     id: str = Field(..., description="弹幕ID")
-    time_offset: int = Field(..., alias="timeOffset", description="弹幕时间偏移(毫秒)")
+    # API 返回的是字符串，我们直接接收字符串，在后续处理中转为数字
+    time_offset: str = Field(..., alias="timeOffset", description="弹幕时间偏移(毫秒)")
     content: str = Field(..., description="弹幕内容")
-    content_style: Optional[TencentCommentContentStyle] = Field(None, alias="contentStyle")
+    # API 对普通弹幕返回空字符串 ""，对特殊弹幕返回对象。Union可以同时处理这两种情况。
+    content_style: Union[TencentCommentContentStyle, str, None] = Field(None, alias="contentStyle")
+
 
 # --- 用于搜索API的新模型 ---
 class TencentSearchVideoInfo(BaseModel):
@@ -330,8 +333,8 @@ class TencentScraper(BaseScraper):
             mode = 1  # 滚动
             color = 16777215  # 白色
 
-            # 根据 style 调整模式和颜色
-            if c.content_style:
+            # 增强的样式处理：只有当 content_style 是一个真正的对象时才处理
+            if isinstance(c.content_style, TencentCommentContentStyle):
                 if c.content_style.position == 2:
                     mode = 5  # 顶部
                 elif c.content_style.position == 3:
@@ -343,8 +346,9 @@ class TencentScraper(BaseScraper):
                         color = int(c.content_style.color, 16)
                     except (ValueError, TypeError):
                         pass # 转换失败则使用默认白色
-
-            timestamp = c.time_offset / 1000.0
+            
+            # 将字符串类型的 time_offset 转为浮点数秒
+            timestamp = int(c.time_offset) / 1000.0
             # 格式: 时间,模式,颜色,来源
             p_string = f"{timestamp},{mode},{color},{self.provider_name}"
             formatted_comments.append({"cid": c.id, "p": p_string, "m": c.content, "t": timestamp})
