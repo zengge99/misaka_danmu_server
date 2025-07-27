@@ -61,6 +61,8 @@ class TencentScraper(BaseScraper):
             "video_bucketid": "4",
             "video_omgid": "0a1ff6bc9407c0b1cff86ee5d359614d"
         }
+        # httpx.AsyncClient 是 Python 中功能强大的异步HTTP客户端，等同于 C# 中的 HttpClient
+        # 此处通过 cookies 参数传入字典，httpx 会自动将其格式化为正确的 Cookie 请求头，效果与C#代码一致
         self.client = httpx.AsyncClient(headers=self.base_headers, cookies=self.cookies, timeout=20.0)
         # 获取一个专用的 logger 实例
         self.logger = logging.getLogger(__name__)
@@ -88,7 +90,7 @@ class TencentScraper(BaseScraper):
                     # 新增：检查 video_info 是否存在，因为API有时会返回null
                     if not item.video_info:
                         continue
-                    # 根据C#代码，增加对年份的过滤，提高结果质量
+                    # 参考C#代码，增加对年份的过滤，可以有效排除很多不相关的结果（如：资讯、短视频等）
                     if not item.video_info.year or item.video_info.year == 0:
                         continue
 
@@ -130,7 +132,7 @@ class TencentScraper(BaseScraper):
 
         while True:
             payload = {
-                "pageParams": {
+                "pageParams": { # 这里的参数结构参考了C#代码和抓包分析
                     "cid": cid,
                     "video_appid": "3000010", # 关键参数，必须包含在POST Body中
                     "vplatform": "2",       # 关键参数，必须包含在POST Body中
@@ -139,17 +141,16 @@ class TencentScraper(BaseScraper):
                 }
             }
             try:
-                self.logger.debug(f"准备请求分集列表 (cid={cid})")
-                self.logger.debug(f"  - URL: {url}")
-                self.logger.debug(f"  - Payload: {payload}")
+                self.logger.debug(f"请求分集列表 (cid={cid}), PageContext='{page_context}'")
                 response = await self.client.post(url, json=payload)
                 self.logger.debug(f"收到响应 (cid={cid}), Status Code: {response.status_code}")
                 response.raise_for_status()
                 data = response.json()
 
-                # --- 新的、更健壮的解析逻辑 ---
+                # --- 参考C#代码实现的健壮解析逻辑 ---
                 # 电影和电视剧的页面模块结构不同，此逻辑会遍历所有模块，
                 # 以找到第一个包含有效项目列表 (itemDatas) 的模块。
+                # 这避免了因页面结构变动导致解析失败的问题。
                 item_datas = []
                 module_list_datas = data.get("data", {}).get("moduleListDatas", [])
                 
@@ -163,7 +164,7 @@ class TencentScraper(BaseScraper):
                             break 
                     if item_datas:
                         break
-                # --- 解析逻辑结束 ---
+                # --- 解析逻辑健壮性改造结束 ---
 
                 if not item_datas:
                     self.logger.warning(f"cid='{cid}': 未找到更多分集，或API结构已更改。")
@@ -179,8 +180,8 @@ class TencentScraper(BaseScraper):
                     
                     episode = TencentEpisode.model_validate(params)
                     
-                    # 过滤预告片和非正片内容
-                    is_preview = episode.is_trailer == "1" or any(kw in episode.title for kw in ["预告", "彩蛋", "直拍"])
+                    # 参考C#代码，增加更详细的过滤规则，过滤掉预告、彩蛋、直拍、直播回顾等非正片内容
+                    is_preview = episode.is_trailer == "1" or any(kw in episode.title for kw in ["预告", "彩蛋", "直拍", "直播回顾"])
                     
                     if not is_preview and episode.vid not in all_episodes:
                         all_episodes[episode.vid] = episode
@@ -188,11 +189,11 @@ class TencentScraper(BaseScraper):
                     
                     current_page_vids.append(episode.vid)
 
-                self.logger.info(f"cid='{cid}': 当前页获取 {len(item_datas)} 个项目，新增 {new_episodes_found} 个有效分集。总数: {len(all_episodes)}")
+                self.logger.info(f"cid='{cid}': 当前页获取 {len(item_datas)} 个项目，新增 {new_episodes_found} 个有效分集。当前总数: {len(all_episodes)}")
 
-                # 检查是否需要翻页以及防止死循环
+                # 检查是否需要翻页，并防止因API返回重复数据导致的死循环
                 if len(item_datas) < page_size or not current_page_vids or current_page_vids[-1] == last_vid_of_page:
-                    self.logger.info(f"cid='{cid}': 已到达最后一页或检测到重复数据，停止翻页。")
+                    self.logger.info(f"cid='{cid}': 已到达最后一页或检测到重复分页数据，停止翻页。")
                     break
 
                 last_vid_of_page = current_page_vids[-1]
@@ -214,7 +215,7 @@ class TencentScraper(BaseScraper):
                     self.logger.debug(f"导致解析失败的JSON数据: {data}")
                 break
 
-        self.logger.info(f"分集列表获取完成 (cid={cid})，共 {len(all_episodes)} 个。")
+        self.logger.info(f"分集列表获取完成 (cid={cid})，去重后共 {len(all_episodes)} 个。")
         # 某些综艺节目可能会返回重复的剧集，这里进行去重
         return list(all_episodes.values())
 
@@ -247,7 +248,7 @@ class TencentScraper(BaseScraper):
             response.raise_for_status()
             index_data = response.json()
             segment_index = index_data.get("segment_index", {})
-            if not segment_index:
+            if not segment_index: # 如果视频没有弹幕，这里会是空的
                 self.logger.warning(f"vid='{vid}' 没有找到弹幕分段索引。")
                 return []
         except Exception as e:
@@ -256,7 +257,8 @@ class TencentScraper(BaseScraper):
 
         # 2. 遍历分段，获取弹幕内容
         self.logger.info(f"为 vid='{vid}' 找到 {len(segment_index)} 个弹幕分段，开始获取...")
-        # 确保按时间顺序处理分段
+        # 与C#代码不同，这里我们直接遍历所有分段以获取全部弹幕，而不是抽样
+        # 按key（时间戳）排序，确保弹幕顺序正确
         sorted_keys = sorted(segment_index.keys(), key=int)
         for key in sorted_keys:
             segment = segment_index[key]
