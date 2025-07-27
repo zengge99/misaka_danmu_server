@@ -85,6 +85,15 @@ async def search_anime_provider(
     支持 "标题 SXXEXX" 格式来指定集数。
     """
     parsed_keyword = parse_search_keyword(keyword)
+
+    # 新增：检查是否有启用的搜索源
+    if not manager.has_enabled_scrapers:
+        # 如果没有启用任何源，直接返回错误，而不是空列表
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="没有启用的搜索源，请在“搜索源”页面中启用至少一个。"
+        )
+
     search_title = parsed_keyword["title"]
     episode_info = {
         "season": parsed_keyword["season"],

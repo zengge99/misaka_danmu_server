@@ -70,6 +70,11 @@ class ScraperManager:
                 self.scrapers[provider_name] = scraper_classes[provider_name]()
                 print(f"已启用爬虫 '{provider_name}' (顺序: {setting['display_order']})。")
 
+    @property
+    def has_enabled_scrapers(self) -> bool:
+        """检查是否有任何已启用的爬虫。"""
+        return bool(self.scrapers)
+
     async def search_all(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[ProviderSearchInfo]:
         """
         在所有已注册的爬虫上并发搜索关键词。
@@ -77,14 +82,16 @@ class ScraperManager:
         if not self.scrapers:
             return []
 
-        tasks = [scraper.search(keyword, episode_info=episode_info) for scraper in self.scrapers.values()]
+        # 将爬虫实例和它们的搜索任务一起创建，以便后续处理
+        scraper_instances = list(self.scrapers.values())
+        tasks = [scraper.search(keyword, episode_info=episode_info) for scraper in scraper_instances]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         all_search_results = []
-        for i, result in enumerate(results):
-            provider_name = list(self.scrapers.keys())[i]
+        # 使用 zip 将爬虫实例和其对应的结果安全地配对
+        for scraper, result in zip(scraper_instances, results):
             if isinstance(result, Exception):
-                print(f"在数据源 '{provider_name}' 上搜索时出错: {result}")
+                print(f"在数据源 '{scraper.provider_name}' 上搜索时出错: {result}")
             elif result:
                 all_search_results.extend(result)
 
