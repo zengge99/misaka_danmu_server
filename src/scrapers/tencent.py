@@ -38,7 +38,7 @@ class TencentSearchVideoInfo(BaseModel):
     title: str
     year: Optional[int] = None
     type_name: str = Field(alias="typeName")
-    poster_url: Optional[str] = Field(None, alias="posterUrl")
+    img_url: Optional[str] = Field(None, alias="imgUrl")
     subject_doc: Optional[TencentSubjectDoc] = Field(None, alias="subjectDoc")
 
 class TencentSearchDoc(BaseModel):
@@ -113,9 +113,7 @@ class TencentScraper(BaseScraper):
         results = []
         try:
             self.logger.info(f"Tencent: 正在搜索 '{keyword}'...")
-            self.logger.info(f"Tencent: 搜索请求 -> {url} | Payload: {payload}")
             response = await self.client.post(url, json=payload)
-            self.logger.info(f"Tencent: 搜索响应 <- Status: {response.status_code} | Body: {response.text}")
             response.raise_for_status()
             data = TencentSearchResult.model_validate(response.json())
 
@@ -150,7 +148,7 @@ class TencentScraper(BaseScraper):
                             title=cleaned_title,
                             type=media_type,
                             year=video_info.year,
-                            imageUrl=video_info.poster_url,
+                            imageUrl=video_info.img_url,
                             episodeCount=episode_count,
                             currentEpisodeIndex=current_episode
                         )
