@@ -4,6 +4,69 @@ from typing import List, Optional, Dict, Any
 from . import models, security
 
 
+async def get_library_anime(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
+    """获取媒体库中的所有番剧及其关联信息（如分集数）"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            # 使用 LEFT JOIN 和 GROUP BY 来统计每个番剧的分集数
+            query = """
+                SELECT
+                    a.id as animeId,
+                    a.image_url as imageUrl,
+                    a.title,
+                    a.season,
+                    a.created_at as createdAt,
+                    COUNT(e.id) as episodeCount
+                FROM anime a
+                LEFT JOIN episode e ON a.id = e.anime_id
+                GROUP BY a.id
+                ORDER BY a.created_at DESC
+            """
+            await cursor.execute(query)
+            return await cursor.fetchall()
+
+async def get_library_anime(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
+    """获取媒体库中的所有番剧及其关联信息（如分集数）"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            # 使用 LEFT JOIN 和 GROUP BY 来统计每个番剧的分集数
+            query = """
+                SELECT
+                    a.id as animeId,
+                    a.image_url as imageUrl,
+                    a.title,
+                    a.season,
+                    a.created_at as createdAt,
+                    COUNT(e.id) as episodeCount
+                FROM anime a
+                LEFT JOIN episode e ON a.id = e.anime_id
+                GROUP BY a.id
+                ORDER BY a.created_at DESC
+            """
+            await cursor.execute(query)
+            return await cursor.fetchall()
+
+async def get_library_anime(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
+    """获取媒体库中的所有番剧及其关联信息（如分集数）"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            # 使用 LEFT JOIN 和 GROUP BY 来统计每个番剧的分集数
+            query = """
+                SELECT
+                    a.id as animeId,
+                    a.image_url as imageUrl,
+                    a.title,
+                    a.season,
+                    a.created_at as createdAt,
+                    COUNT(e.id) as episodeCount
+                FROM anime a
+                LEFT JOIN episode e ON a.id = e.anime_id
+                GROUP BY a.id
+                ORDER BY a.created_at DESC
+            """
+            await cursor.execute(query)
+            return await cursor.fetchall()
+
 async def search_anime(pool: aiomysql.Pool, keyword: str) -> List[Dict[str, Any]]:
     """在数据库中搜索番剧 (使用FULLTEXT索引)"""
     async with pool.acquire() as conn:

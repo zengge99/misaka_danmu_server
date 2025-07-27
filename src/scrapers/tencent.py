@@ -28,7 +28,7 @@ class TencentSearchDoc(BaseModel):
     id: str  # 这是 cid
 
 class TencentSearchItem(BaseModel):
-    video_info: TencentSearchVideoInfo = Field(alias="videoInfo")
+    video_info: Optional[TencentSearchVideoInfo] = Field(None, alias="videoInfo")
     doc: TencentSearchDoc
 
 class TencentSearchItemList(BaseModel):
@@ -81,6 +81,9 @@ class TencentScraper(BaseScraper):
 
             if data.data and data.data.normal_list:
                 for item in data.data.normal_list.item_list:
+                    # 新增：检查 video_info 是否存在，因为API有时会返回null
+                    if not item.video_info:
+                        continue
                     # 根据C#代码，增加对年份的过滤，提高结果质量
                     if not item.video_info.year or item.video_info.year == 0:
                         continue

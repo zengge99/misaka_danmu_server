@@ -45,6 +45,7 @@
                 <nav id="sidebar">
                     <ul>
                         <li><a href="#" class="nav-link active" data-view="home-view">主页</a></li>
+                        <li><a href="#" class="nav-link" data-view="library-view">弹幕库</a></li>
                         <li><a href="#" class="nav-link" data-view="account-view">账户设置</a></li>
                     </ul>
                 </nav>
@@ -66,6 +67,22 @@
                             <h2>日志/状态</h2>
                             <pre id="log-output"></pre>
                         </div>
+                    </div>
+                    <div id="library-view" class="content-view hidden">
+                        <h2>弹幕库</h2>
+                        <table id="library-table">
+                            <thead>
+                                <tr>
+                                    <th>海报</th>
+                                    <th>影视名称</th>
+                                    <th>季</th>
+                                    <th>集数</th>
+                                    <th>收录时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
                     <div id="account-view" class="content-view hidden">
                         <div class="account-management-section">

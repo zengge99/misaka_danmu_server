@@ -94,12 +94,13 @@ async def init_db_tables(app: FastAPI):
                 # 这是一种简单的数据库迁移，以确保旧数据库也能平滑升级
                 await cursor.execute("SHOW COLUMNS FROM `users` LIKE 'token'")
                 if not await cursor.fetchone():
-                    print("检测到旧的 'users' 表 schema，正在添加 'token' 和 'token_update' 字段...")
+                    print("检测到旧的 schema，正在更新 'users' 和 'anime' 表...")
                     await cursor.execute("""
                         ALTER TABLE `users`
                         ADD COLUMN `token` TEXT NULL AFTER `hashed_password`,
                         ADD COLUMN `token_update` TIMESTAMP NULL AFTER `token`;
                     """)
+                    await cursor.execute("ALTER TABLE `anime` ADD COLUMN `image_url` VARCHAR(512) NULL AFTER `type`;")
                     print("Schema 更新完成。")
                 else:
                     print("Schema 已是最新，无需更新。")
@@ -111,7 +112,7 @@ async def init_db_tables(app: FastAPI):
             CREATE TABLE IF NOT EXISTS `anime` (
               `id` BIGINT NOT NULL AUTO_INCREMENT,
               `title` VARCHAR(255) NOT NULL,
-              `type` ENUM('tv_series', 'movie', 'ova', 'other') NOT NULL DEFAULT 'tv_series',
+              `type` ENUM('tv_series', 'movie', 'ova', 'other') NOT NULL DEFAULT 'tv_series', `image_url` VARCHAR(512) NULL,
               `season` INT NOT NULL DEFAULT 1,
               `source_url` VARCHAR(512) NULL,
               `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,

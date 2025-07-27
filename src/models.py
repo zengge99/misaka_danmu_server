@@ -69,6 +69,19 @@ class ImportRequest(BaseModel):
     media_id: str = Field(..., description="数据源中的媒体ID (e.g., tencent的cid)")
     anime_title: str = Field(..., description="要存储在数据库中的番剧标题")
 
+# --- 媒体库（弹幕情况）模型 ---
+class LibraryAnimeInfo(BaseModel):
+    """代表媒体库中的一个番剧条目。"""
+    animeId: int
+    imageUrl: Optional[str] = None
+    title: str
+    season: int
+    episodeCount: int
+    createdAt: datetime
+
+class LibraryResponse(BaseModel):
+    animes: List[LibraryAnimeInfo]
+
 # --- 用户和认证模型 ---
 class UserBase(BaseModel):
     username: str

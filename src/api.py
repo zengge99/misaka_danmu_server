@@ -93,6 +93,17 @@ async def match_episode(
     )
     return models.MatchResponse(isMatched=True, matches=[match_info])
 
+@router.get("/library", response_model=models.LibraryResponse, summary="获取媒体库内容")
+async def get_library(
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """获取数据库中所有已收录的番剧信息，用于“弹幕情况”展示。"""
+    db_results = await crud.get_library_anime(pool)
+    # Pydantic 会自动处理 datetime 到 ISO 8601 字符串的转换
+    animes = [models.LibraryAnimeInfo.model_validate(item) for item in db_results]
+    return models.LibraryResponse(animes=animes)
+
 @router.get(
     "/comment/{episode_id}",
     response_model=models.CommentResponse,

@@ -28,6 +28,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const changePasswordForm = document.getElementById('change-password-form');
     const passwordChangeMessage = document.getElementById('password-change-message');
 
+    // Library View elements
+    const libraryTableBody = document.querySelector('#library-table tbody');
+
+
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
 
@@ -201,6 +205,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (targetView) {
                 targetView.classList.remove('hidden');
             }
+
+            // 如果切换到弹幕库视图，则加载数据
+            if (viewId === 'library-view') {
+                loadLibrary();
+            }
         }
     });
 
@@ -317,6 +326,63 @@ document.addEventListener('DOMContentLoaded', () => {
             log(`修改密码失败: ${error.message}`);
         }
     });
+
+    // --- Library View Logic ---
+    async function loadLibrary() {
+        if (!libraryTableBody) return;
+        libraryTableBody.innerHTML = '<tr><td colspan="6">加载中...</td></tr>';
+        try {
+            const data = await apiFetch('/api/v2/library');
+            renderLibrary(data.animes);
+        } catch (error) {
+            log(`加载弹幕库失败: ${error.message}`);
+            libraryTableBody.innerHTML = `<tr><td colspan="6" class="error">加载失败: ${error.message}</td></tr>`;
+        }
+    }
+
+    function renderLibrary(animes) {
+        libraryTableBody.innerHTML = '';
+        if (animes.length === 0) {
+            libraryTableBody.innerHTML = '<tr><td colspan="6">媒体库为空。</td></tr>';
+            return;
+        }
+
+        animes.forEach(anime => {
+            const row = libraryTableBody.insertRow();
+            
+            // 海报
+            const posterCell = row.insertCell();
+            posterCell.className = 'poster-cell';
+            const img = document.createElement('img');
+            img.src = anime.imageUrl || '/static/placeholder.png'; // 使用占位符图片
+            img.alt = anime.title;
+            posterCell.appendChild(img);
+
+            // 其他信息
+            row.insertCell().textContent = anime.title;
+            row.insertCell().textContent = anime.season;
+            row.insertCell().textContent = anime.episodeCount;
+            row.insertCell().textContent = new Date(anime.createdAt).toLocaleString();
+
+            // 操作按钮
+            const actionsCell = row.insertCell();
+            actionsCell.className = 'actions-cell';
+            actionsCell.innerHTML = `
+                <button class="action-btn" title="编辑" onclick="handleAction('edit', ${anime.animeId})">✏️</button>
+                <button class="action-btn" title="全量刷新" onclick="handleAction('refresh_full', ${anime.animeId})">🔄</button>
+                <button class="action-btn" title="增量刷新" onclick="handleAction('refresh_inc', ${anime.animeId})">➕</button>
+                <button class="action-btn" title="定时刷新" onclick="handleAction('schedule', ${anime.animeId})">⏰</button>
+                <button class="action-btn" title="查看剧集" onclick="handleAction('view', ${anime.animeId})">📖</button>
+                <button class="action-btn" title="删除" onclick="handleAction('delete', ${anime.animeId})">🗑️</button>
+            `;
+        });
+    }
+
+    // 将操作函数暴露到全局，以便内联onclick可以调用
+    window.handleAction = (action, animeId) => {
+        log(`操作: ${action}, 番剧ID: ${animeId}`);
+        // 此处可以根据 action 类型实现具体功能
+    };
 
     // Logout
     logoutBtn.addEventListener('click', logout);
