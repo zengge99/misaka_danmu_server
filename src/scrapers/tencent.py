@@ -7,8 +7,13 @@ from datetime import datetime
 
 from .base import BaseScraper
 from .. import models
- 
+
 # --- Pydantic 模型，用于解析腾讯API的响应 ---
+
+# --- Models for Get Comments API ---
+class TencentCommentContentStyle(BaseModel):
+    color: Optional[str] = None
+    position: Optional[int] = None
 
 class TencentEpisode(BaseModel):
     vid: str = Field(..., description="分集视频ID")
@@ -19,6 +24,7 @@ class TencentComment(BaseModel):
     id: str = Field(..., description="弹幕ID")
     time_offset: int = Field(..., alias="timeOffset", description="弹幕时间偏移(毫秒)")
     content: str = Field(..., description="弹幕内容")
+    content_style: Optional[TencentCommentContentStyle] = Field(None, alias="contentStyle")
 
 # --- 用于搜索API的新模型 ---
 class TencentSearchVideoInfo(BaseModel):
@@ -41,6 +47,21 @@ class TencentSearchData(BaseModel):
 
 class TencentSearchResult(BaseModel):
     data: Optional[TencentSearchData] = None
+
+# --- 用于搜索API的请求模型 (参考C#代码) ---
+class TencentSearchRequest(BaseModel):
+    query: str
+    version: str = ""
+    filter_value: str = Field("firstTabid=150", alias="filterValue")
+    retry: int = 0
+    pagenum: int = 0
+    pagesize: int = 20
+    query_from: int = Field(4, alias="queryFrom")
+    is_need_qc: bool = Field(True, alias="isneedQc")
+    ad_request_info: str = Field("", alias="adRequestInfo")
+    sdk_request_info: str = Field("", alias="sdkRequestInfo")
+    scene_id: int = Field(21, alias="sceneId")
+    platform: str = "23"
 
 # --- 腾讯API客户端 ---
 
@@ -78,7 +99,8 @@ class TencentScraper(BaseScraper):
     async def search(self, keyword: str) -> List[models.ProviderSearchInfo]:
         """通过腾讯搜索API查找番剧。"""
         url = "https://pbaccess.video.qq.com/trpc.videosearch.mobile_search.HttpMobileRecall/MbSearchHttp"
-        payload = {"query": keyword}
+        request_model = TencentSearchRequest(query=keyword)
+        payload = request_model.model_dump(by_alias=True)
         results = []
         try:
             response = await self.client.post(url, json=payload)
@@ -132,13 +154,16 @@ class TencentScraper(BaseScraper):
 
         while True:
             payload = {
-                "pageParams": { # 这里的参数结构参考了C#代码和抓包分析
+                "pageParams": { # 这里的参数结构完全参考了C#代码，确保请求的正确性
                     "cid": cid,
-                    "video_appid": "3000010", # 关键参数，必须包含在POST Body中
-                    "vplatform": "2",       # 关键参数，必须包含在POST Body中
+                    "page_type": "detail_operation",
+                    "page_id": "vsite_episode_list",
+                    "id_type": "1",
                     "pageSize": str(page_size),
+                    "lid": "0",
+                    "req_from": "web_mobile",
                     "pageContext": page_context,
-                }
+                },
             }
             try:
                 self.logger.debug(f"请求分集列表 (cid={cid}), PageContext='{page_context}'")
@@ -295,9 +320,27 @@ class TencentScraper(BaseScraper):
 
         formatted_comments = []
         for c in tencent_comments:
+            # 默认值
+            mode = 1  # 滚动
+            color = 16777215  # 白色
+
+            # 根据 style 调整模式和颜色
+            if c.content_style:
+                if c.content_style.position == 2:
+                    mode = 5  # 顶部
+                elif c.content_style.position == 3:
+                    mode = 4  # 底部
+                
+                if c.content_style.color:
+                    try:
+                        # 将16进制颜色字符串转为10进制整数
+                        color = int(c.content_style.color, 16)
+                    except (ValueError, TypeError):
+                        pass # 转换失败则使用默认白色
+
             timestamp = c.time_offset / 1000.0
             # 格式: 时间,模式,颜色,来源
-            p_string = f"{timestamp},1,16777215,{self.provider_name}"
+            p_string = f"{timestamp},{mode},{color},{self.provider_name}"
             formatted_comments.append({"cid": c.id, "p": p_string, "m": c.content, "t": timestamp})
 
         return formatted_comments
