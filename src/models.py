@@ -94,6 +94,7 @@ class LibraryAnimeInfo(BaseModel):
     title: str
     season: int
     episodeCount: int
+    sourceCount: int
     createdAt: datetime
 
 class LibraryResponse(BaseModel):

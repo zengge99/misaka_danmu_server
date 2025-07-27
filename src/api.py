@@ -1,5 +1,5 @@
 import re
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 import asyncio
 import logging
 
@@ -180,8 +180,8 @@ async def refresh_anime(
     if not source_info or not source_info.get("provider_name") or not source_info.get("media_id"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anime not found or missing source information for refresh.")
     
-    logger.info(f"用户 '{current_user.username}' 为番剧 '{source_info['title']}' (ID: {anime_id}) 启动了全量刷新任务。")
-    background_tasks.add_task(full_refresh_task, anime_id, pool, manager)
+    logger.info(f"用户 '{current_user.username}' 为番剧 '{source_info['title']}' (源ID: {source_id}) 启动了全量刷新任务。")
+    background_tasks.add_task(full_refresh_task, source_id, pool, manager)
     return {"message": f"番剧 '{source_info['title']}' 的全量刷新任务已在后台开始。"}
 
 @router.delete("/library/anime/{anime_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除媒体库中的番剧")

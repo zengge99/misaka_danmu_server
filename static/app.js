@@ -393,16 +393,14 @@ document.addEventListener('DOMContentLoaded', () => {
             row.insertCell().textContent = anime.title;
             row.insertCell().textContent = anime.season;
             row.insertCell().textContent = anime.episodeCount;
+            row.insertCell().textContent = anime.sourceCount;
             row.insertCell().textContent = new Date(anime.createdAt).toLocaleString();
 
             const actionsCell = row.insertCell();
             actionsCell.className = 'actions-cell';
             actionsCell.innerHTML = `
                 <button class="action-btn" title="编辑" onclick="handleAction('edit', ${anime.animeId})">✏️</button>
-                <button class="action-btn" title="全量刷新" onclick="handleAction('refresh_full', ${anime.animeId})">🔄</button>
-                <button class="action-btn" title="增量刷新" onclick="handleAction('refresh_inc', ${anime.animeId})">➕</button>
-                <button class="action-btn" title="定时刷新" onclick="handleAction('schedule', ${anime.animeId})">⏰</button>
-                <button class="action-btn" title="查看剧集" onclick="handleAction('view', ${anime.animeId})">📖</button>
+                <button class="action-btn" title="查看数据源" onclick="handleAction('view', ${anime.animeId})">📖</button>
                 <button class="action-btn" title="删除" onclick="handleAction('delete', ${anime.animeId})">🗑️</button>
             `;
         });
@@ -457,6 +455,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else {
             alert(`功能 '${action}' 尚未实现。`);
+        }
+    };
+
+    // 全局的 handleSourceAction 函数，用于详情页
+    window.handleSourceAction = (action, sourceId, title) => {
+        if (action === 'refresh') {
+            refreshSource(sourceId, title);
         }
     };
 
@@ -559,7 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showAnimeDetailView(animeId) {
         libraryView.classList.add('hidden');
         animeDetailView.classList.remove('hidden');
-        animeDetailView.innerHTML = '<button id="back-to-library-btn"> &lt; 返回弹幕库</button><div>加载中...</div>';
+        animeDetailView.innerHTML = '<div>加载中...</div>';
         
         document.getElementById('back-to-library-btn').addEventListener('click', () => {
             animeDetailView.classList.add('hidden');
@@ -589,14 +594,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 <img src="${anime.imageUrl || '/static/placeholder.png'}" alt="${anime.title}">
                 <div>
                     <h2>${anime.title}</h2>
-                    <p>季: ${anime.season} | 总集数: ${anime.episodeCount} | 已关联 ${sources.length} 个源</p>
+                    <p>季: ${anime.season} | 总集数: ${anime.episodeCount || 0} | 已关联 ${sources.length} 个源</p>
                 </div>
             </div>
             <h3>关联的数据源</h3>
             <table id="source-detail-table">
                 <thead>
                     <tr>
-                        <th>源名称</th>
+                        <th>源提供方</th>
                         <th>源媒体ID</th>
                         <th>收录时间</th>
                         <th>操作</th>
