@@ -115,7 +115,7 @@ class TencentScraper(BaseScraper):
             self.logger.info(f"Tencent: 正在搜索 '{keyword}'...")
             self.logger.info(f"Tencent: 搜索请求 -> {url} | Payload: {payload}")
             response = await self.client.post(url, json=payload)
-            self.logger.info(f"Tencent: 搜索响应 <- Status: {response.status_code} | Body: {response.text[:500]}...")
+            self.logger.info(f"Tencent: 搜索响应 <- Status: {response.status_code} | Body: {response.text}")
             response.raise_for_status()
             data = TencentSearchResult.model_validate(response.json())
 
