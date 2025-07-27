@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const libraryTableBody = document.querySelector('#library-table tbody');
     const libraryView = document.getElementById('library-view');
     const animeDetailView = document.getElementById('anime-detail-view');
+    const editAnimeView = document.getElementById('edit-anime-view');
+    const editAnimeForm = document.getElementById('edit-anime-form');
+    const librarySearchInput = document.getElementById('library-search-input');
 
     // Sources View Elements
     const sourcesList = document.getElementById('sources-list');
@@ -232,6 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadLibrary();
                 libraryView.classList.remove('hidden');
                 animeDetailView.classList.add('hidden');
+                editAnimeView.classList.add('hidden');
             } else if (viewId === 'sources-view') {
                 loadScraperSettings();
             }
@@ -401,6 +405,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Library Search Filter
+    librarySearchInput.addEventListener('input', () => {
+        const searchTerm = librarySearchInput.value.toLowerCase();
+        const rows = libraryTableBody.querySelectorAll('tr');
+        rows.forEach(row => {
+            const titleCell = row.cells[1];
+            if (titleCell) {
+                const title = titleCell.textContent.toLowerCase();
+                row.style.display = title.includes(searchTerm) ? '' : 'none';
+            }
+        });
+    });
+
     // --- Scraper Sources View ---
     async function loadScraperSettings() {
         if (!sourcesList) return;
@@ -487,6 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showAnimeDetailView(animeId) {
         libraryView.classList.add('hidden');
         animeDetailView.classList.remove('hidden');
+        editAnimeView.classList.add('hidden');
         animeDetailView.innerHTML = '<div>加载中...</div>';
 
         try {
@@ -564,6 +582,54 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- Edit Anime View ---
+    function showEditAnimeView(animeId, currentTitle, currentSeason) {
+        libraryView.classList.add('hidden');
+        animeDetailView.classList.add('hidden');
+        editAnimeView.classList.remove('hidden');
+
+        document.getElementById('edit-anime-id').value = animeId;
+        document.getElementById('edit-anime-title').value = currentTitle;
+        document.getElementById('edit-anime-season').value = currentSeason;
+    }
+
+    editAnimeForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const animeId = document.getElementById('edit-anime-id').value;
+        const newTitle = document.getElementById('edit-anime-title').value;
+        const newSeason = parseInt(document.getElementById('edit-anime-season').value, 10);
+
+        if (isNaN(newSeason) || newSeason < 1) {
+            alert("季数必须是一个大于0的数字。");
+            return;
+        }
+
+        const saveButton = editAnimeForm.querySelector('button[type="submit"]');
+        saveButton.disabled = true;
+        saveButton.textContent = '保存中...';
+
+        try {
+            await apiFetch(`/api/v2/library/anime/${animeId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ title: newTitle, season: newSeason }),
+            });
+            alert("信息更新成功！");
+            // 返回并刷新列表
+            document.getElementById('back-to-library-from-edit-btn').click();
+            loadLibrary();
+        } catch (error) {
+            alert(`更新失败: ${error.message}`);
+        } finally {
+            saveButton.disabled = false;
+            saveButton.textContent = '保存更改';
+        }
+    });
+
+    document.getElementById('back-to-library-from-edit-btn').addEventListener('click', () => {
+        editAnimeView.classList.add('hidden');
+        libraryView.classList.remove('hidden');
+    });
+
     // --- Global Action Handlers ---
     window.handleAction = (action, animeId) => {
         const row = document.querySelector(`#library-table button[onclick*="handleAction('${action}', ${animeId})"]`).closest('tr');
@@ -580,27 +646,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         } else if (action === 'edit') {
-            const currentSeason = row ? row.cells[2].textContent : '1';
-            const newTitle = prompt("请输入新的影视名称：", title);
-            if (newTitle === null) return;
-            const newSeasonStr = prompt("请输入新的季数：", currentSeason);
-            if (newSeasonStr === null) return;
-
-            const newSeason = parseInt(newSeasonStr, 10);
-            if (isNaN(newSeason) || newSeason < 1) {
-                alert("季数必须是一个大于0的数字。");
-                return;
-            }
-
-            apiFetch(`/api/v2/library/anime/${animeId}`, {
-                method: 'PUT',
-                body: JSON.stringify({ title: newTitle, season: newSeason }),
-            }).then(() => {
-                alert("信息更新成功！");
-                loadLibrary();
-            }).catch(error => {
-                alert(`更新失败: ${error.message}`);
-            });
+            const currentSeason = row ? parseInt(row.cells[2].textContent, 10) : 1;
+            showEditAnimeView(animeId, title, currentSeason);
         } else if (action === 'view') {
             showAnimeDetailView(animeId);
         } else {
