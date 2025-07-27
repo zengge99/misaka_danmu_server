@@ -176,6 +176,49 @@ async def get_source_episodes(
     """获取指定数据源下的所有已收录分集列表。"""
     return await crud.get_episodes_for_source(pool, source_id)
 
+@router.put("/library/episode/{episode_id}", status_code=status.HTTP_204_NO_CONTENT, summary="编辑分集信息")
+async def edit_episode_info(
+    episode_id: int,
+    update_data: models.EpisodeInfoUpdate,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """更新指定分集的标题。"""
+    updated = await crud.update_episode_title(pool, episode_id, update_data.title)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+    logger.info(f"用户 '{current_user.username}' 更新了分集 ID: {episode_id} 的信息。")
+    return
+
+@router.delete("/library/episode/{episode_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除指定分集")
+async def delete_episode_from_source(
+    episode_id: int,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """删除一个分集及其所有关联的弹幕。"""
+    deleted = await crud.delete_episode(pool, episode_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+    logger.info(f"用户 '{current_user.username}' 删除了分集 ID: {episode_id}。")
+    return
+
+@router.post("/library/episode/{episode_id}/refresh", status_code=status.HTTP_202_ACCEPTED, summary="刷新单个分集的弹幕")
+async def refresh_single_episode(
+    episode_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    manager: ScraperManager = Depends(get_scraper_manager)
+):
+    """为指定分集启动一个后台任务，重新获取其弹幕。"""
+    # 检查分集是否存在，以提供更友好的404错误
+    if not await crud.check_episode_exists(pool, episode_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+    logger.info(f"用户 '{current_user.username}' 请求刷新分集 ID: {episode_id}")
+    background_tasks.add_task(refresh_episode_task, episode_id, pool, manager)
+    return {"message": f"分集 ID: {episode_id} 的刷新任务已在后台开始。"}
+
 @router.post("/library/source/{source_id}/refresh", status_code=status.HTTP_202_ACCEPTED, summary="全量刷新指定源的弹幕")
 async def refresh_anime(
     source_id: int,
@@ -297,7 +340,7 @@ async def generic_import_task(
             logger.info(f"--- 开始处理分集 {i+1}/{len(episodes)}: '{episode.title}' (ID: {episode.episodeId}) ---")
             
             # 3.1 在数据库中创建或获取分集ID
-            episode_db_id = await crud.get_or_create_episode(pool, source_id, episode.episodeIndex, episode.title, episode.url)
+            episode_db_id = await crud.get_or_create_episode(pool, source_id, episode.episodeIndex, episode.title, episode.url, episode.episodeId)
 
             # 3.2 获取弹幕
             comments = await scraper.get_comments(episode.episodeId)
@@ -331,6 +374,33 @@ async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: Scrape
     logger.info(f"已清空源 ID: {source_id} 的旧分集和弹幕。")
     # 2. 重新执行通用导入逻辑
     await generic_import_task(source_info["provider_name"], source_info["media_id"], source_info["title"], source_info["type"], None, pool, manager)
+
+async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: ScraperManager):
+    """后台任务：刷新单个分集的弹幕"""
+    logger.info(f"开始刷新分集 ID: {episode_id}")
+    try:
+        # 1. 获取分集的源信息
+        info = await crud.get_episode_provider_info(pool, episode_id)
+        if not info or not info.get("provider_name") or not info.get("provider_episode_id"):
+            logger.error(f"刷新失败：在数据库中找不到分集 ID: {episode_id} 的源信息")
+            return
+
+        provider_name = info["provider_name"]
+        provider_episode_id = info["provider_episode_id"]
+        scraper = manager.get_scraper(provider_name)
+
+        # 2. 清空旧弹幕
+        await crud.clear_episode_comments(pool, episode_id)
+        logger.info(f"已清空分集 ID: {episode_id} 的旧弹幕。")
+
+        # 3. 获取新弹幕并插入
+        comments = await scraper.get_comments(provider_episode_id)
+        added_count = await crud.bulk_insert_comments(pool, episode_id, comments)
+        await crud.update_episode_fetch_time(pool, episode_id)
+        logger.info(f"分集 ID: {episode_id} 刷新完成，新增 {added_count} 条弹幕。")
+
+    except Exception as e:
+        logger.error(f"刷新分集 ID: {episode_id} 时发生严重错误: {e}", exc_info=True)
 
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED, summary="从指定数据源导入弹幕")
 async def import_from_provider(

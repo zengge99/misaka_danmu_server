@@ -1,4 +1,5 @@
 import aiomysql
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 
 from . import models, security
@@ -82,8 +83,8 @@ async def get_or_create_anime(pool: aiomysql.Pool, title: str, media_type: str) 
                 return result[0]
             
             await cursor.execute(
-                "INSERT INTO anime (title, type) VALUES (%s, %s)",
-                (title, media_type)
+                "INSERT INTO anime (title, type, created_at) VALUES (%s, %s, %s)",
+                (title, media_type, datetime.now())
             )
             return cursor.lastrowid
 
@@ -93,15 +94,15 @@ async def link_source_to_anime(pool: aiomysql.Pool, anime_id: int, provider: str
         async with conn.cursor() as cursor:
             # 使用 INSERT IGNORE 来安全地插入，如果唯一键冲突则什么都不做
             await cursor.execute(
-                "INSERT IGNORE INTO anime_sources (anime_id, provider_name, media_id) VALUES (%s, %s, %s)",
-                (anime_id, provider, media_id)
+                "INSERT IGNORE INTO anime_sources (anime_id, provider_name, media_id, created_at) VALUES (%s, %s, %s, %s)",
+                (anime_id, provider, media_id, datetime.now())
             )
             # 获取刚刚插入或已存在的源ID
             await cursor.execute("SELECT id FROM anime_sources WHERE anime_id = %s AND provider_name = %s AND media_id = %s", (anime_id, provider, media_id))
             source = await cursor.fetchone()
             return source[0]
 
-async def get_or_create_episode(pool: aiomysql.Pool, source_id: int, episode_index: int, title: str, url: Optional[str]) -> int:
+async def get_or_create_episode(pool: aiomysql.Pool, source_id: int, episode_index: int, title: str, url: Optional[str], provider_episode_id: str) -> int:
     """如果分集不存在则创建，并返回其ID"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
@@ -113,8 +114,8 @@ async def get_or_create_episode(pool: aiomysql.Pool, source_id: int, episode_ind
             
             # 不存在则创建
             await cursor.execute(
-                "INSERT INTO episode (source_id, episode_index, title, source_url) VALUES (%s, %s, %s, %s)",
-                (source_id, episode_index, title, url)
+                "INSERT INTO episode (source_id, episode_index, provider_episode_id, title, source_url, fetched_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                (source_id, episode_index, provider_episode_id, title, url, datetime.now())
             )
             return cursor.lastrowid
 
@@ -148,8 +149,8 @@ async def create_user(pool: aiomysql.Pool, user: models.UserCreate) -> int:
     hashed_password = security.get_password_hash(user.password)
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
-            query = "INSERT INTO users (username, hashed_password) VALUES (%s, %s)"
-            await cursor.execute(query, (user.username, hashed_password))
+            query = "INSERT INTO users (username, hashed_password, created_at) VALUES (%s, %s, %s)"
+            await cursor.execute(query, (user.username, hashed_password, datetime.now()))
             return cursor.lastrowid
 
 
@@ -193,6 +194,21 @@ async def get_episodes_for_source(pool: aiomysql.Pool, source_id: int) -> List[D
             await cursor.execute(query, (source_id,))
             return await cursor.fetchall()
 
+async def get_episode_provider_info(pool: aiomysql.Pool, episode_id: int) -> Optional[Dict[str, Any]]:
+    """获取分集的原始提供方信息 (provider_name, provider_episode_id)"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            query = """
+                SELECT
+                    s.provider_name,
+                    e.provider_episode_id
+                FROM episode e
+                JOIN anime_sources s ON e.source_id = s.id
+                WHERE e.id = %s
+            """
+            await cursor.execute(query, (episode_id,))
+            return await cursor.fetchone()
+
 async def clear_source_data(pool: aiomysql.Pool, source_id: int):
     """清空指定源的所有分集和弹幕，用于刷新。"""
     async with pool.acquire() as conn:
@@ -204,12 +220,26 @@ async def clear_source_data(pool: aiomysql.Pool, source_id: int):
                 await cursor.execute(f"DELETE FROM comment WHERE episode_id IN ({format_strings})", tuple(episode_ids))
                 await cursor.execute(f"DELETE FROM episode WHERE id IN ({format_strings})", tuple(episode_ids))
 
+async def clear_episode_comments(pool: aiomysql.Pool, episode_id: int):
+    """清空指定分集的所有弹幕"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("DELETE FROM comment WHERE episode_id = %s", (episode_id,))
+
 async def update_anime_info(pool: aiomysql.Pool, anime_id: int, title: str, season: int) -> bool:
     """更新番剧信息"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             query = "UPDATE anime SET title = %s, season = %s WHERE id = %s"
             affected_rows = await cursor.execute(query, (title, season, anime_id))
+            return affected_rows > 0
+
+async def update_episode_title(pool: aiomysql.Pool, episode_id: int, new_title: str) -> bool:
+    """更新分集的标题"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            query = "UPDATE episode SET title = %s WHERE id = %s"
+            affected_rows = await cursor.execute(query, (new_title, episode_id))
             return affected_rows > 0
 
 async def delete_anime(pool: aiomysql.Pool, anime_id: int) -> bool:
@@ -243,6 +273,24 @@ async def delete_anime(pool: aiomysql.Pool, anime_id: int) -> bool:
                 await conn.rollback()  # 如果出错则回滚
                 raise e
 
+async def delete_episode(pool: aiomysql.Pool, episode_id: int) -> bool:
+    """
+    删除一个分集及其所有弹幕。
+    此操作在事务中执行以保证数据一致性。
+    """
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            try:
+                await conn.begin()
+                # 1. 删除弹幕
+                await cursor.execute("DELETE FROM comment WHERE episode_id = %s", (episode_id,))
+                # 2. 删除分集
+                affected_rows = await cursor.execute("DELETE FROM episode WHERE id = %s", (episode_id,))
+                await conn.commit()
+                return affected_rows > 0
+            except Exception as e:
+                await conn.rollback()
+                raise e
 
 async def sync_scrapers_to_db(pool: aiomysql.Pool, provider_names: List[str]):
     """将发现的爬虫同步到数据库，新爬虫会被添加进去。"""
@@ -283,3 +331,9 @@ async def update_scrapers_settings(pool: aiomysql.Pool, settings: List[models.Sc
             query = "UPDATE scrapers SET is_enabled = %s, display_order = %s WHERE provider_name = %s"
             data_to_update = [(s.is_enabled, s.display_order, s.provider_name) for s in settings]
             await cursor.executemany(query, data_to_update)
+
+async def update_episode_fetch_time(pool: aiomysql.Pool, episode_id: int):
+    """更新分集的采集时间"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("UPDATE episode SET fetched_at = %s WHERE id = %s", (datetime.now(), episode_id))

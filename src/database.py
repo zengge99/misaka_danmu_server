@@ -99,7 +99,7 @@ async def init_db_tables(app: FastAPI):
               `image_url` VARCHAR(512) NULL,
               `season` INT NOT NULL DEFAULT 1,
               `source_url` VARCHAR(512) NULL,
-              `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+              `created_at` TIMESTAMP NULL,
               PRIMARY KEY (`id`),
               FULLTEXT INDEX `idx_title_fulltext` (`title`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -111,8 +111,9 @@ async def init_db_tables(app: FastAPI):
               `source_id` BIGINT NOT NULL,
               `title` VARCHAR(255) NOT NULL,
               `episode_index` INT NOT NULL,
+              `provider_episode_id` VARCHAR(255) NULL,
               `source_url` VARCHAR(512) NULL,
-              `fetched_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+              `fetched_at` TIMESTAMP NULL,
               PRIMARY KEY (`id`),
               UNIQUE INDEX `idx_source_episode_unique` (`source_id` ASC, `episode_index` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -134,7 +135,7 @@ async def init_db_tables(app: FastAPI):
               `hashed_password` VARCHAR(255) NOT NULL,
               `token` TEXT NULL,
               `token_update` TIMESTAMP NULL,
-              `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+              `created_at` TIMESTAMP NULL,
               PRIMARY KEY (`id`),
               UNIQUE INDEX `idx_username_unique` (`username` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -155,7 +156,7 @@ async def init_db_tables(app: FastAPI):
               `anime_id` BIGINT NOT NULL,
               `provider_name` VARCHAR(50) NOT NULL,
               `media_id` VARCHAR(255) NOT NULL,
-              `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+              `created_at` TIMESTAMP NULL,
               PRIMARY KEY (`id`),
               UNIQUE INDEX `idx_anime_provider_media_unique` (`anime_id` ASC, `provider_name` ASC, `media_id` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -204,7 +205,33 @@ async def init_db_tables(app: FastAPI):
                     ADD COLUMN `source_url` VARCHAR(512) NULL AFTER `episode_index`,
                     ADD COLUMN `fetched_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `source_url`;
                 """)
+                # 再次修改以移除默认值，确保与新schema一致
+                await cursor.execute("ALTER TABLE `episode` MODIFY COLUMN `fetched_at` TIMESTAMP NULL;");
                 print("'episode' 表 schema 更新完成。")
+
+            # 迁移检查：episode 表的 provider_episode_id
+            await cursor.execute("SHOW COLUMNS FROM `episode` LIKE 'provider_episode_id'")
+            if not await cursor.fetchone():
+                print("检测到旧的 'episode' 表 schema，正在添加 'provider_episode_id' 字段...")
+                await cursor.execute("""
+                    ALTER TABLE `episode` ADD COLUMN `provider_episode_id` VARCHAR(255) NULL AFTER `episode_index`;
+                """)
+                print("'episode' 表 schema 更新完成。")
+
+            # 迁移检查：移除所有 created_at 和 fetched_at 的默认值
+            tables_with_timestamps = ['anime', 'users', 'anime_sources', 'episode']
+            for table in tables_with_timestamps:
+                column = 'fetched_at' if table == 'episode' else 'created_at'
+                await cursor.execute("""
+                    SELECT COLUMN_DEFAULT FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s
+                """, (db_name, table, column))
+                default_val = await cursor.fetchone()
+                if default_val and default_val[0] is not None:
+                    print(f"检测到旧的 '{table}' 表 schema，正在移除 '{column}' 字段的默认值...")
+                    await cursor.execute(f"ALTER TABLE `{table}` ALTER COLUMN `{column}` DROP DEFAULT;")
+                    print(f"'{table}' 表 '{column}' 字段默认值移除完成。")
+
 
             # 主要迁移：从 anime(provider, media_id) 迁移到 anime_sources，并更新 episode 表
             await cursor.execute("SHOW COLUMNS FROM `anime` LIKE 'provider'")

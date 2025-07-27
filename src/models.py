@@ -80,6 +80,10 @@ class AnimeInfoUpdate(BaseModel):
     title: str = Field(..., min_length=1, description="新的影视名称")
     season: int = Field(..., ge=1, description="新的季数")
 
+class EpisodeInfoUpdate(BaseModel):
+    """用于更新分集信息的模型"""
+    title: str = Field(..., min_length=1, description="新的分集标题")
+
 # --- 爬虫源管理模型 ---
 class ScraperSetting(BaseModel):
     provider_name: str
