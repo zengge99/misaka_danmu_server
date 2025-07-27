@@ -70,7 +70,10 @@
                         </div>
                     </div>
                     <div id="library-view" class="content-view hidden">
-                        <h2>弹幕库</h2>
+                        <div class="library-header">
+                            <h2>弹幕库</h2>
+                            <input type="text" id="library-search-input" placeholder="搜索已收录的影视...">
+                        </div>
                         <table id="library-table">
                             <thead>
                                 <tr>
@@ -85,6 +88,16 @@
                             </thead>
                             <tbody></tbody>
                         </table>
+                    </div>
+                    <div id="edit-anime-view" class="content-view hidden">
+                        <h2>编辑影视信息</h2>
+                        <form id="edit-anime-form">
+                            <input type="hidden" id="edit-anime-id">
+                            <input type="text" id="edit-anime-title" placeholder="影视名称" required>
+                            <input type="number" id="edit-anime-season" placeholder="季" min="1" required>
+                            <button type="submit">保存更改</button>
+                            <button type="button" id="back-to-library-from-edit-btn">返回</button>
+                        </form>
                     </div>
                     <div id="anime-detail-view" class="content-view hidden">
                         <!-- 详情内容将在这里动态生成 -->
