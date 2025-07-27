@@ -25,57 +25,14 @@ async def get_library_anime(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
             await cursor.execute(query)
             return await cursor.fetchall()
 
-async def get_library_anime(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
-    """获取媒体库中的所有番剧及其关联信息（如分集数）"""
-    async with pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cursor:
-            # 使用 LEFT JOIN 和 GROUP BY 来统计每个番剧的分集数
-            query = """
-                SELECT
-                    a.id as animeId,
-                    a.image_url as imageUrl,
-                    a.title,
-                    a.season,
-                    a.created_at as createdAt,
-                    COUNT(e.id) as episodeCount
-                FROM anime a
-                LEFT JOIN episode e ON a.id = e.anime_id
-                GROUP BY a.id
-                ORDER BY a.created_at DESC
-            """
-            await cursor.execute(query)
-            return await cursor.fetchall()
-
-async def get_library_anime(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
-    """获取媒体库中的所有番剧及其关联信息（如分集数）"""
-    async with pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cursor:
-            # 使用 LEFT JOIN 和 GROUP BY 来统计每个番剧的分集数
-            query = """
-                SELECT
-                    a.id as animeId,
-                    a.image_url as imageUrl,
-                    a.title,
-                    a.season,
-                    a.created_at as createdAt,
-                    COUNT(e.id) as episodeCount
-                FROM anime a
-                LEFT JOIN episode e ON a.id = e.anime_id
-                GROUP BY a.id
-                ORDER BY a.created_at DESC
-            """
-            await cursor.execute(query)
-            return await cursor.fetchall()
 
 async def search_anime(pool: aiomysql.Pool, keyword: str) -> List[Dict[str, Any]]:
     """在数据库中搜索番剧 (使用FULLTEXT索引)"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            # 使用布尔全文搜索，+ 表示必须包含
             query = "SELECT id, title, type FROM anime WHERE MATCH(title) AGAINST(%s IN BOOLEAN MODE)"
-            # 为每个词添加+号，例如 "复仇者 联盟" -> "+复仇者 +联盟"
-            search_term = ' '.join([f'+{word}' for word in keyword.split()])
-            await cursor.execute(query, (search_term,))
+            # 为关键词添加通配符以支持前缀匹配
+            await cursor.execute(query, (keyword + '*',))
             return await cursor.fetchall()
 
 
@@ -89,7 +46,7 @@ async def find_anime_by_title(pool: aiomysql.Pool, title: str) -> Optional[Dict[
 
 
 async def find_episode(pool: aiomysql.Pool, anime_id: int, episode_index: int) -> Optional[Dict[str, Any]]:
-    """查找特定分集"""
+    """查找特定番剧的特定分集"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             query = "SELECT id, title FROM episode WHERE anime_id = %s AND episode_index = %s"
@@ -97,17 +54,8 @@ async def find_episode(pool: aiomysql.Pool, anime_id: int, episode_index: int) -
             return await cursor.fetchone()
 
 
-async def fetch_comments(pool: aiomysql.Pool, episode_id: int) -> List[Dict[str, Any]]:
-    """获取弹幕"""
-    async with pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cursor:
-            query = "SELECT p, m FROM comment WHERE episode_id = %s ORDER BY t ASC"
-            await cursor.execute(query, (episode_id,))
-            return await cursor.fetchall()
-
-
 async def check_episode_exists(pool: aiomysql.Pool, episode_id: int) -> bool:
-    """检查分集是否存在"""
+    """检查指定ID的分集是否存在"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             query = "SELECT 1 FROM episode WHERE id = %s LIMIT 1"
@@ -115,6 +63,14 @@ async def check_episode_exists(pool: aiomysql.Pool, episode_id: int) -> bool:
             result = await cursor.fetchone()
             return result is not None
 
+
+async def fetch_comments(pool: aiomysql.Pool, episode_id: int) -> List[Dict[str, Any]]:
+    """获取指定分集的所有弹幕"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            query = "SELECT p, m FROM comment WHERE episode_id = %s"
+            await cursor.execute(query, (episode_id,))
+            return await cursor.fetchall()
 
 async def get_or_create_anime(pool: aiomysql.Pool, title: str) -> int:
     """如果番剧不存在则创建，并返回其ID"""
