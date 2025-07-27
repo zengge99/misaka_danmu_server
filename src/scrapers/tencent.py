@@ -131,6 +131,8 @@ class TencentScraper(BaseScraper):
             payload = {
                 "pageParams": {
                     "cid": cid,
+                    "video_appid": "3000010", # 关键参数，必须包含在POST Body中
+                    "vplatform": "2",       # 关键参数，必须包含在POST Body中
                     "pageSize": str(page_size),
                     "pageContext": page_context,
                 }
