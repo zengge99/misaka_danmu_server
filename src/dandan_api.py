@@ -2,6 +2,7 @@ import logging
 from typing import List, Optional
 
 import aiomysql
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 
 from . import crud, models
