@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import httpx
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from .. import models
 from .base import BaseScraper
@@ -65,19 +65,19 @@ class IqiyiHtmlAlbumInfo(BaseModel):
 
 class IqiyiHtmlVideoInfo(BaseModel):
     album_id: int = Field(alias="albumQipuId")
-    tv_id: int = Field(alias="tvId")
-    video_id: Optional[int] = Field(None, alias="videoId")
+    tv_id: int # 验证器运行后，此字段必须存在
     video_name: str = Field(alias="videoName")
     video_url: str = Field(alias="videoUrl")
     channel_name: str = Field(alias="channelName")
     duration: int
-
-    @field_validator('tv_id', mode='before')
-    def set_tv_id_from_video_id(cls, v: Optional[int], values: Dict[str, Any]):
-        if v is None:
-            return values.get('video_id')
-        return v
     video_count: int = 0
+
+    @model_validator(mode='before')
+    @classmethod
+    def set_tv_id_from_video_id(cls, data: Any) -> Any:
+        if isinstance(data, dict) and data.get('tvId') is None and data.get('videoId') is not None:
+            data['tvId'] = data['videoId']
+        return data
 
 class IqiyiEpisodeInfo(BaseModel):
     tv_id: int = Field(alias="tvId")
