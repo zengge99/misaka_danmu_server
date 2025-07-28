@@ -584,6 +584,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const posterImg = document.createElement('img');
             posterImg.className = 'poster';
             posterImg.src = item.imageUrl || '/static/placeholder.png';
+            posterImg.referrerPolicy = 'no-referrer'; // 关键修复：禁止发送Referer头
             posterImg.alt = item.title;
             li.appendChild(posterImg);
 
@@ -665,6 +666,7 @@ document.addEventListener('DOMContentLoaded', () => {
             posterCell.className = 'poster-cell';
             const img = document.createElement('img');
             img.src = anime.imageUrl || '/static/placeholder.png';
+            img.referrerPolicy = 'no-referrer'; // 关键修复：禁止发送Referer头
             img.alt = anime.title;
             posterCell.appendChild(img);
 
@@ -744,7 +746,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let html = `
             <button id="back-to-library-btn"> &lt; 返回弹幕库</button>
             <div class="anime-detail-header">
-                <img src="${anime.imageUrl || '/static/placeholder.png'}" alt="${anime.title}">
+                <img src="${anime.imageUrl || '/static/placeholder.png'}" alt="${anime.title}" referrerpolicy="no-referrer">
                 <div>
                     <h2>${anime.title}</h2>
                     <p>季: ${anime.season} | 总集数: ${anime.episodeCount || 0} | 已关联 ${sources.length} 个源</p>
