@@ -17,7 +17,7 @@ from .base import BaseScraper
 
 class IqiyiSearchAlbumInfo(BaseModel):
     album_id: int = Field(alias="albumId")
-    item_total_number: int = Field(alias="itemTotalNumber")
+    item_total_number: Optional[int] = Field(None, alias="itemTotalNumber")
     site_id: str = Field(alias="siteId")
     album_link: str = Field(alias="albumLink")
     video_doc_type: int = Field(alias="videoDocType")
