@@ -476,21 +476,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Task Manager View ---
+    // --- Task Manager View (Optimized Rendering) ---
     function renderTasks(tasks) {
         if (!taskListUl) return;
-        taskListUl.innerHTML = '';
 
+        // If no tasks, show message and clear list
         if (tasks.length === 0) {
             taskListUl.innerHTML = '<li>当前没有任务。</li>';
             return;
         }
 
-        tasks.forEach(task => {
-            const li = document.createElement('li');
-            li.className = 'task-item';
-            li.dataset.status = task.status;
+        const existingTaskElements = new Map([...taskListUl.querySelectorAll('.task-item')].map(el => [el.dataset.taskId, el]));
+        const incomingTaskIds = new Set(tasks.map(t => t.task_id));
 
+        // Remove tasks that are no longer in the list
+        for (const [taskId, element] of existingTaskElements.entries()) {
+            if (!incomingTaskIds.has(taskId)) {
+                element.remove();
+            }
+        }
+
+        // Update existing or add new tasks
+        tasks.forEach(task => {
             const statusColor = {
                 "已完成": "var(--success-color)",
                 "失败": "var(--error-color)",
@@ -498,22 +505,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 "运行中": "var(--primary-color)"
             }[task.status] || "var(--primary-color)";
 
-            li.innerHTML = `
-                <div class="task-header">
-                    <span class="task-title">${task.title}</span>
-                    <span class="task-status">${task.status}</span>
-                </div>
-                <p class="task-description">${task.description}</p>
-                <div class="task-progress-bar-container">
-                    <div class="task-progress-bar" style="width: ${task.progress}%; background-color: ${statusColor};"></div>
-                </div>
-            `;
-            taskListUl.appendChild(li);
+            let taskElement = existingTaskElements.get(task.task_id);
+
+            if (taskElement) {
+                // Update existing element
+                if (taskElement.dataset.status !== task.status) {
+                    taskElement.dataset.status = task.status;
+                    taskElement.querySelector('.task-status').textContent = task.status;
+                }
+                taskElement.querySelector('.task-description').textContent = task.description;
+                taskElement.querySelector('.task-progress-bar').style.width = `${task.progress}%`;
+                taskElement.querySelector('.task-progress-bar').style.backgroundColor = statusColor;
+            } else {
+                // Create new element
+                const li = document.createElement('li');
+                li.className = 'task-item';
+                li.dataset.taskId = task.task_id;
+                li.dataset.status = task.status;
+
+                li.innerHTML = `
+                    <div class="task-header">
+                        <span class="task-title">${task.title}</span>
+                        <span class="task-status">${task.status}</span>
+                    </div>
+                    <p class="task-description">${task.description}</p>
+                    <div class="task-progress-bar-container">
+                        <div class="task-progress-bar" style="width: ${task.progress}%; background-color: ${statusColor};"></div>
+                    </div>
+                `;
+                taskListUl.appendChild(li);
+            }
         });
     }
 
     // Start polling tasks when the app is loaded and user is logged in
-    setInterval(loadAndRenderTasks, 2000);
+    setInterval(loadAndRenderTasks, 800);
 
     // --- Rendering Functions ---
 

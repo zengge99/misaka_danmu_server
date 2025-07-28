@@ -293,6 +293,7 @@ header {
 
 #library-table .actions-cell {
     display: flex;
+    align-items: center; /* 新增：确保按钮在单元格内垂直居中 */
     gap: 8px;
 }
 
