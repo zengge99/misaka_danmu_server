@@ -44,6 +44,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const taskManagerView = document.getElementById('task-manager-view');
     const taskListUl = document.getElementById('task-list');
 
+    const tokenManagerView = document.getElementById('token-manager-view');
+    const tokenTableBody = document.querySelector('#token-table tbody');
+    const addTokenBtn = document.getElementById('add-token-btn');
+
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
     let logRefreshInterval = null;
@@ -162,6 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners Setup ---
     function setupEventListeners() {
+        // ... (其他监听器保持不变)
         // Auth Form Switching
         showRegisterLink.addEventListener('click', (e) => {
             e.preventDefault();
@@ -194,6 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleSourceBtn.addEventListener('click', handleToggleSource);
         moveSourceUpBtn.addEventListener('click', handleMoveSourceUp);
         moveSourceDownBtn.addEventListener('click', handleMoveSourceDown);
+        addTokenBtn.addEventListener('click', handleAddToken);
         document.getElementById('back-to-library-from-edit-btn').addEventListener('click', () => {
             editAnimeView.classList.add('hidden');
             libraryView.classList.remove('hidden');
@@ -290,6 +296,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadScraperSettings();
             } else if (viewId === 'task-manager-view') {
                 loadAndRenderTasks(); // Load immediately on view switch
+            } else if (viewId === 'token-manager-view') {
+                loadAndRenderTokens();
             }
         }
     }
@@ -1030,6 +1038,22 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (action === 'delete') {
             // Placeholder for deleting a source
             alert(`功能 '删除源' (ID: ${sourceId}) 尚未实现。`);
+        }
+    };
+
+    window.handleTokenAction = async (action, tokenId) => {
+        if (action === 'toggle') {
+            try {
+                await apiFetch(`/api/v2/tokens/${tokenId}/toggle`, { method: 'PUT' });
+                loadAndRenderTokens();
+            } catch (error) {
+                alert(`操作失败: ${error.message}`);
+            }
+        } else if (action === 'delete') {
+            if (confirm("您确定要删除这个Token吗？此操作不可恢复。")) {
+                await apiFetch(`/api/v2/tokens/${tokenId}`, { method: 'DELETE' });
+                loadAndRenderTokens();
+            }
         }
     };
 

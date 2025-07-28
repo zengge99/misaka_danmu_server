@@ -5,7 +5,8 @@ import logging
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from .database import create_db_pool, close_db_pool, init_db_tables, create_initial_admin_user
-from .api import router as api_router, auth_router
+from .api import router as v2_router, auth_router
+from .dandan_api import dandan_router
 from .task_manager import TaskManager
 from .scraper_manager import ScraperManager
 from .config import settings
@@ -70,8 +71,9 @@ async def shutdown_event():
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 包含 v2 版本的 API 路由
-app.include_router(api_router, prefix="/api/v2", tags=["v2"])
+app.include_router(v2_router, prefix="/api/v2", tags=["Web UI API"])
 app.include_router(auth_router, prefix="/api/v2/auth", tags=["Auth"])
+app.include_router(dandan_router, prefix="/api/{token}", tags=["DanDanPlay Compatible"])
 
 # 根路径返回前端页面
 @app.get("/", response_class=FileResponse, include_in_schema=False)

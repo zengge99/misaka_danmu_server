@@ -52,6 +52,7 @@
                         <li><a href="#" class="nav-link active" data-view="home-view">主页</a></li>
                         <li><a href="#" class="nav-link" data-view="library-view">弹幕库</a></li>
                         <li><a href="#" class="nav-link" data-view="task-manager-view">任务管理器</a></li>
+                        <li><a href="#" class="nav-link" data-view="token-manager-view">弹幕Token</a></li>
                         <li><a href="#" class="nav-link" data-view="sources-view">搜索源</a></li>
                         <li><a href="#" class="nav-link" data-view="account-view">账户设置</a></li>
                     </ul>
@@ -131,6 +132,22 @@
                     <div id="task-manager-view" class="content-view hidden">
                         <h2>任务管理器</h2>
                         <ul id="task-list">
+                        </ul>
+                    </div>
+                    <div id="token-manager-view" class="content-view hidden">
+                        <div class="library-header">
+                            <h2>弹幕Token管理</h2>
+                            <button id="add-token-btn">添加Token</button>
+                        </div>
+                        <p>在这里管理用于第三方播放器（如dandanplay）的API访问令牌。</p>
+                        <table id="token-table">
+                            <thead>
+                                <tr>
+                                    <th>名称</th><th>Token (点击复制)</th><th>状态</th><th>创建时间</th><th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
                         </ul>
                     </div>
                     <div id="sources-view" class="content-view hidden">

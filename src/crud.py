@@ -37,6 +37,29 @@ async def search_anime(pool: aiomysql.Pool, keyword: str) -> List[Dict[str, Any]
             await cursor.execute(query, (keyword + '*',))
             return await cursor.fetchall()
 
+async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, episode_number: int) -> List[Dict[str, Any]]:
+    """
+    在本地库中通过番剧标题和集数搜索匹配的分集。
+    """
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            # 使用 JOIN 查询来直接匹配
+            # MATCH...AGAINST 用于模糊匹配标题
+            query = """
+                SELECT
+                    a.id AS animeId,
+                    a.title AS animeTitle,
+                    e.id AS episodeId,
+                    e.title AS episodeTitle
+                FROM episode e
+                JOIN anime_sources s ON e.source_id = s.id
+                JOIN anime a ON s.anime_id = a.id
+                WHERE
+                    MATCH(a.title) AGAINST(%s IN BOOLEAN MODE)
+                    AND e.episode_index = %s
+            """
+            await cursor.execute(query, (anime_title + '*', episode_number))
+            return await cursor.fetchall()
 
 async def find_anime_by_title(pool: aiomysql.Pool, title: str) -> Optional[Dict[str, Any]]:
     """通过标题精确查找番剧"""
@@ -403,3 +426,47 @@ async def update_episode_fetch_time(pool: aiomysql.Pool, episode_id: int):
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("UPDATE episode SET fetched_at = %s WHERE id = %s", (datetime.now(), episode_id))
+
+# --- API Token 管理服务 ---
+
+async def get_all_api_tokens(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
+    """获取所有 API Token。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("SELECT id, name, token, is_enabled, created_at FROM api_tokens ORDER BY created_at DESC")
+            return await cursor.fetchall()
+
+async def get_api_token_by_id(pool: aiomysql.Pool, token_id: int) -> Optional[Dict[str, Any]]:
+    """通过ID获取一个 API Token。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("SELECT id, name, token, is_enabled, created_at FROM api_tokens WHERE id = %s", (token_id,))
+            return await cursor.fetchone()
+
+async def create_api_token(pool: aiomysql.Pool, name: str, token: str) -> int:
+    """创建一个新的 API Token。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("INSERT INTO api_tokens (name, token) VALUES (%s, %s)", (name, token))
+            return cursor.lastrowid
+
+async def delete_api_token(pool: aiomysql.Pool, token_id: int) -> bool:
+    """删除一个 API Token。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            affected_rows = await cursor.execute("DELETE FROM api_tokens WHERE id = %s", (token_id,))
+            return affected_rows > 0
+
+async def toggle_api_token(pool: aiomysql.Pool, token_id: int) -> bool:
+    """切换一个 API Token 的启用/禁用状态。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            affected_rows = await cursor.execute("UPDATE api_tokens SET is_enabled = NOT is_enabled WHERE id = %s", (token_id,))
+            return affected_rows > 0
+
+async def validate_api_token(pool: aiomysql.Pool, token: str) -> bool:
+    """验证一个 API Token 是否有效且已启用。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT 1 FROM api_tokens WHERE token = %s AND is_enabled = TRUE", (token,))
+            return await cursor.fetchone() is not None

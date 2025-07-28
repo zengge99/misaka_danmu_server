@@ -126,6 +126,17 @@ class TaskInfo(BaseModel):
     progress: int
     description: str
 
+# --- API Token 管理模型 ---
+class ApiTokenInfo(BaseModel):
+    id: int
+    name: str
+    token: str
+    is_enabled: bool
+    created_at: datetime
+
+class ApiTokenCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50, description="Token的描述性名称")
+
 # --- 用户和认证模型 ---
 class UserBase(BaseModel):
     username: str

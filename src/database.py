@@ -181,6 +181,18 @@ async def init_db_tables(app: FastAPI):
               INDEX `idx_expires_at` (`expires_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
+            # 创建 API Token 表
+            await cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `api_tokens` (
+              `id` INT NOT NULL AUTO_INCREMENT,
+              `name` VARCHAR(100) NOT NULL,
+              `token` VARCHAR(50) NOT NULL,
+              `is_enabled` BOOLEAN NOT NULL DEFAULT TRUE,
+              `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              UNIQUE INDEX `idx_token_unique` (`token` ASC)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
             print("数据表检查完成。")
 
             # --- 步骤 3.2: 为已存在的表运行 schema 迁移检查 ---

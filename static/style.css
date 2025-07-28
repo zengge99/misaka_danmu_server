@@ -262,7 +262,8 @@ header {
 /* Library & Detail Table Styles */
 #library-table,
 #source-detail-table,
-#episode-list-table {
+#episode-list-table,
+#token-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 20px;
@@ -270,7 +271,8 @@ header {
 
 #library-table th, #library-table td,
 #source-detail-table th, #source-detail-table td,
-#episode-list-table th, #episode-list-table td {
+#episode-list-table th, #episode-list-table td,
+#token-table th, #token-table td {
     padding: 12px 20px; /* 增加了列间距 */
     text-align: left;
     border-bottom: 1px solid var(--border-color);
@@ -279,7 +281,8 @@ header {
 
 #library-table th,
 #source-detail-table th,
-#episode-list-table th {
+#episode-list-table th,
+#token-table th {
     background-color: var(--secondary-color);
     font-weight: 600;
 }
@@ -314,6 +317,19 @@ header {
     cursor: pointer;
     font-size: 1.2em;
     padding: 5px;
+}
+
+.token-value {
+    font-family: 'Courier New', Courier, monospace;
+    background-color: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.token-status.disabled {
+    color: #909399;
+    font-style: italic;
 }
 
 #results-list {

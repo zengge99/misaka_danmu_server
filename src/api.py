@@ -1,6 +1,7 @@
 import re
 from typing import Optional, List, Any, Dict, Callable
 import asyncio
+import secrets
 import logging
 
 from datetime import timedelta, datetime, timezone
@@ -306,6 +307,53 @@ async def get_all_tasks(
 ):
     """获取当前所有（排队中、运行中、已完成）后台任务的列表和状态。"""
     return task_manager.get_all_tasks()
+
+@router.get("/tokens", response_model=List[models.ApiTokenInfo], summary="获取所有弹幕API Token")
+async def get_all_api_tokens(
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """获取所有为第三方播放器创建的 API Token。"""
+    tokens = await crud.get_all_api_tokens(pool)
+    return [models.ApiTokenInfo.model_validate(t) for t in tokens]
+
+@router.post("/tokens", response_model=models.ApiTokenInfo, status_code=status.HTTP_201_CREATED, summary="创建一个新的API Token")
+async def create_new_api_token(
+    token_data: models.ApiTokenCreate,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """创建一个新的、随机的 API Token。"""
+    # 生成一个20位的随机字符串
+    new_token_str = secrets.token_urlsafe(15) # 15字节 -> 20个URL安全字符
+    token_id = await crud.create_api_token(pool, token_data.name, new_token_str)
+    # 重新从数据库获取以包含所有字段
+    new_token = await crud.get_api_token_by_id(pool, token_id) # 假设这个函数存在
+    return models.ApiTokenInfo.model_validate(new_token)
+
+@router.delete("/tokens/{token_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除一个API Token")
+async def delete_api_token(
+    token_id: int,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """根据ID删除一个 API Token。"""
+    deleted = await crud.delete_api_token(pool, token_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
+    return
+
+@router.put("/tokens/{token_id}/toggle", status_code=status.HTTP_204_NO_CONTENT, summary="切换API Token的启用状态")
+async def toggle_api_token_status(
+    token_id: int,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """切换指定 API Token 的启用/禁用状态。"""
+    toggled = await crud.toggle_api_token(pool, token_id)
+    if not toggled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
+    return
 
 @router.get(
     "/comment/{episode_id}",
