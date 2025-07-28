@@ -236,21 +236,49 @@ header {
     box-shadow: var(--shadow);
 }
 
-/* Episode List View Styles */
-.episode-list-header {
+/* View Header Styles (for Episode, Danmaku lists etc.) */
+.view-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 15px;
+    flex-shrink: 0; /* 防止头部被压缩 */
 }
 
-.episode-list-header h3 {
+.view-header h3 {
     margin: 0;
 }
 
-#episode-list-table { /* Reuse library table styles */ }
+/*
+  Flexbox layout for views that need a sticky header and scrollable content.
+  This applies to episode list and danmaku list.
+*/
+#episode-list-view,
+#danmaku-list-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* 占据父容器 main-content 的全部高度 */
+}
 
-/* Danmaku List View Styles */
+.view-content.scrollable {
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+/* Sticky Table Header */
+.scrollable table thead {
+    position: sticky;
+    top: 0;
+    background-color: var(--card-bg); /* 确保表头有背景色，不会变透明 */
+    z-index: 10;
+}
+
+/*
+  Danmaku List View Specific Styles
+  The <pre> tag is now the scrollable content.
+*/
 #danmaku-list-view pre {
     flex-grow: 1;
     overflow-y: auto;
@@ -259,6 +287,7 @@ header {
     padding: 10px;
     white-space: pre-wrap;
     word-break: break-all;
+    margin: 0; /* 移除 pre 标签的默认外边距 */
 }
 
 /* Library & Detail Table Styles */
@@ -267,7 +296,7 @@ header {
 #episode-list-table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 20px;
+    /* margin-top is no longer needed as header provides spacing */
 }
 
 #library-table th, #library-table td,

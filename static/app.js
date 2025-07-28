@@ -201,9 +201,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('back-to-episodes-from-edit-btn').addEventListener('click', () => {
             editEpisodeView.classList.add('hidden');
             // Retrieve context to navigate back
-            const sourceId = document.getElementById('edit-episode-source-id').value;
+            const sourceId = parseInt(document.getElementById('edit-episode-source-id').value, 10);
             const animeTitle = document.getElementById('edit-episode-anime-title').value;
-            const animeId = document.getElementById('edit-episode-anime-id').value;
+            const animeId = parseInt(document.getElementById('edit-episode-anime-id').value, 10);
             showEpisodeListView(sourceId, animeTitle, animeId);
         });
 
@@ -834,34 +834,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderEpisodeListView(sourceId, animeTitle, episodes, animeId) {
-        let html = `
-            <div class="episode-list-header">
-                <h3>分集列表: ${animeTitle}</h3>
-                <button id="back-to-detail-view-btn">&lt; 返回作品详情</button>
-            </div>
-            <table id="episode-list-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>剧集名</th>
-                        <th>集数</th>
-                        <th>采集时间</th>
-                        <th>官方链接</th>
-                        <th>剧集操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                </tbody>
-            </table>
+        document.getElementById('episode-list-title').textContent = `分集列表: ${animeTitle}`;
+        const episodeTable = document.getElementById('episode-list-table');
+        // 清空旧内容，但保留 thead 结构（如果有的话）
+        episodeTable.innerHTML = `
+            <thead>
+                <tr><th>ID</th><th>剧集名</th><th>集数</th><th>采集时间</th><th>官方链接</th><th>剧集操作</th></tr>
+            </thead>
+            <tbody></tbody>
         `;
-        episodeListView.innerHTML = html;
 
         // Store context on the view container for handleEpisodeAction to use
         episodeListView.dataset.sourceId = sourceId;
         episodeListView.dataset.animeTitle = animeTitle;
         episodeListView.dataset.animeId = animeId;
 
-        const episodeTableBody = episodeListView.querySelector('#episode-list-table tbody');
+        const episodeTableBody = episodeTable.querySelector('tbody');
         if (episodes.length > 0) {
             episodes.forEach(ep => {
                 const row = episodeTableBody.insertRow();
@@ -906,25 +894,18 @@ document.addEventListener('DOMContentLoaded', () => {
         episodeListView.classList.add('hidden');
         editEpisodeView.classList.add('hidden');
         danmakuListView.classList.remove('hidden');
-        danmakuListView.innerHTML = '<div>加载中...</div>';
+        document.getElementById('danmaku-content-pre').textContent = '加载中...';
 
         try {
             const data = await apiFetch(`/api/v2/comment/${episodeId}`);
             renderDanmakuListView(episodeId, episodeTitle, sourceId, animeTitle, animeId, data.comments);
         } catch (error) {
-            danmakuListView.innerHTML = `<div class="error">加载弹幕失败: ${(error.message || error)}</div>`;
+            document.getElementById('danmaku-content-pre').textContent = `加载弹幕失败: ${(error.message || error)}`;
         }
     }
 
     function renderDanmakuListView(episodeId, episodeTitle, sourceId, animeTitle, animeId, comments) {
-        let html = `
-            <div class="episode-list-header">
-                <h3>弹幕列表: ${animeTitle} - ${episodeTitle}</h3>
-                <button id="back-to-episodes-from-danmaku-btn">&lt; 返回分集列表</button>
-            </div>
-            <pre id="danmaku-content-pre"></pre>
-        `;
-        danmakuListView.innerHTML = html;
+        document.getElementById('danmaku-list-title').textContent = `弹幕列表: ${animeTitle} - ${episodeTitle}`;
 
         const danmakuContentPre = document.getElementById('danmaku-content-pre');
         if (comments.length === 0) {
@@ -986,9 +967,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const row = document.querySelector(`#episode-list-table button[onclick*="handleEpisodeAction('${action}', ${episodeId},"]`).closest('tr');
         
         // Retrieve context from the view container's dataset
-        const sourceId = episodeListView.dataset.sourceId;
+        const sourceId = parseInt(episodeListView.dataset.sourceId, 10);
         const animeTitle = episodeListView.dataset.animeTitle;
-        const animeId = episodeListView.dataset.animeId;
+        const animeId = parseInt(episodeListView.dataset.animeId, 10);
+
+        if (isNaN(animeId) || isNaN(sourceId)) {
+            alert("无法获取上下文信息，操作失败。");
+            return;
+        }
 
         if (action === 'delete') {
             if (confirm(`您确定要删除分集 '${title}' 吗？\n此操作将删除该分集及其所有弹幕，且不可恢复。`)) {
