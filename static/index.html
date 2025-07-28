@@ -100,10 +100,18 @@
                         <h2>编辑影视信息</h2>
                         <form id="edit-anime-form">
                             <input type="hidden" id="edit-anime-id">
-                            <input type="text" id="edit-anime-title" placeholder="影视名称" required>
-                            <input type="number" id="edit-anime-season" placeholder="季" min="1" required>
-                            <button type="submit">保存更改</button>
-                            <button type="button" id="back-to-library-from-edit-btn">返回</button>
+                            <div class="form-row">
+                                <label for="edit-anime-title">影视名称</label>
+                                <input type="text" id="edit-anime-title" required>
+                            </div>
+                            <div class="form-row">
+                                <label for="edit-anime-season">季</label>
+                                <input type="number" id="edit-anime-season" min="1" required>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit">保存更改</button>
+                                <button type="button" id="back-to-library-from-edit-btn">返回</button>
+                            </div>
                         </form>
                     </div>
                     <div id="anime-detail-view" class="content-view hidden">
@@ -119,11 +127,22 @@
                             <input type="hidden" id="edit-episode-source-id">
                             <input type="hidden" id="edit-episode-anime-title">
                             <input type="hidden" id="edit-episode-anime-id">
-                            <input type="text" id="edit-episode-title" placeholder="分集标题" required>
-                            <input type="number" id="edit-episode-index" placeholder="集数" min="1" required>
-                            <input type="text" id="edit-episode-url" placeholder="官方链接 (可选)">
-                            <button type="submit">保存更改</button>
-                            <button type="button" id="back-to-episodes-from-edit-btn">返回</button>
+                            <div class="form-row">
+                                <label for="edit-episode-title">分集标题</label>
+                                <input type="text" id="edit-episode-title" required>
+                            </div>
+                            <div class="form-row">
+                                <label for="edit-episode-index">集数</label>
+                                <input type="number" id="edit-episode-index" min="1" required>
+                            </div>
+                            <div class="form-row">
+                                <label for="edit-episode-url">官方链接</label>
+                                <input type="text" id="edit-episode-url">
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit">保存更改</button>
+                                <button type="button" id="back-to-episodes-from-edit-btn">返回</button>
+                            </div>
                         </form>
                     </div>
                     <div id="danmaku-list-view" class="content-view hidden">

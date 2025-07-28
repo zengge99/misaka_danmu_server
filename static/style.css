@@ -236,6 +236,35 @@ header {
     box-shadow: var(--shadow);
 }
 
+/* New styles for form layout */
+.form-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    /* margin-bottom: 15px; */
+}
+
+.form-row label {
+    width: 80px;
+    text-align: right;
+    flex-shrink: 0;
+    font-weight: 500;
+    color: #606266;
+}
+
+.form-row input {
+    flex-grow: 1;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+}
+
 /* Episode List View Styles */
 .episode-list-header {
     display: flex;
