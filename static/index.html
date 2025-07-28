@@ -169,6 +169,20 @@
                             </tbody>
                         </table>
                     </div>
+                    <div id="add-token-view" class="content-view hidden">
+                        <h2>添加新Token</h2>
+                        <form id="add-token-form">
+                            <p>为新的API Token指定一个描述性名称，Token值将自动生成。</p>
+                            <div class="form-row">
+                                <label for="add-token-name">名称</label>
+                                <input type="text" id="add-token-name" placeholder="例如：我的dandanplay客户端" required>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit">保存</button>
+                                <button type="button" id="back-to-tokens-from-add-btn">返回</button>
+                            </div>
+                        </form>
+                    </div>
                     <div id="sources-view" class="content-view hidden">
                         <h2>搜索源管理</h2>
                         <div class="source-controls">

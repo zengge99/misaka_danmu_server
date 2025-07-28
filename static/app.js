@@ -47,6 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const tokenManagerView = document.getElementById('token-manager-view');
     const tokenTableBody = document.querySelector('#token-table tbody');
     const addTokenBtn = document.getElementById('add-token-btn');
+    const addTokenView = document.getElementById('add-token-view');
+    const addTokenForm = document.getElementById('add-token-form');
 
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
@@ -199,10 +201,18 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleSourceBtn.addEventListener('click', handleToggleSource);
         moveSourceUpBtn.addEventListener('click', handleMoveSourceUp);
         moveSourceDownBtn.addEventListener('click', handleMoveSourceDown);
-        addTokenBtn.addEventListener('click', handleAddToken);
+        addTokenBtn.addEventListener('click', () => {
+            tokenManagerView.classList.add('hidden');
+            addTokenView.classList.remove('hidden');
+            addTokenForm.reset(); // 每次显示时清空表单
+        });
         document.getElementById('back-to-library-from-edit-btn').addEventListener('click', () => {
             editAnimeView.classList.add('hidden');
             libraryView.classList.remove('hidden');
+        });
+        document.getElementById('back-to-tokens-from-add-btn').addEventListener('click', () => {
+            addTokenView.classList.add('hidden');
+            tokenManagerView.classList.remove('hidden');
         });
         document.getElementById('back-to-episodes-from-edit-btn').addEventListener('click', () => {
             editEpisodeView.classList.add('hidden');
@@ -213,6 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showEpisodeListView(sourceId, animeTitle,animeId);
         });
 
+        addTokenForm.addEventListener('submit', handleAddTokenSave);
         // Inputs
         librarySearchInput.addEventListener('input', handleLibrarySearch);
     }
@@ -485,6 +496,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function handleAddTokenSave(e) {
+        e.preventDefault();
+        const nameInput = document.getElementById('add-token-name');
+        const name = nameInput.value.trim();
+        if (!name) {
+            alert('名称不能为空。');
+            return;
+        }
+
+        const saveButton = addTokenForm.querySelector('button[type="submit"]');
+        saveButton.disabled = true;
+        saveButton.textContent = '保存中...';
+
+        try {
+            await apiFetch('/api/v2/tokens', {
+                method: 'POST',
+                body: JSON.stringify({ name: name }),
+            });
+            // 成功后，自动点击返回按钮并刷新列表
+            document.getElementById('back-to-tokens-from-add-btn').click();
+            loadAndRenderTokens();
+        } catch (error) {
+            alert(`添加失败: ${(error.message || error)}`);
+        } finally {
+            saveButton.disabled = false;
+            saveButton.textContent = '保存';
+        }
+    }
     // --- Task Manager View (Optimized Rendering) ---
     function renderTasks(tasks) {
         if (!taskListUl) return;
@@ -957,10 +996,63 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    async function loadAndRenderTokens() {
+        if (!tokenTableBody) return;
+        tokenTableBody.innerHTML = '<tr><td colspan="5">加载中...</td></tr>';
+        try {
+            const tokens = await apiFetch('/api/v2/tokens');
+            renderTokens(tokens);
+        } catch (error) {
+            tokenTableBody.innerHTML = `<tr><td colspan="5" class="error">加载失败: ${(error.message || error)}</td></tr>`;
+        }
+    }
+
+    function renderTokens(tokens) {
+        tokenTableBody.innerHTML = '';
+        if (tokens.length === 0) {
+            tokenTableBody.innerHTML = '<tr><td colspan="5">没有创建任何Token。</td></tr>';
+            return;
+        }
+
+        tokens.forEach(token => {
+            const row = tokenTableBody.insertRow();
+            row.insertCell().textContent = token.name;
+
+            const tokenCell = row.insertCell();
+            const tokenSpan = document.createElement('span');
+            tokenSpan.className = 'token-value';
+            tokenSpan.textContent = token.token;
+            tokenSpan.title = '点击复制';
+            tokenSpan.addEventListener('click', () => {
+                navigator.clipboard.writeText(token.token).then(() => {
+                    alert('Token已复制到剪贴板');
+                }, () => {
+                    alert('复制失败');
+                });
+            });
+            tokenCell.appendChild(tokenSpan);
+
+            const statusCell = row.insertCell();
+            statusCell.textContent = token.is_enabled ? '已启用' : '已禁用';
+            statusCell.className = token.is_enabled ? 'token-status' : 'token-status disabled';
+
+            row.insertCell().textContent = new Date(token.created_at).toLocaleString();
+
+            const actionsCell = row.insertCell();
+            actionsCell.className = 'actions-cell';
+            const enabledText = token.is_enabled ? '禁用' : '启用';
+            actionsCell.innerHTML = `
+                <div class="action-buttons-wrapper">
+                    <button class="action-btn" title="${enabledText}" onclick="handleTokenAction('toggle', ${token.id})">${token.is_enabled ? '⏸️' : '▶️'}</button>
+                    <button class="action-btn" title="删除" onclick="handleTokenAction('delete', ${token.id})">🗑️</button>
+                </div>
+            `;
+        });
+    }
+
     function showEditEpisodeView(episodeId, episodeTitle, episodeIndex, sourceUrl, sourceId, animeTitle, animeId) {
         episodeListView.classList.add('hidden');
         animeDetailView.classList.add("hidden");
-       editEpisodeView.classList.remove('hidden');
         editEpisodeView.classList.remove('hidden');
 
         // Populate form
