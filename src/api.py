@@ -1,5 +1,5 @@
 import re
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, Callable
 import asyncio
 import logging
 
@@ -10,6 +10,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from . import crud, models, security
 from .log_manager import get_logs
+from .task_manager import TaskManager
 from .scraper_manager import ScraperManager
 from .config import settings
 from .database import get_db_pool
@@ -38,6 +39,10 @@ def parse_search_keyword(keyword: str) -> dict:
 async def get_scraper_manager(request: Request) -> ScraperManager:
     """依赖项：从应用状态获取 Scraper 管理器"""
     return request.app.state.scraper_manager
+
+async def get_task_manager(request: Request) -> TaskManager:
+    """依赖项：从应用状态获取任务管理器"""
+    return request.app.state.task_manager
 
 def parse_filename_for_match(filename: str) -> Optional[dict]:
     """使用正则表达式从文件名中解析出番剧标题和集数"""
@@ -286,6 +291,14 @@ async def get_server_logs(current_user: models.User = Depends(security.get_curre
     """获取存储在内存中的最新日志条目。"""
     return get_logs()
 
+@router.get("/tasks", response_model=List[models.TaskInfo], summary="获取所有后台任务的状态")
+async def get_all_tasks(
+    current_user: models.User = Depends(security.get_current_user),
+    task_manager: TaskManager = Depends(get_task_manager)
+):
+    """获取当前所有（排队中、运行中、已完成）后台任务的列表和状态。"""
+    return task_manager.get_all_tasks()
+
 @router.get(
     "/comment/{episode_id}",
     response_model=models.CommentResponse,
@@ -311,6 +324,7 @@ async def generic_import_task(
     media_type: str,
     current_episode_index: Optional[int],
     image_url: Optional[str],
+    progress_callback: Callable,
     pool: aiomysql.Pool,
     manager: ScraperManager
 ):
@@ -345,6 +359,7 @@ async def generic_import_task(
         # 3. 为每个分集获取并存储弹幕
         for i, episode in enumerate(episodes):
             logger.info(f"--- 开始处理分集 {i+1}/{len(episodes)}: '{episode.title}' (ID: {episode.episodeId}) ---")
+            progress_callback(progress=(i / len(episodes)) * 100, description=f"正在处理: {episode.title} ({i+1}/{len(episodes)})")
             
             # 3.1 在数据库中创建或获取分集ID
             episode_db_id = await crud.get_or_create_episode(pool, source_id, episode.episodeIndex, episode.title, episode.url, episode.episodeId)
@@ -380,7 +395,7 @@ async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: Scrape
     await crud.clear_source_data(pool, source_id)
     logger.info(f"已清空源 ID: {source_id} 的旧分集和弹幕。") # image_url 在这里不会被传递，因为刷新时我们不希望覆盖已有的海报
     # 2. 重新执行通用导入逻辑
-    await generic_import_task(source_info["provider_name"], source_info["media_id"], source_info["title"], source_info["type"], None, None, pool, manager)
+    await generic_import_task(source_info["provider_name"], source_info["media_id"], source_info["title"], source_info["type"], None, None, lambda p, d: None, pool, manager)
 
 async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: ScraperManager):
     """后台任务：刷新单个分集的弹幕"""
@@ -412,30 +427,35 @@ async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: Sc
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED, summary="从指定数据源导入弹幕")
 async def import_from_provider(
     request_data: models.ImportRequest,
-    background_tasks: BackgroundTasks,
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool),
-    manager: ScraperManager = Depends(get_scraper_manager)
+    scraper_manager: ScraperManager = Depends(get_scraper_manager),
+    task_manager: TaskManager = Depends(get_task_manager)
 ):
     try:
         # 在启动任务前检查provider是否存在
-        manager.get_scraper(request_data.provider)
+        scraper_manager.get_scraper(request_data.provider)
         logger.info(f"用户 '{current_user.username}' 正在从 '{request_data.provider}' 导入 '{request_data.anime_title}' (media_id={request_data.media_id})")
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
-    background_tasks.add_task(
-        generic_import_task,
-        request_data.provider,
-        request_data.media_id,
-        request_data.anime_title,
-        request_data.type,
-        request_data.current_episode_index,
-        request_data.image_url,
-        pool,
-        manager
+    # 创建一个将传递给任务管理器的协程
+    task_coro = lambda callback: generic_import_task(
+        provider=request_data.provider,
+        media_id=request_data.media_id,
+        anime_title=request_data.anime_title,
+        media_type=request_data.type,
+        current_episode_index=request_data.current_episode_index,
+        image_url=request_data.image_url,
+        progress_callback=callback,
+        pool=pool,
+        manager=scraper_manager
     )
-    return {"message": f"{request_data.provider} 弹幕导入任务已在后台开始。请查看服务器日志了解进度。"}
+    
+    # 提交任务并获取任务ID
+    task_id = await task_manager.submit_task(task_coro, f"导入: {request_data.anime_title}")
+
+    return {"message": f"'{request_data.anime_title}' 的导入任务已提交。请在任务管理器中查看进度。", "task_id": task_id}
 
 @auth_router.post("/register", response_model=models.User, status_code=status.HTTP_201_CREATED, summary="注册新用户")
 async def register_user(

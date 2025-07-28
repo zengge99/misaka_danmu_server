@@ -41,6 +41,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const moveSourceUpBtn = document.getElementById('move-source-up-btn');
     const moveSourceDownBtn = document.getElementById('move-source-down-btn');
 
+    const taskManagerView = document.getElementById('task-manager-view');
+    const taskListUl = document.getElementById('task-list');
+
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
     let logRefreshInterval = null;
@@ -125,6 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Log Polling ---
     function startLogRefresh() {
         refreshServerLogs();
+        loadAndRenderTasks(); // Also load tasks initially
         if (logRefreshInterval) clearInterval(logRefreshInterval);
         logRefreshInterval = setInterval(refreshServerLogs, 3000);
     }
@@ -139,6 +143,17 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const logs = await apiFetch('/api/v2/logs');
             logOutput.textContent = logs.join('\n');
+        } catch (error) {
+            console.error("刷新日志失败:", error.message);
+        }
+    }
+
+    // --- Task Polling ---
+    async function loadAndRenderTasks() {
+        if (!token || taskManagerView.classList.contains('hidden')) return;
+        try {
+            const tasks = await apiFetch('/api/v2/tasks');
+            renderTasks(tasks);
         } catch (error) {
             console.error("刷新日志失败:", error.message);
         }
@@ -272,6 +287,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadLibrary();
             } else if (viewId === 'sources-view') {
                 loadScraperSettings();
+            } else if (viewId === 'task-manager-view') {
+                loadAndRenderTasks(); // Load immediately on view switch
             }
         }
     }
@@ -458,6 +475,45 @@ document.addEventListener('DOMContentLoaded', () => {
             saveButton.textContent = '保存更改';
         }
     }
+
+    // --- Task Manager View ---
+    function renderTasks(tasks) {
+        if (!taskListUl) return;
+        taskListUl.innerHTML = '';
+
+        if (tasks.length === 0) {
+            taskListUl.innerHTML = '<li>当前没有任务。</li>';
+            return;
+        }
+
+        tasks.forEach(task => {
+            const li = document.createElement('li');
+            li.className = 'task-item';
+            li.dataset.status = task.status;
+
+            const statusColor = {
+                "已完成": "var(--success-color)",
+                "失败": "var(--error-color)",
+                "排队中": "#909399",
+                "运行中": "var(--primary-color)"
+            }[task.status] || "var(--primary-color)";
+
+            li.innerHTML = `
+                <div class="task-header">
+                    <span class="task-title">${task.title}</span>
+                    <span class="task-status">${task.status}</span>
+                </div>
+                <p class="task-description">${task.description}</p>
+                <div class="task-progress-bar-container">
+                    <div class="task-progress-bar" style="width: ${task.progress}%; background-color: ${statusColor};"></div>
+                </div>
+            `;
+            taskListUl.appendChild(li);
+        });
+    }
+
+    // Start polling tasks when the app is loaded and user is logged in
+    setInterval(loadAndRenderTasks, 2000);
 
     // --- Rendering Functions ---
 

@@ -117,6 +117,14 @@ class EpisodeDetail(BaseModel):
     source_url: Optional[str] = None
     fetched_at: Optional[datetime] = None
 
+# --- 任务管理器模型 ---
+class TaskInfo(BaseModel):
+    task_id: str
+    title: str
+    status: str
+    progress: int
+    description: str
+
 # --- 用户和认证模型 ---
 class UserBase(BaseModel):
     username: str
