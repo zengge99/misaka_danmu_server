@@ -291,9 +291,15 @@ header {
     background-color: #eee; /* Placeholder color */
 }
 
-#library-table .actions-cell {
+/*
+  The wrapper div inside the actions-cell is now the flex container.
+  This is a more robust way to vertically center content inside a table cell,
+  as it doesn't interfere with the cell's own `vertical-align` property.
+  The parent <td> is vertically centered by `vertical-align: middle;`
+*/
+#library-table .actions-cell .action-buttons-wrapper {
     display: flex;
-    align-items: center; /* 新增：确保按钮在单元格内垂直居中 */
+    align-items: center; /* 新增：确保按钮在包裹层内垂直居中 */
     gap: 8px;
 }
 

@@ -648,9 +648,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const actionsCell = row.insertCell();
             actionsCell.className = 'actions-cell';
             actionsCell.innerHTML = `
-                <button class="action-btn" title="编辑" onclick="handleAction('edit', ${anime.animeId})">✏️</button>
-                <button class="action-btn" title="查看数据源" onclick="handleAction('view', ${anime.animeId})">📖</button>
-                <button class="action-btn" title="删除" onclick="handleAction('delete', ${anime.animeId})">🗑️</button>
+                <div class="action-buttons-wrapper">
+                    <button class="action-btn" title="编辑" onclick="handleAction('edit', ${anime.animeId})">✏️</button>
+                    <button class="action-btn" title="查看数据源" onclick="handleAction('view', ${anime.animeId})">📖</button>
+                    <button class="action-btn" title="删除" onclick="handleAction('delete', ${anime.animeId})">🗑️</button>
+                </div>
             `;
         });
     }
