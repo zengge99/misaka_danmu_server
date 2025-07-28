@@ -130,6 +130,18 @@ class TencentScraper(BaseScraper):
                     if not item.video_info.year or item.video_info.year == 0:
                         continue
 
+                    # 新增：更严格的内容类型和标题过滤
+                    video_info = item.video_info
+                    type_name = video_info.type_name
+                    title = video_info.title
+                    
+                    # 1. 只保留电影和电视剧
+                    if not any(valid_type in type_name for valid_type in ["电影", "电视剧"]):
+                        continue
+                    # 2. 过滤掉预告、花絮等非正片内容
+                    if any(junk_word in title for junk_word in ["预告", "花絮", "特辑", "速看", "资讯", "解读"]):
+                        continue
+
                     video_info = item.video_info
                     # 清理标题中的HTML高亮标签 (如 <em>)，这是模仿C#参考代码中的逻辑
                     cleaned_title = re.sub(r'<.*?>', '', video_info.title)
