@@ -1026,7 +1026,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else if (action === 'edit') {
             const episodeIndex = row.cells[2].textContent;
-            const sourceUrl = row.cells[5].querySelector('a')?.href || '';
+            // 关键修复：弹幕数列(3)和采集时间列(4)被添加后，链接列的索引是 5
+            const sourceUrl = row.cells[5] && row.cells[5].querySelector('a') ? row.cells[5].querySelector('a').href : '';
             showEditEpisodeView(episodeId, title, episodeIndex, sourceUrl, sourceId, animeTitle, animeId);
         } else if (action === 'refresh') {
             if (confirm(`您确定要刷新分集 '${title}' 的弹幕吗？\n这将清空现有弹幕并从源重新获取。`)) {
