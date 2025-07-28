@@ -67,7 +67,7 @@ class ScraperManager:
         for setting in settings:
             if setting['is_enabled'] and setting['provider_name'] in scraper_classes:
                 provider_name = setting['provider_name']
-                self.scrapers[provider_name] = scraper_classes[provider_name]()
+                self.scrapers[provider_name] = scraper_classes[provider_name](self.pool)
                 print(f"已启用爬虫 '{provider_name}' (顺序: {setting['display_order']})。")
 
     @property

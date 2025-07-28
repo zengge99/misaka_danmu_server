@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import aiomysql
 import re
 import json
 import zlib
@@ -97,14 +98,13 @@ class IqiyiComment(BaseModel):
 # --- Main Scraper Class ---
 
 class IqiyiScraper(BaseScraper):
-    def __init__(self):
+    def __init__(self, pool: aiomysql.Pool):
+        super().__init__(pool)
         self.mobile_user_agent = "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36 Edg/136.0.0.0"
         self.reg_video_info = re.compile(r'"videoInfo":(\{.+?\}),')
         self.reg_album_info = re.compile(r'"albumInfo":(\{.+?\}),')
 
         self.client = httpx.AsyncClient(timeout=20.0, follow_redirects=True)
-        self.logger = logging.getLogger(__name__)
-
     @property
     def provider_name(self) -> str:
         return "iqiyi"
@@ -113,6 +113,12 @@ class IqiyiScraper(BaseScraper):
         await self.client.aclose()
 
     async def search(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:
+        cache_key = f"search_{keyword}"
+        cached_results = await self._get_from_cache(cache_key)
+        if cached_results is not None:
+            self.logger.info(f"爱奇艺: 从缓存中命中搜索结果 '{keyword}'")
+            return [models.ProviderSearchInfo.model_validate(r) for r in cached_results]
+
         url = f"https://search.video.iqiyi.com/o?if=html5&key={keyword}&pageNum=1&pageSize=20"
         results = []
         try:
@@ -151,10 +157,18 @@ class IqiyiScraper(BaseScraper):
 
         except Exception as e:
             self.logger.error(f"爱奇艺: 搜索 '{keyword}' 失败: {e}", exc_info=True)
-        
+
+        results_to_cache = [r.model_dump() for r in results]
+        await self._set_to_cache(cache_key, results_to_cache, 'search_ttl_seconds', 300)
         return results
 
     async def _get_video_base_info(self, link_id: str) -> Optional[IqiyiHtmlVideoInfo]:
+        cache_key = f"base_info_{link_id}"
+        cached_info = await self._get_from_cache(cache_key)
+        if cached_info is not None:
+            self.logger.info(f"爱奇艺: 从缓存中命中基础信息 (link_id={link_id})")
+            return IqiyiHtmlVideoInfo.model_validate(cached_info)
+
         url = f"https://m.iqiyi.com/v_{link_id}.html"
         try:
             response = await self.client.get(url, headers={"User-Agent": self.mobile_user_agent})
@@ -173,12 +187,15 @@ class IqiyiScraper(BaseScraper):
                 album_info = IqiyiHtmlAlbumInfo.model_validate(json.loads(album_match.group(1)))
                 video_info.video_count = album_info.video_count
             
+            info_to_cache = video_info.model_dump()
+            await self._set_to_cache(cache_key, info_to_cache, 'base_info_ttl_seconds', 1800)
             return video_info
         except Exception as e:
             self.logger.error(f"爱奇艺: 获取 link_id {link_id} 的基础信息失败: {e}", exc_info=True)
             return None
 
     async def _get_tv_episodes(self, album_id: int, size: int) -> List[IqiyiEpisodeInfo]:
+        # 这个函数被 get_episodes 调用，缓存应该在 get_episodes 层面处理
         url = f"https://pcw-api.iqiyi.com/albums/album/avlistinfo?aid={album_id}&page=1&size={size}"
         try:
             response = await self.client.get(url)
@@ -190,6 +207,14 @@ class IqiyiScraper(BaseScraper):
             return []
 
     async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None) -> List[models.ProviderEpisodeInfo]:
+        # 仅当请求完整列表时才使用缓存
+        cache_key = f"episodes_{media_id}"
+        if target_episode_index is None:
+            cached_episodes = await self._get_from_cache(cache_key)
+            if cached_episodes is not None:
+                self.logger.info(f"爱奇艺: 从缓存中命中分集列表 (media_id={media_id})")
+                return [models.ProviderEpisodeInfo.model_validate(e) for e in cached_episodes]
+
         base_info = await self._get_video_base_info(media_id)
         if not base_info:
             return []
@@ -218,6 +243,10 @@ class IqiyiScraper(BaseScraper):
                 url=ep.play_url
             ) for ep in episodes if ep.link_id
         ]
+
+        if target_episode_index is None:
+            episodes_to_cache = [e.model_dump() for e in provider_episodes]
+            await self._set_to_cache(cache_key, episodes_to_cache, 'episodes_ttl_seconds', 1800)
 
         if target_episode_index:
             target = next((ep for ep in provider_episodes if ep.episodeIndex == target_episode_index), None)

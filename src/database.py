@@ -161,6 +161,25 @@ async def init_db_tables(app: FastAPI):
               UNIQUE INDEX `idx_anime_provider_media_unique` (`anime_id` ASC, `provider_name` ASC, `media_id` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
+            # 创建缓存配置表
+            await cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `config` (
+              `config_key` VARCHAR(100) NOT NULL,
+              `config_value` VARCHAR(255) NOT NULL,
+              `description` TEXT NULL,
+              PRIMARY KEY (`config_key`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
+            # 创建缓存数据表
+            await cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `cache_data` (
+              `cache_key` VARCHAR(255) NOT NULL,
+              `cache_value` LONGTEXT NOT NULL,
+              `expires_at` TIMESTAMP NOT NULL,
+              PRIMARY KEY (`cache_key`),
+              INDEX `idx_expires_at` (`expires_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
             print("数据表检查完成。")
 
             # --- 步骤 3.2: 为已存在的表运行 schema 迁移检查 ---
@@ -263,3 +282,18 @@ async def init_db_tables(app: FastAPI):
                 print("Schema 迁移完成。")
             else:
                 print("Schema 检查完成，无需迁移。")
+            
+            # --- 步骤 3.3: 初始化默认配置 ---
+            await _init_default_config(cursor)
+
+async def _init_default_config(cursor: aiomysql.Cursor):
+    """初始化缓存配置表的默认值"""
+    default_configs = [
+        ('search_ttl_seconds', '300', '搜索结果的缓存时间（秒），默认5分钟。'),
+        ('episodes_ttl_seconds', '1800', '分集列表的缓存时间（秒），默认30分钟。'),
+        ('base_info_ttl_seconds', '1800', '基础媒体信息（如爱奇艺）的缓存时间（秒），默认30分钟。')
+    ]
+    # 使用 INSERT IGNORE 来避免因主键冲突而报错
+    query = "INSERT IGNORE INTO config (config_key, config_value, description) VALUES (%s, %s, %s)"
+    await cursor.executemany(query, default_configs)
+    print("默认缓存配置已初始化。")

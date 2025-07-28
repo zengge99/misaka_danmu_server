@@ -1,5 +1,6 @@
 import asyncio
 import httpx
+import aiomysql
 import re
 import logging
 from typing import List, Dict, Any, Optional, Union
@@ -78,7 +79,8 @@ class TencentScraper(BaseScraper):
     """
     用于从腾讯视频抓取分集信息和弹幕的客户端。
     """
-    def __init__(self):
+    def __init__(self, pool: aiomysql.Pool):
+        super().__init__(pool)
         self.base_headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
             "Referer": "https://v.qq.com/",
@@ -94,8 +96,6 @@ class TencentScraper(BaseScraper):
         # httpx.AsyncClient 是 Python 中功能强大的异步HTTP客户端，等同于 C# 中的 HttpClient
         # 此处通过 cookies 参数传入字典，httpx 会自动将其格式化为正确的 Cookie 请求头，效果与C#代码一致
         self.client = httpx.AsyncClient(headers=self.base_headers, cookies=self.cookies, timeout=20.0)
-        # 获取一个专用的 logger 实例
-        self.logger = logging.getLogger(__name__)
 
     @property
     def provider_name(self) -> str:
@@ -107,6 +107,12 @@ class TencentScraper(BaseScraper):
 
     async def search(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:
         """通过腾讯搜索API查找番剧。"""
+        cache_key = f"search_{keyword}"
+        cached_results = await self._get_from_cache(cache_key)
+        if cached_results is not None:
+            self.logger.info(f"Tencent: 从缓存中命中搜索结果 '{keyword}'")
+            return [models.ProviderSearchInfo.model_validate(r) for r in cached_results]
+
         url = "https://pbaccess.video.qq.com/trpc.videosearch.mobile_search.HttpMobileRecall/MbSearchHttp"
         request_model = TencentSearchRequest(query=keyword)
         payload = request_model.model_dump(by_alias=True)
@@ -157,7 +163,9 @@ class TencentScraper(BaseScraper):
             self.logger.error(f"搜索请求失败: {e}")
         except (ValidationError, KeyError) as e:
             self.logger.error(f"解析搜索结果失败: {e}", exc_info=True)
-
+        
+        results_to_cache = [r.model_dump() for r in results]
+        await self._set_to_cache(cache_key, results_to_cache, 'search_ttl_seconds', 300)
         return results
 
     async def _internal_get_episodes(self, cid: str, target_episode_index: Optional[int] = None) -> List[TencentEpisode]:
@@ -166,6 +174,14 @@ class TencentScraper(BaseScraper):
         处理了腾讯视频复杂的分页逻辑。
         如果提供了 target_episode_index，则会提前停止翻页。
         """
+        # 仅当请求完整列表时才使用缓存
+        cache_key = f"episodes_{cid}"
+        if target_episode_index is None:
+            cached_episodes = await self._get_from_cache(cache_key)
+            if cached_episodes is not None:
+                self.logger.info(f"Tencent: 从缓存中命中分集列表 (cid={cid})")
+                return [TencentEpisode.model_validate(e) for e in cached_episodes]
+
         url = "https://pbaccess.video.qq.com/trpc.universal_backend_service.page_server_rpc.PageServer/GetPageData?video_appid=3000010&vplatform=2"
         all_episodes: Dict[str, TencentEpisode] = {}
         # 采用C#代码中更可靠的分页逻辑
@@ -274,10 +290,15 @@ class TencentScraper(BaseScraper):
                 if 'data' in locals():
                     self.logger.debug(f"导致解析失败的JSON数据: {data}")
                 break
-
-        self.logger.info(f"分集列表获取完成 (cid={cid})，去重后共 {len(all_episodes)} 个。")
+        
+        final_episodes = list(all_episodes.values())
+        self.logger.info(f"分集列表获取完成 (cid={cid})，去重后共 {len(final_episodes)} 个。")
+        
+        if target_episode_index is None:
+            episodes_to_cache = [e.model_dump() for e in final_episodes]
+            await self._set_to_cache(cache_key, episodes_to_cache, 'episodes_ttl_seconds', 1800)
         # 某些综艺节目可能会返回重复的剧集，这里进行去重
-        return list(all_episodes.values())
+        return final_episodes
 
     async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None) -> List[models.ProviderEpisodeInfo]:
         """

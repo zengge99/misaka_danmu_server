@@ -1,4 +1,5 @@
 import aiomysql
+import json
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
@@ -345,6 +346,51 @@ async def update_scrapers_settings(pool: aiomysql.Pool, settings: List[models.Sc
             query = "UPDATE scrapers SET is_enabled = %s, display_order = %s WHERE provider_name = %s"
             data_to_update = [(s.is_enabled, s.display_order, s.provider_name) for s in settings]
             await cursor.executemany(query, data_to_update)
+
+async def update_episode_fetch_time(pool: aiomysql.Pool, episode_id: int):
+    """更新分集的采集时间"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("UPDATE episode SET fetched_at = %s WHERE id = %s", (datetime.now(), episode_id))
+
+# --- 数据库缓存服务 ---
+
+async def get_config_value(pool: aiomysql.Pool, key: str, default: str) -> str:
+    """从数据库获取配置值。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT config_value FROM config WHERE config_key = %s", (key,))
+            result = await cursor.fetchone()
+            return result[0] if result else default
+
+async def get_cache(pool: aiomysql.Pool, key: str) -> Optional[Any]:
+    """从数据库缓存中获取数据。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT cache_value FROM cache_data WHERE cache_key = %s AND expires_at > NOW()", (key,))
+            result = await cursor.fetchone()
+            if result:
+                try:
+                    return json.loads(result[0])
+                except json.JSONDecodeError:
+                    return None # 缓存数据损坏
+    return None
+
+async def set_cache(pool: aiomysql.Pool, key: str, value: Any, ttl_seconds: int):
+    """将数据存入数据库缓存。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            json_value = json.dumps(value, ensure_ascii=False)
+            query = "INSERT INTO cache_data (cache_key, cache_value, expires_at) VALUES (%s, %s, NOW() + INTERVAL %s SECOND) ON DUPLICATE KEY UPDATE cache_value = VALUES(cache_value), expires_at = VALUES(expires_at)"
+            await cursor.execute(query, (key, json_value, ttl_seconds))
+
+async def clear_expired_cache(pool: aiomysql.Pool):
+    """从数据库中清除过期的缓存条目。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            deleted_rows = await cursor.execute("DELETE FROM cache_data WHERE expires_at <= NOW()")
+            if deleted_rows > 0:
+                logging.getLogger(__name__).info(f"清除了 {deleted_rows} 条过期的数据库缓存。")
 
 async def update_episode_fetch_time(pool: aiomysql.Pool, episode_id: int):
     """更新分集的采集时间"""

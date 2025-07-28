@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import aiomysql
 import hashlib
 import json
 import logging
@@ -86,7 +87,8 @@ class YoukuRpcResult(BaseModel):
 # --- Main Scraper Class ---
 
 class YoukuScraper(BaseScraper):
-    def __init__(self):
+    def __init__(self, pool: aiomysql.Pool):
+        super().__init__(pool)
         # Regexes from C#
         self.year_reg = re.compile(r"[12][890][0-9][0-9]")
         self.unused_words_reg = re.compile(r"<[^>]+>|【.+?】")
@@ -96,7 +98,6 @@ class YoukuScraper(BaseScraper):
             timeout=20.0,
             follow_redirects=True
         )
-        self.logger = logging.getLogger(__name__)
 
         # For danmaku signing
         self._cna = ""
@@ -110,6 +111,12 @@ class YoukuScraper(BaseScraper):
         await self.client.aclose()
 
     async def search(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:
+        cache_key = f"search_{keyword}"
+        cached_results = await self._get_from_cache(cache_key)
+        if cached_results is not None:
+            self.logger.info(f"Youku: 从缓存中命中搜索结果 '{keyword}'")
+            return [models.ProviderSearchInfo.model_validate(r) for r in cached_results]
+
         ua_encoded = urlencode({"userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"})
         keyword_encoded = urlencode({"keyword": keyword})
         url = f"https://search.youku.com/api/search?{keyword_encoded}&{ua_encoded}&site=1&categories=0&ftype=0&ob=0&pg=1"
@@ -153,10 +160,20 @@ class YoukuScraper(BaseScraper):
 
         except Exception as e:
             self.logger.error(f"Youku search failed for '{keyword}': {e}", exc_info=True)
-        
+
+        results_to_cache = [r.model_dump() for r in results]
+        await self._set_to_cache(cache_key, results_to_cache, 'search_ttl_seconds', 300)
         return results
 
     async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None) -> List[models.ProviderEpisodeInfo]:
+        # 仅当请求完整列表时才使用缓存
+        cache_key = f"episodes_{media_id}"
+        if target_episode_index is None:
+            cached_episodes = await self._get_from_cache(cache_key)
+            if cached_episodes is not None:
+                self.logger.info(f"Youku: 从缓存中命中分集列表 (media_id={media_id})")
+                return [models.ProviderEpisodeInfo.model_validate(e) for e in cached_episodes]
+
         all_episodes = []
         page = 1
         page_size = 20
@@ -196,6 +213,10 @@ class YoukuScraper(BaseScraper):
                 url=ep.link
             ) for i, ep in enumerate(all_episodes)
         ]
+
+        if target_episode_index is None:
+            episodes_to_cache = [e.model_dump() for e in provider_episodes]
+            await self._set_to_cache(cache_key, episodes_to_cache, 'episodes_ttl_seconds', 1800)
 
         if target_episode_index:
             target = next((ep for ep in provider_episodes if ep.episodeIndex == target_episode_index), None)

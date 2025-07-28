@@ -1,5 +1,7 @@
 import uvicorn
+import asyncio
 from fastapi import FastAPI
+import logging
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from .database import create_db_pool, close_db_pool, init_db_tables, create_initial_admin_user
@@ -7,6 +9,7 @@ from .api import router as api_router, auth_router
 from .task_manager import TaskManager
 from .scraper_manager import ScraperManager
 from .config import settings
+from . import crud
 from .log_manager import setup_logging
 
 app = FastAPI(
@@ -14,6 +17,18 @@ app = FastAPI(
     description="一个基于dandanplay API风格的弹幕服务",
     version="1.0.0",
 )
+
+async def cleanup_cache_task(app: FastAPI):
+    """定期清理过期缓存的后台任务。"""
+    pool = app.state.db_pool
+    while True:
+        try:
+            await asyncio.sleep(3600) # 每小时清理一次
+            await crud.clear_expired_cache(pool)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logging.getLogger(__name__).error(f"缓存清理任务出错: {e}")
 
 @app.on_event("startup")
 async def startup_event():
@@ -32,10 +47,18 @@ async def startup_event():
     app.state.task_manager.start()
     # 创建初始管理员用户（如果需要）
     await create_initial_admin_user(app)
+    # 启动缓存清理后台任务
+    app.state.cache_cleanup_task = asyncio.create_task(cleanup_cache_task(app))
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """应用关闭时，关闭数据库连接池和Scraper"""
+    if hasattr(app.state, "cache_cleanup_task"):
+        app.state.cache_cleanup_task.cancel()
+        try:
+            await app.state.cache_cleanup_task
+        except asyncio.CancelledError:
+            pass
     await close_db_pool(app)
     if hasattr(app.state, "scraper_manager"):
         await app.state.scraper_manager.close_all()
