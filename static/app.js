@@ -209,8 +209,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Retrieve context to navigate back
             const sourceId = parseInt(document.getElementById('edit-episode-source-id').value, 10);
             const animeTitle = document.getElementById('edit-episode-anime-title').value;
-            const animeId = parseInt(document.getElementById('edit-episode-anime-id').value, 10);
-            showEpisodeListView(sourceId, animeTitle, animeId);
+             const animeId = parseInt(document.getElementById('edit-episode-anime-id').value, 10);
+            showEpisodeListView(sourceId, animeTitle,animeId);
         });
 
         // Inputs
@@ -957,7 +957,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showEditEpisodeView(episodeId, episodeTitle, episodeIndex, sourceUrl, sourceId, animeTitle, animeId) {
         episodeListView.classList.add('hidden');
-        danmakuListView.classList.add('hidden');
+        animeDetailView.classList.add("hidden");
+       editEpisodeView.classList.remove('hidden');
         editEpisodeView.classList.remove('hidden');
 
         // Populate form
@@ -966,6 +967,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('edit-episode-index').value = episodeIndex;
         document.getElementById('edit-episode-url').value = sourceUrl;
         
+
         // Store context for navigating back
         document.getElementById('edit-episode-source-id').value = sourceId;
         document.getElementById('edit-episode-anime-title').value = animeTitle;

@@ -327,6 +327,12 @@ header {
 .actions-cell {
     text-align: right; /* 新增：将按钮组靠右对齐 */
 }
+/* 调整library-header使其水平对齐且右边距自适应 */
+.library-header {
+    display: flex;
+    justify-content: space-between; /* 将子元素分散对齐 */
+    align-items: center; /* 垂直居中对齐 */
+}
 
 /*
   The wrapper div inside the actions-cell is now the flex container.
