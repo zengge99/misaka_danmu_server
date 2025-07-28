@@ -217,26 +217,31 @@ async def delete_episode_from_source(
 @router.post("/library/episode/{episode_id}/refresh", status_code=status.HTTP_202_ACCEPTED, summary="刷新单个分集的弹幕")
 async def refresh_single_episode(
     episode_id: int,
-    background_tasks: BackgroundTasks,
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool),
-    manager: ScraperManager = Depends(get_scraper_manager)
+    scraper_manager: ScraperManager = Depends(get_scraper_manager),
+    task_manager: TaskManager = Depends(get_task_manager)
 ):
     """为指定分集启动一个后台任务，重新获取其弹幕。"""
     # 检查分集是否存在，以提供更友好的404错误
-    if not await crud.check_episode_exists(pool, episode_id):
+    episode = await crud.get_episode_for_refresh(pool, episode_id)
+    if not episode:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
-    logger.info(f"用户 '{current_user.username}' 请求刷新分集 ID: {episode_id}")
-    background_tasks.add_task(refresh_episode_task, episode_id, pool, manager)
-    return {"message": f"分集 ID: {episode_id} 的刷新任务已在后台开始。"}
+    
+    logger.info(f"用户 '{current_user.username}' 请求刷新分集 ID: {episode_id} ({episode['title']})")
+    
+    task_coro = lambda callback: refresh_episode_task(episode_id, pool, scraper_manager, callback)
+    task_id = await task_manager.submit_task(task_coro, f"刷新分集: {episode['title']}")
+
+    return {"message": f"分集 '{episode['title']}' 的刷新任务已提交。", "task_id": task_id}
 
 @router.post("/library/source/{source_id}/refresh", status_code=status.HTTP_202_ACCEPTED, summary="全量刷新指定源的弹幕")
 async def refresh_anime(
     source_id: int,
-    background_tasks: BackgroundTasks,
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool),
-    manager: ScraperManager = Depends(get_scraper_manager)
+    scraper_manager: ScraperManager = Depends(get_scraper_manager),
+    task_manager: TaskManager = Depends(get_task_manager)
 ):
     """为指定数据源启动一个后台任务，删除其所有旧弹幕并从源重新获取。"""
     source_info = await crud.get_anime_source_info(pool, source_id)
@@ -244,8 +249,11 @@ async def refresh_anime(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anime not found or missing source information for refresh.")
     
     logger.info(f"用户 '{current_user.username}' 为番剧 '{source_info['title']}' (源ID: {source_id}) 启动了全量刷新任务。")
-    background_tasks.add_task(full_refresh_task, source_id, pool, manager)
-    return {"message": f"番剧 '{source_info['title']}' 的全量刷新任务已在后台开始。"}
+    
+    task_coro = lambda callback: full_refresh_task(source_id, pool, scraper_manager, callback)
+    task_id = await task_manager.submit_task(task_coro, f"刷新: {source_info['title']}")
+
+    return {"message": f"番剧 '{source_info['title']}' 的全量刷新任务已提交。", "task_id": task_id}
 
 @router.delete("/library/anime/{anime_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除媒体库中的番剧")
 async def delete_anime_from_library(
@@ -380,31 +388,35 @@ async def generic_import_task(
     finally:
         logger.info(f"--- {provider} 导入任务完成 (media_id={media_id})。总共新增 {total_comments_added} 条弹幕。 ---")
 
-async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: ScraperManager):
+async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: ScraperManager, progress_callback: Callable):
     """
     后台任务：全量刷新一个已存在的番剧。
     """
     logger.info(f"开始刷新源 ID: {source_id}")
     source_info = await crud.get_anime_source_info(pool, source_id)
     if not source_info:
+        progress_callback(100, "失败: 找不到源信息")
         logger.error(f"刷新失败：在数据库中找不到源 ID: {source_id}")
         return
     
     anime_id = source_info["anime_id"]
     # 1. 清空旧数据
+    progress_callback(10, "正在清空旧数据...")
     await crud.clear_source_data(pool, source_id)
     logger.info(f"已清空源 ID: {source_id} 的旧分集和弹幕。") # image_url 在这里不会被传递，因为刷新时我们不希望覆盖已有的海报
     # 2. 重新执行通用导入逻辑
-    await generic_import_task(source_info["provider_name"], source_info["media_id"], source_info["title"], source_info["type"], None, None, lambda p, d: None, pool, manager)
+    await generic_import_task(source_info["provider_name"], source_info["media_id"], source_info["title"], source_info["type"], None, None, progress_callback, pool, manager)
 
-async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: ScraperManager):
+async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: ScraperManager, progress_callback: Callable):
     """后台任务：刷新单个分集的弹幕"""
     logger.info(f"开始刷新分集 ID: {episode_id}")
     try:
+        progress_callback(0, "正在获取分集信息...")
         # 1. 获取分集的源信息
         info = await crud.get_episode_provider_info(pool, episode_id)
         if not info or not info.get("provider_name") or not info.get("provider_episode_id"):
             logger.error(f"刷新失败：在数据库中找不到分集 ID: {episode_id} 的源信息")
+            progress_callback(100, "失败: 找不到源信息")
             return
 
         provider_name = info["provider_name"]
@@ -412,17 +424,23 @@ async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: Sc
         scraper = manager.get_scraper(provider_name)
 
         # 2. 清空旧弹幕
+        progress_callback(25, "正在清空旧弹幕...")
         await crud.clear_episode_comments(pool, episode_id)
         logger.info(f"已清空分集 ID: {episode_id} 的旧弹幕。")
 
         # 3. 获取新弹幕并插入
+        progress_callback(50, "正在从源获取新弹幕...")
         comments = await scraper.get_comments(provider_episode_id)
+        progress_callback(75, f"正在写入 {len(comments)} 条新弹幕...")
         added_count = await crud.bulk_insert_comments(pool, episode_id, comments)
         await crud.update_episode_fetch_time(pool, episode_id)
         logger.info(f"分集 ID: {episode_id} 刷新完成，新增 {added_count} 条弹幕。")
+        progress_callback(100, f"刷新完成，新增 {added_count} 条弹幕。")
 
     except Exception as e:
         logger.error(f"刷新分集 ID: {episode_id} 时发生严重错误: {e}", exc_info=True)
+        progress_callback(100, "任务失败")
+        raise e # Re-raise so the task manager catches it and marks as FAILED
 
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED, summary="从指定数据源导入弹幕")
 async def import_from_provider(
@@ -439,7 +457,7 @@ async def import_from_provider(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
-    # 创建一个将传递给任务管理器的协程
+    # 创建一个将传递给任务管理器的协程工厂 (lambda)
     task_coro = lambda callback: generic_import_task(
         provider=request_data.provider,
         media_id=request_data.media_id,

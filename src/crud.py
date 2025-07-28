@@ -200,6 +200,14 @@ async def get_episodes_for_source(pool: aiomysql.Pool, source_id: int) -> List[D
             await cursor.execute(query, (source_id,))
             return await cursor.fetchall()
 
+async def get_episode_for_refresh(pool: aiomysql.Pool, episode_id: int) -> Optional[Dict[str, Any]]:
+    """获取分集的基本信息，用于刷新任务。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            query = "SELECT id, title FROM episode WHERE id = %s"
+            await cursor.execute(query, (episode_id,))
+            return await cursor.fetchone()
+
 async def get_episode_provider_info(pool: aiomysql.Pool, episode_id: int) -> Optional[Dict[str, Any]]:
     """获取分集的原始提供方信息 (provider_name, provider_episode_id)"""
     async with pool.acquire() as conn:

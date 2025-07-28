@@ -16,10 +16,10 @@ class TaskStatus(str, Enum):
     FAILED = "失败"
 
 class Task:
-    def __init__(self, task_id: str, title: str, coro: Coroutine):
+    def __init__(self, task_id: str, title: str, coro_factory: Callable[[Callable], Coroutine]):
         self.task_id = task_id
         self.title = title
-        self.coro = coro
+        self.coro_factory = coro_factory
         self.status: TaskStatus = TaskStatus.PENDING
         self.progress: int = 0
         self.description: str = "等待执行..."
@@ -65,7 +65,12 @@ class TaskManager:
             task.progress = 0
             task.description = "正在初始化..."
             try:
-                await task.coro
+                # 创建一个回调函数，该函数将由任务内部调用以更新其进度
+                progress_callback = self.get_progress_callback(task.task_id)
+                # task.coro_factory 是一个需要回调函数作为参数的 lambda
+                # 调用它以获取真正的、可等待的协程
+                actual_coroutine = task.coro_factory(progress_callback)
+                await actual_coroutine
                 task.status = TaskStatus.COMPLETED
                 task.progress = 100
                 task.description = "任务成功完成"
@@ -77,10 +82,10 @@ class TaskManager:
             finally:
                 self._queue.task_done()
 
-    async def submit_task(self, coro: Coroutine, title: str) -> str:
+    async def submit_task(self, coro_factory: Callable[[Callable], Coroutine], title: str) -> str:
         """提交一个新任务到队列。"""
         task_id = str(uuid4())
-        task = Task(task_id, title, coro)
+        task = Task(task_id, title, coro_factory)
         self._tasks[task_id] = task
         await self._queue.put(task)
         logger.info(f"任务 '{title}' 已提交，ID: {task_id}")
