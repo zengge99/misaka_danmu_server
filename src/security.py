@@ -59,14 +59,8 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
     
-    # 暂时禁用严格的 Token 检查，以解决容器重启后需要重新登录的问题。
-    # 之前的逻辑是：如果数据库中的 token 与客户端 token 不匹配，则强制登出。
-    # 这在某些场景下会导致不佳的用户体验。现在，只要 token 本身有效（未过期、签名正确），就允许访问。
-    if user.get("token") != token:
-        raise HTTPException(
-             status_code=status.HTTP_401_UNAUTHORIZED,
-             detail="Token is outdated, please log in again.",
-             headers={"WWW-Authenticate": "Bearer"},
-         )
-
+    # 只要JWT本身有效（未过期、签名正确），就允许访问。
+    # 之前严格的token比对逻辑（要求客户端token与数据库最新token一致）已移除，
+    # 以改善在多标签页或服务重启后的用户体验。
+    
     return models.User.model_validate(user)
