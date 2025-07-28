@@ -137,7 +137,7 @@ class IqiyiScraper(BaseScraper):
                 ))
 
         except Exception as e:
-            self.logger.error(f"Iqiyi search failed for '{keyword}': {e}", exc_info=True)
+            self.logger.error(f"爱奇艺: 搜索 '{keyword}' 失败: {e}", exc_info=True)
         
         return results
 
@@ -152,7 +152,7 @@ class IqiyiScraper(BaseScraper):
             album_match = self.reg_album_info.search(html)
 
             if not video_match:
-                self.logger.warning(f"Iqiyi: Could not find videoInfo JSON in HTML for link_id {link_id}")
+                self.logger.warning(f"爱奇艺: 在 link_id {link_id} 的HTML中找不到 videoInfo JSON")
                 return None
 
             video_info = IqiyiHtmlVideoInfo.model_validate(json.loads(video_match.group(1)))
@@ -162,7 +162,7 @@ class IqiyiScraper(BaseScraper):
             
             return video_info
         except Exception as e:
-            self.logger.error(f"Iqiyi: Failed to get base info for link_id {link_id}: {e}", exc_info=True)
+            self.logger.error(f"爱奇艺: 获取 link_id {link_id} 的基础信息失败: {e}", exc_info=True)
             return None
 
     async def _get_tv_episodes(self, album_id: int, size: int) -> List[IqiyiEpisodeInfo]:
@@ -173,7 +173,7 @@ class IqiyiScraper(BaseScraper):
             data = IqiyiVideoResult.model_validate(response.json())
             return data.data.epsodelist if data.data else []
         except Exception as e:
-            self.logger.error(f"Iqiyi: Failed to get TV episodes for album {album_id}: {e}", exc_info=True)
+            self.logger.error(f"爱奇艺: 获取剧集列表失败 (album_id: {album_id}): {e}", exc_info=True)
             return []
 
     async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None) -> List[models.ProviderEpisodeInfo]:
@@ -192,7 +192,7 @@ class IqiyiScraper(BaseScraper):
         elif base_info.channel_name == "电视剧" or base_info.channel_name == "动漫":
             episodes = await self._get_tv_episodes(base_info.album_id, base_info.video_count)
         else: # 综艺等其他类型暂不处理，C#代码中综艺逻辑复杂且易出错
-            self.logger.warning(f"Iqiyi: Unsupported channel type '{base_info.channel_name}' for episode fetching.")
+            self.logger.warning(f"爱奇艺: 不支持的频道类型 '{base_info.channel_name}'，无法获取分集。")
             # 尝试使用电视剧逻辑获取，可能对某些频道有效
             episodes = await self._get_tv_episodes(base_info.album_id, base_info.video_count)
 
@@ -222,7 +222,7 @@ class IqiyiScraper(BaseScraper):
         try:
             response = await self.client.get(url)
             if response.status_code == 404:
-                self.logger.info(f"Iqiyi: Danmaku segment {mat} for tvId {tv_id} not found, stopping.")
+                self.logger.info(f"爱奇艺: 找不到 tvId {tv_id} 的弹幕分段 {mat}，停止获取。")
                 return [] # 404 means no more segments
             response.raise_for_status()
 
@@ -248,11 +248,11 @@ class IqiyiScraper(BaseScraper):
                         ))
             return comments
         except zlib.error:
-            self.logger.warning(f"Iqiyi: Failed to decompress danmaku for tvId {tv_id}, mat {mat}. It might be empty or corrupted.")
+            self.logger.warning(f"爱奇艺: 解压 tvId {tv_id} 的弹幕分段 {mat} 失败，文件可能为空或已损坏。")
         except ET.ParseError:
-            self.logger.warning(f"Iqiyi: Failed to parse XML danmaku for tvId {tv_id}, mat {mat}.")
+            self.logger.warning(f"爱奇艺: 解析 tvId {tv_id} 的弹幕分段 {mat} 的XML失败。")
         except Exception as e:
-            self.logger.error(f"Iqiyi: Error fetching danmaku segment {mat} for tvId {tv_id}: {e}", exc_info=True)
+            self.logger.error(f"爱奇艺: 获取 tvId {tv_id} 的弹幕分段 {mat} 时出错: {e}", exc_info=True)
         
         return []
 
