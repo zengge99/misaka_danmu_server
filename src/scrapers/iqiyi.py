@@ -15,6 +15,9 @@ from .base import BaseScraper
 
 # --- Pydantic Models for iQiyi API ---
 
+class IqiyiSearchVideoInfo(BaseModel):
+    item_link: str = Field(alias="itemLink")
+
 class IqiyiSearchAlbumInfo(BaseModel):
     album_id: int = Field(alias="albumId")
     item_total_number: Optional[int] = Field(None, alias="itemTotalNumber")
@@ -24,10 +27,15 @@ class IqiyiSearchAlbumInfo(BaseModel):
     album_title: str = Field(alias="albumTitle")
     channel: str
     release_date: Optional[str] = Field(None, alias="releaseDate")
+    videoinfos: Optional[List[IqiyiSearchVideoInfo]] = None
 
     @property
     def link_id(self) -> Optional[str]:
-        match = re.search(r"v_(\w+?)\.html", self.album_link)
+        link_to_parse = self.album_link
+        if self.videoinfos and self.videoinfos[0].item_link:
+            link_to_parse = self.videoinfos[0].item_link
+
+        match = re.search(r"v_(\w+?)\.html", link_to_parse)
         return match.group(1).strip() if match else None
 
     @property
@@ -123,12 +131,16 @@ class IqiyiScraper(BaseScraper):
                 if "原创" in album.channel or "教育" in album.channel:
                     continue
 
+                link_id = album.link_id
+                if not link_id:
+                    continue
+
                 channel_name = album.channel.split(',')[0]
                 media_type = "movie" if channel_name == "电影" else "tv_series"
 
                 results.append(models.ProviderSearchInfo(
                     provider=self.provider_name,
-                    mediaId=album.link_id,
+                    mediaId=link_id,
                     title=album.album_title,
                     type=media_type,
                     year=album.year,
