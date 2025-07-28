@@ -45,29 +45,39 @@ async def get_token_from_path(
     return token
 
 @dandan_router.get(
-    "/search/episodes",
+    "/search/anime",
     response_model=DandanSearchResponse,
     summary="[dandanplay兼容] 搜索节目和分集"
 )
-async def search_episodes_for_dandan(
-    anime: str = Query(..., description="节目名称"),
+async def search_for_dandan(
+    keyword: str = Query(..., description="节目名称 (兼容'anime'和'keyword'参数)", alias="anime"),
     episode: Optional[str] = Query(None, description="分集标题 (通常是数字)"),
     token: str = Depends(get_token_from_path),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
     """
     模拟 dandanplay 的搜索接口。
-    它会搜索 **本地弹幕库**，而不是调用外部爬虫。
+    它会搜索 **本地弹幕库**，而不是调用外部爬虫。支持电视剧和电影的匹配。
     """
-    if not episode or not episode.isdigit():
-        # 如果没有提供分集号，无法进行精确匹配，返回空结果
-        return DandanSearchResponse(matches=[])
-
-    episode_number = int(episode)
-
-    # 使用新的 crud 函数在本地库中搜索
-    results = await crud.search_episodes_in_library(pool, anime, episode_number)
-
+    results = []
+    # 检查是否提供了有效的分集号
+    if episode and episode.isdigit():
+        # 如果有分集号，则进行精确的剧集搜索
+        episode_number = int(episode)
+        results = await crud.search_episodes_in_library(pool, keyword, episode_number)
+    else:
+        # 如果没有分集号，则假定为电影或对剧集进行模糊匹配
+        # 电影通常被记为第1集，所以我们尝试匹配第1集
+        potential_matches = await crud.search_episodes_in_library(pool, keyword, 1)
+        
+        # 过滤结果，只保留类型为 'movie' 的匹配项
+        # 这样可以避免将 "xxx 第一季" 错误地匹配为电影
+        movie_matches = [m for m in potential_matches if m.get('type') == 'movie']
+        if movie_matches:
+            results = movie_matches
+        # 如果没有找到电影，但有其他匹配（例如，系列剧的第一集），也可以考虑返回，这取决于期望的行为
+        # 为简单起见，我们目前只精确匹配电影
+    
     matches = []
     for res in results:
         matches.append(DandanSearchMatch(
