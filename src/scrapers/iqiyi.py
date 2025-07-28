@@ -65,19 +65,19 @@ class IqiyiHtmlAlbumInfo(BaseModel):
 
 class IqiyiHtmlVideoInfo(BaseModel):
     album_id: int = Field(alias="albumQipuId")
-    tv_id: int # 验证器运行后，此字段必须存在
+    tv_id: Optional[int] = Field(None, alias="tvId")
+    video_id: Optional[int] = Field(None, alias="videoId")
     video_name: str = Field(alias="videoName")
     video_url: str = Field(alias="videoUrl")
     channel_name: str = Field(alias="channelName")
     duration: int
     video_count: int = 0
 
-    @model_validator(mode='before')
-    @classmethod
-    def set_tv_id_from_video_id(cls, data: Any) -> Any:
-        if isinstance(data, dict) and data.get('tvId') is None and data.get('videoId') is not None:
-            data['tvId'] = data['videoId']
-        return data
+    @model_validator(mode='after')
+    def merge_ids(self) -> 'IqiyiHtmlVideoInfo':
+        if self.tv_id is None and self.video_id is not None:
+            self.tv_id = self.video_id
+        return self
 
 class IqiyiEpisodeInfo(BaseModel):
     tv_id: int = Field(alias="tvId")
@@ -177,6 +177,8 @@ class IqiyiScraper(BaseScraper):
             return IqiyiHtmlVideoInfo.model_validate(cached_info)
 
         url = f"https://m.iqiyi.com/v_{link_id}.html"
+        # 模仿 C# 代码中的 LimitRequestFrequently
+        await asyncio.sleep(1)
         try:
             response = await self.client.get(url, headers={"User-Agent": self.mobile_user_agent})
             response.raise_for_status()
@@ -229,7 +231,7 @@ class IqiyiScraper(BaseScraper):
         episodes: List[IqiyiEpisodeInfo] = []
         if base_info.channel_name == "电影":
             episodes.append(IqiyiEpisodeInfo(
-                tv_id=base_info.tv_id,
+                tv_id=base_info.tv_id or 0, # 确保 tv_id 不为 None，模仿 C# long 的默认值 0
                 name=base_info.video_name,
                 order=1,
                 play_url=base_info.video_url
