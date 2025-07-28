@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Type
 
 import aiomysql
-from ... import crud
+from .. import crud
 from .. import models
 
 
