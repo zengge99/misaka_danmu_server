@@ -96,12 +96,16 @@ class IqiyiVideoData(BaseModel):
 class IqiyiVideoResult(BaseModel):
     data: IqiyiVideoData
 
+class IqiyiUserInfo(BaseModel):
+    uid: str
+
 class IqiyiComment(BaseModel):
     content_id: str = Field(alias="contentId")
     content: str
     show_time: int = Field(alias="showTime")
     color: str
-    uid: str
+    # user_info 字段在XML中可能不存在，设为可选
+    user_info: Optional[IqiyiUserInfo] = Field(None, alias="userInfo")
 
 # --- Main Scraper Class ---
 
@@ -280,34 +284,32 @@ class IqiyiScraper(BaseScraper):
             # 根据用户的反馈，恢复为标准的 zlib 解压方式。
             decompressed_data = zlib.decompress(response.content)
 
-            # 重新添加：打印完整的解压后内容以供调试
-            self.logger.info(f"爱奇艺: tvId {tv_id} 分段 {mat} 解压后的内容: \n{decompressed_data.decode('utf-8', errors='ignore')}")
-
             # 增加显式的UTF-8解析器以提高健壮性
             parser = ET.XMLParser(encoding="utf-8")
             root = ET.fromstring(decompressed_data, parser=parser)
             
             comments = []
-            # 使用更稳健的 XPath 语法直接查找所有 'item' 节点，无论其嵌套多深
-            for item in root.findall('.//item'):
+            # 关键修复：根据日志，弹幕信息在 <bulletInfo> 标签内
+            for item in root.findall('.//bulletInfo'):
                 content_node = item.find('content')
                 show_time_node = item.find('showTime')
 
                 # 核心字段必须存在
                 if not (content_node is not None and content_node.text and show_time_node is not None and show_time_node.text):
                     continue
-
+                
                 # 安全地获取可选字段
                 content_id_node = item.find('contentId')
                 color_node = item.find('color')
-                uid_node = item.find('userInfo/uid')
+                user_info_node = item.find('userInfo')
+                uid_node = user_info_node.find('uid') if user_info_node is not None else None
 
                 comments.append(IqiyiComment(
                     contentId=content_id_node.text if content_id_node is not None and content_id_node.text else "0",
                     content=content_node.text,
                     showTime=int(show_time_node.text),
                     color=color_node.text if color_node is not None and color_node.text else "ffffff",
-                    uid=uid_node.text if uid_node is not None and uid_node.text else "0"
+                    userInfo=IqiyiUserInfo(uid=uid_node.text) if uid_node is not None and uid_node.text else None
                 ))
             return comments
         except zlib.error:
@@ -344,7 +346,8 @@ class IqiyiScraper(BaseScraper):
                 color = 16777215 # Default white
 
             timestamp = float(c.show_time)
-            p_string = f"{timestamp},{mode},{color},[{self.provider_name}]"
+            uid = c.user_info.uid if c.user_info else "0"
+            p_string = f"{timestamp},{mode},{color},[{self.provider_name}]{uid}"
             formatted.append({
                 "cid": c.content_id,
                 "p": p_string,
