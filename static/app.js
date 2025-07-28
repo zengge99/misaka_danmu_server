@@ -486,10 +486,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // 如果列表之前显示的是“没有任务”的消息，则先清空它
+        const noTasksLi = taskListUl.querySelector('li:not(.task-item)');
+        if (noTasksLi) {
+            taskListUl.innerHTML = '';
+        }
+
         const existingTaskElements = new Map([...taskListUl.querySelectorAll('.task-item')].map(el => [el.dataset.taskId, el]));
         const incomingTaskIds = new Set(tasks.map(t => t.task_id));
 
-        // Remove tasks that are no longer in the list
+        // Remove tasks that are no longer in the list (e.g., if backend state is cleared)
         for (const [taskId, element] of existingTaskElements.entries()) {
             if (!incomingTaskIds.has(taskId)) {
                 element.remove();
@@ -534,6 +540,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
                 taskListUl.appendChild(li);
+                taskElement = li; // Use the newly created element for the next step
+            }
+
+            // Schedule removal for completed tasks
+            if (task.status === '已完成' && !taskElement.dataset.removing) {
+                taskElement.dataset.removing = 'true';
+                setTimeout(() => {
+                    taskElement.style.opacity = '0';
+                    setTimeout(() => {
+                        taskElement.remove();
+                        // After removing, check if the list is now empty.
+                        if (taskListUl.children.length === 0) {
+                             taskListUl.innerHTML = '<li>当前没有任务。</li>';
+                        }
+                    }, 500); // This duration should match the CSS transition
+                }, 2500); // Wait 2.5 seconds before starting the fade-out
             }
         });
     }
