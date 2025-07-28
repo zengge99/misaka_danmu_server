@@ -279,7 +279,7 @@ class IqiyiScraper(BaseScraper):
 
             # 关键修复：使用 -zlib.MAX_WBITS 参数来处理没有 zlib头的原始 DEFLATE 流，
             # 这与 C# 代码中 InflaterInputStream 的行为完全一致。
-            decompressed_data = zlib.decompress(response.content, -zlib.MAX_WBITS)
+            decompressed_data = zlib.decompress(response.content)
             # 增加显式的UTF-8解析器以提高健壮性
             parser = ET.XMLParser(encoding="utf-8")
             root = ET.fromstring(decompressed_data, parser=parser)
