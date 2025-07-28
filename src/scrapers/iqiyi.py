@@ -277,7 +277,9 @@ class IqiyiScraper(BaseScraper):
                 return [] # 404 means no more segments
             response.raise_for_status()
 
-            decompressed_data = zlib.decompress(response.content)
+            # 关键修复：使用 -zlib.MAX_WBITS 参数来处理没有 zlib头的原始 DEFLATE 流，
+            # 这与 C# 代码中 InflaterInputStream 的行为完全一致。
+            decompressed_data = zlib.decompress(response.content, -zlib.MAX_WBITS)
             # 增加显式的UTF-8解析器以提高健壮性
             parser = ET.XMLParser(encoding="utf-8")
             root = ET.fromstring(decompressed_data, parser=parser)
@@ -285,20 +287,25 @@ class IqiyiScraper(BaseScraper):
             comments = []
             # 使用更稳健的 XPath 语法直接查找所有 'item' 节点，无论其嵌套多深
             for item in root.findall('.//item'):
-                content_id_node = item.find('contentId')
                 content_node = item.find('content')
                 show_time_node = item.find('showTime')
+
+                # 核心字段必须存在
+                if not (content_node is not None and content_node.text and show_time_node is not None and show_time_node.text):
+                    continue
+
+                # 安全地获取可选字段
+                content_id_node = item.find('contentId')
                 color_node = item.find('color')
                 uid_node = item.find('userInfo/uid')
 
-                if all(n is not None and n.text for n in [content_id_node, content_node, show_time_node, color_node, uid_node]):
-                    comments.append(IqiyiComment(
-                        contentId=content_id_node.text,
-                        content=content_node.text,
-                        showTime=int(show_time_node.text),
-                        color=color_node.text,
-                        uid=uid_node.text
-                    ))
+                comments.append(IqiyiComment(
+                    contentId=content_id_node.text if content_id_node is not None and content_id_node.text else "0",
+                    content=content_node.text,
+                    showTime=int(show_time_node.text),
+                    color=color_node.text if color_node is not None and color_node.text else "ffffff",
+                    uid=uid_node.text if uid_node is not None and uid_node.text else "0"
+                ))
             return comments
         except zlib.error:
             self.logger.warning(f"爱奇艺: 解压 tvId {tv_id} 的弹幕分段 {mat} 失败，文件可能为空或已损坏。")
