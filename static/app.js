@@ -213,31 +213,6 @@ document.addEventListener('DOMContentLoaded', () => {
             showEpisodeListView(sourceId, animeTitle, animeId);
         });
 
-        // 使用事件委托来处理动态添加的返回按钮，这比在每次渲染时重新绑定更健壮
-        animeDetailView.addEventListener('click', (e) => {
-            if (e.target.id === 'back-to-library-btn') {
-                animeDetailView.classList.add('hidden');
-                libraryView.classList.remove('hidden');
-            }
-        });
-        episodeListView.addEventListener('click', (e) => {
-            if (e.target.id === 'back-to-detail-view-btn') {
-                const animeId = parseInt(episodeListView.dataset.animeId, 10);
-                if (!isNaN(animeId)) {
-                    episodeListView.classList.add('hidden');
-                    showAnimeDetailView(animeId);
-                }
-            }
-        });
-        danmakuListView.addEventListener('click', (e) => {
-            if (e.target.id === 'back-to-episodes-from-danmaku-btn') {
-                danmakuListView.classList.add('hidden');
-                // 从分集列表视图获取上下文，因为它是弹幕视图的上级
-                const { sourceId, animeTitle, animeId } = episodeListView.dataset;
-                showEpisodeListView(parseInt(sourceId, 10), animeTitle, parseInt(animeId, 10));
-            }
-        });
-
         // Inputs
         librarySearchInput.addEventListener('input', handleLibrarySearch);
     }
@@ -822,6 +797,12 @@ document.addEventListener('DOMContentLoaded', () => {
             sourceTableBody.innerHTML = `<tr><td colspan="4">未关联任何数据源。</td></tr>`;
         }
 
+        // 重新绑定事件监听器
+        document.getElementById('back-to-library-btn').addEventListener('click', () => {
+            animeDetailView.classList.add('hidden');
+            libraryView.classList.remove('hidden');
+        });
+
     }
 
     function refreshSource(sourceId, title) {
@@ -927,6 +908,12 @@ document.addEventListener('DOMContentLoaded', () => {
             episodeTableBody.innerHTML = `<tr><td colspan="7">未找到任何分集数据。</td></tr>`;
         }
 
+        // 重新绑定事件监听器
+        document.getElementById('back-to-detail-view-btn').addEventListener('click', () => {
+            episodeListView.classList.add('hidden');
+            showAnimeDetailView(animeId);
+        });
+
     }
 
     async function showDanmakuListView(episodeId, episodeTitle, sourceId, animeTitle, animeId) {
@@ -960,6 +947,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const formattedText = comments.map(c => `${c.p} | ${c.m}`).join('\n');
             danmakuContentPre.textContent = formattedText;
         }
+
+        // 重新绑定事件监听器
+        document.getElementById('back-to-episodes-from-danmaku-btn').addEventListener('click', () => {
+            danmakuListView.classList.add('hidden');
+            showEpisodeListView(sourceId, animeTitle, animeId);
+        });
     }
 
     function showEditEpisodeView(episodeId, episodeTitle, episodeIndex, sourceUrl, sourceId, animeTitle, animeId) {
