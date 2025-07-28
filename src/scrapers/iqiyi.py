@@ -277,9 +277,12 @@ class IqiyiScraper(BaseScraper):
                 return [] # 404 means no more segments
             response.raise_for_status()
 
-            # 关键修复：使用 -zlib.MAX_WBITS 参数来处理没有 zlib头的原始 DEFLATE 流，
-            # 这与 C# 代码中 InflaterInputStream 的行为完全一致。
+            # 根据用户的反馈，恢复为标准的 zlib 解压方式。
             decompressed_data = zlib.decompress(response.content)
+
+            # 重新添加：打印完整的解压后内容以供调试
+            self.logger.info(f"爱奇艺: tvId {tv_id} 分段 {mat} 解压后的内容: \n{decompressed_data.decode('utf-8', errors='ignore')}")
+
             # 增加显式的UTF-8解析器以提高健壮性
             parser = ET.XMLParser(encoding="utf-8")
             root = ET.fromstring(decompressed_data, parser=parser)
