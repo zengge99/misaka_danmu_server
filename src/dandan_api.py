@@ -50,7 +50,8 @@ async def get_token_from_path(
     summary="[dandanplay兼容] 搜索节目和分集"
 )
 async def search_for_dandan(
-    keyword: str = Query(..., description="节目名称 (兼容'anime'和'keyword'参数)", alias="anime"),
+    keyword: Optional[str] = Query(None, description="节目名称 (e.g., dandanplay-qt)"),
+    anime: Optional[str] = Query(None, description="节目名称 (e.g., dandanplay-legacy)"),
     episode: Optional[str] = Query(None, description="分集标题 (通常是数字)"),
     token: str = Depends(get_token_from_path),
     pool: aiomysql.Pool = Depends(get_db_pool)
@@ -59,16 +60,23 @@ async def search_for_dandan(
     模拟 dandanplay 的搜索接口。
     它会搜索 **本地弹幕库**，而不是调用外部爬虫。支持电视剧和电影的匹配。
     """
+    search_term = keyword or anime
+    if not search_term:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Missing required query parameter: 'keyword' or 'anime'"
+        )
+
     results = []
     # 检查是否提供了有效的分集号
     if episode and episode.isdigit():
         # 如果有分集号，则进行精确的剧集搜索
         episode_number = int(episode)
-        results = await crud.search_episodes_in_library(pool, keyword, episode_number)
+        results = await crud.search_episodes_in_library(pool, search_term, episode_number)
     else:
         # 如果没有分集号，则假定为电影或对剧集进行模糊匹配
         # 电影通常被记为第1集，所以我们尝试匹配第1集
-        potential_matches = await crud.search_episodes_in_library(pool, keyword, 1)
+        potential_matches = await crud.search_episodes_in_library(pool, search_term, 1)
         
         # 过滤结果，只保留类型为 'movie' 的匹配项
         # 这样可以避免将 "xxx 第一季" 错误地匹配为电影
