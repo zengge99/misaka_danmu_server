@@ -98,6 +98,8 @@ class IqiyiComment(BaseModel):
 # --- Main Scraper Class ---
 
 class IqiyiScraper(BaseScraper):
+    provider_name = "iqiyi"
+
     def __init__(self, pool: aiomysql.Pool):
         super().__init__(pool)
         self.mobile_user_agent = "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36 Edg/136.0.0.0"
@@ -105,9 +107,6 @@ class IqiyiScraper(BaseScraper):
         self.reg_album_info = re.compile(r'"albumInfo":(\{.+?\}),')
 
         self.client = httpx.AsyncClient(timeout=20.0, follow_redirects=True)
-    @property
-    def provider_name(self) -> str:
-        return "iqiyi"
 
     async def close(self):
         await self.client.aclose()

@@ -87,6 +87,8 @@ class YoukuRpcResult(BaseModel):
 # --- Main Scraper Class ---
 
 class YoukuScraper(BaseScraper):
+    provider_name = "youku"
+
     def __init__(self, pool: aiomysql.Pool):
         super().__init__(pool)
         # Regexes from C#
@@ -102,10 +104,6 @@ class YoukuScraper(BaseScraper):
         # For danmaku signing
         self._cna = ""
         self._token = ""
-
-    @property
-    def provider_name(self) -> str:
-        return "youku"
 
     async def close(self):
         await self.client.aclose()

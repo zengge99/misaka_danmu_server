@@ -57,7 +57,7 @@ class ScraperManager:
             module = importlib.import_module(module_name, package="src")
             for name, obj in inspect.getmembers(module, inspect.isclass):
                 if issubclass(obj, BaseScraper) and obj is not BaseScraper:
-                    provider_name = obj().provider_name # 临时实例化以获取名称
+                    provider_name = obj.provider_name # 直接访问类属性，避免实例化
                     discovered_providers.append(provider_name)
                     scraper_classes[provider_name] = obj
         

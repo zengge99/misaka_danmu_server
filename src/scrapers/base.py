@@ -36,13 +36,8 @@ class BaseScraper(ABC):
         if ttl > 0:
             await crud.set_cache(self.pool, key, value, ttl)
 
-    @property
-    @abstractmethod
-    def provider_name(self) -> str:
-        """
-        数据源的唯一名称 (例如, 'tencent')。
-        """
-        raise NotImplementedError
+    # 每个子类都必须覆盖这个类属性
+    provider_name: str
 
     @abstractmethod
     async def search(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:

@@ -79,6 +79,8 @@ class TencentScraper(BaseScraper):
     """
     用于从腾讯视频抓取分集信息和弹幕的客户端。
     """
+    provider_name = "tencent"
+
     def __init__(self, pool: aiomysql.Pool):
         super().__init__(pool)
         self.base_headers = {
@@ -96,10 +98,6 @@ class TencentScraper(BaseScraper):
         # httpx.AsyncClient 是 Python 中功能强大的异步HTTP客户端，等同于 C# 中的 HttpClient
         # 此处通过 cookies 参数传入字典，httpx 会自动将其格式化为正确的 Cookie 请求头，效果与C#代码一致
         self.client = httpx.AsyncClient(headers=self.base_headers, cookies=self.cookies, timeout=20.0)
-
-    @property
-    def provider_name(self) -> str:
-        return "tencent"
 
     async def close(self):
         """关闭HTTP客户端"""
