@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
     let logRefreshInterval = null;
+    let clearedTaskIds = new Set(); // 新增：用于存储已从视图中清除的任务ID
 
     // --- Core Functions ---
     function toggleLoader(show) {
@@ -480,8 +481,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderTasks(tasks) {
         if (!taskListUl) return;
 
+        // 过滤掉那些已经被前端清除的任务
+        const tasksToRender = tasks.filter(task => !clearedTaskIds.has(task.task_id));
+
         // If no tasks, show message and clear list
-        if (tasks.length === 0) {
+        if (tasksToRender.length === 0) {
             taskListUl.innerHTML = '<li>当前没有任务。</li>';
             return;
         }
@@ -493,7 +497,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const existingTaskElements = new Map([...taskListUl.querySelectorAll('.task-item')].map(el => [el.dataset.taskId, el]));
-        const incomingTaskIds = new Set(tasks.map(t => t.task_id));
+        const incomingTaskIds = new Set(tasksToRender.map(t => t.task_id));
 
         // Remove tasks that are no longer in the list (e.g., if backend state is cleared)
         for (const [taskId, element] of existingTaskElements.entries()) {
@@ -503,7 +507,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Update existing or add new tasks
-        tasks.forEach(task => {
+        tasksToRender.forEach(task => {
             const statusColor = {
                 "已完成": "var(--success-color)",
                 "失败": "var(--error-color)",
@@ -546,6 +550,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Schedule removal for completed tasks
             if (task.status === '已完成' && !taskElement.dataset.removing) {
                 taskElement.dataset.removing = 'true';
+                // 立即将任务ID添加到已清除集合，防止下次轮询时再次渲染
+                clearedTaskIds.add(task.task_id);
+
                 setTimeout(() => {
                     taskElement.style.opacity = '0';
                     setTimeout(() => {
@@ -767,10 +774,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.insertCell().textContent = source.media_id;
                 row.insertCell().textContent = new Date(source.created_at).toLocaleString();
                 const actionsCell = row.insertCell();
+                actionsCell.className = 'actions-cell';
                 actionsCell.innerHTML = `
-                    <button class="action-btn" title="查看/编辑分集" onclick="handleSourceAction('view_episodes', ${source.source_id}, '${anime.title.replace(/'/g, "\\'")}', ${anime.animeId})">📖</button>
-                    <button class="action-btn" title="刷新此源" onclick="handleSourceAction('refresh', ${source.source_id}, '${anime.title}')">🔄</button>
-                    <button class="action-btn" title="删除此源" onclick="handleSourceAction('delete', ${source.source_id}, '${anime.title}')">🗑️</button>
+                    <div class="action-buttons-wrapper">
+                        <button class="action-btn" title="查看/编辑分集" onclick="handleSourceAction('view_episodes', ${source.source_id}, '${anime.title.replace(/'/g, "\\'")}', ${anime.animeId})">📖</button>
+                        <button class="action-btn" title="刷新此源" onclick="handleSourceAction('refresh', ${source.source_id}, '${anime.title}')">🔄</button>
+                        <button class="action-btn" title="删除此源" onclick="handleSourceAction('delete', ${source.source_id}, '${anime.title}')">🗑️</button>
+                    </div>
                 `;
             });
         } else {
@@ -870,11 +880,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const actionsCell = row.insertCell();
+                actionsCell.className = 'actions-cell';
                 actionsCell.innerHTML = `
-                    <button class="action-btn" title="编辑剧集" onclick="handleEpisodeAction('edit', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">✏️</button>
-                    <button class="action-btn" title="刷新剧集" onclick="handleEpisodeAction('refresh', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">🔄</button>
-                    <button class="action-btn" title="查看具体弹幕" onclick="handleEpisodeAction('view_danmaku', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">💬</button>
-                    <button class="action-btn" title="删除集" onclick="handleEpisodeAction('delete', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">🗑️</button>
+                    <div class="action-buttons-wrapper">
+                        <button class="action-btn" title="编辑剧集" onclick="handleEpisodeAction('edit', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">✏️</button>
+                        <button class="action-btn" title="刷新剧集" onclick="handleEpisodeAction('refresh', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">🔄</button>
+                        <button class="action-btn" title="查看具体弹幕" onclick="handleEpisodeAction('view_danmaku', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">💬</button>
+                        <button class="action-btn" title="删除集" onclick="handleEpisodeAction('delete', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">🗑️</button>
+                    </div>
                 `;
             });
         } else {

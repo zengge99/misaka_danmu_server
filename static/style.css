@@ -261,26 +261,29 @@ header {
     word-break: break-all;
 }
 
-/* Library Table Styles */
-#library-table {
+/* Library & Detail Table Styles */
+#library-table,
+#source-detail-table,
+#episode-list-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 20px;
 }
 
-#library-table th, #library-table td {
-    padding: 12px 15px;
+#library-table th, #library-table td,
+#source-detail-table th, #source-detail-table td,
+#episode-list-table th, #episode-list-table td {
+    padding: 12px 20px; /* 增加了列间距 */
     text-align: left;
     border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
 }
 
-#library-table th {
+#library-table th,
+#source-detail-table th,
+#episode-list-table th {
     background-color: var(--secondary-color);
     font-weight: 600;
-}
-
-#library-table td {
-    vertical-align: middle;
 }
 
 #library-table .poster-cell img {
@@ -297,9 +300,9 @@ header {
   as it doesn't interfere with the cell's own `vertical-align` property.
   The parent <td> is vertically centered by `vertical-align: middle;`
 */
-#library-table .actions-cell .action-buttons-wrapper {
+.actions-cell .action-buttons-wrapper {
     display: flex;
-    align-items: center; /* 新增：确保按钮在包裹层内垂直居中 */
+    align-items: center;
     gap: 8px;
 }
 
