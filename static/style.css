@@ -73,7 +73,8 @@ form {
 }
 
 input[type="text"],
-input[type="password"] {
+input[type="password"],
+input[type="number"] {
     padding: 10px;
     border: 1px solid var(--border-color);
     border-radius: 4px;
@@ -234,6 +235,30 @@ header {
     margin: 20px auto;
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow);
+}
+
+/* New styles for flexible header in detail view */
+.view-header-flexible {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start; /* 顶部对齐，以防标题过长 */
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.anime-detail-header-main {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    flex-grow: 1; /* 占据剩余空间 */
+}
+
+.anime-detail-header-main img { /* 直接为图片设置样式 */
+    width: 100px; /* 调整海报大小 */
+    height: 140px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
 }
 
 /* New styles for form layout */

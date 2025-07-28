@@ -752,13 +752,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderAnimeDetailView(anime, sources) {
         let html = `
-            <button id="back-to-library-btn"> &lt; 返回弹幕库</button>
-            <div class="anime-detail-header">
-                <img src="${anime.imageUrl || '/static/placeholder.png'}" alt="${anime.title}" referrerpolicy="no-referrer">
-                <div>
-                    <h2>${anime.title}</h2>
-                    <p>季: ${anime.season} | 总集数: ${anime.episodeCount || 0} | 已关联 ${sources.length} 个源</p>
+            <div class="view-header-flexible">
+                <div class="anime-detail-header-main">
+                    <img src="${anime.imageUrl || '/static/placeholder.png'}" alt="${anime.title}" referrerpolicy="no-referrer">
+                    <div>
+                        <h2>${anime.title}</h2>
+                        <p>季: ${anime.season} | 总集数: ${anime.episodeCount || 0} | 已关联 ${sources.length} 个源</p>
+                    </div>
                 </div>
+                <button id="back-to-library-btn"> &lt; 返回弹幕库</button>
             </div>
             <h3>关联的数据源</h3>
             <table id="source-detail-table">
@@ -1024,7 +1026,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else if (action === 'edit') {
             const episodeIndex = row.cells[2].textContent;
-            const sourceUrl = row.cells[4].querySelector('a')?.href || '';
+            const sourceUrl = row.cells[5].querySelector('a')?.href || '';
             showEditEpisodeView(episodeId, title, episodeIndex, sourceUrl, sourceId, animeTitle, animeId);
         } else if (action === 'refresh') {
             if (confirm(`您确定要刷新分集 '${title}' 的弹幕吗？\n这将清空现有弹幕并从源重新获取。`)) {
