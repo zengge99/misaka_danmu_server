@@ -116,6 +116,7 @@ class EpisodeDetail(BaseModel):
     episode_index: int
     source_url: Optional[str] = None
     fetched_at: Optional[datetime] = None
+    comment_count: int
 
 # --- 任务管理器模型 ---
 class TaskInfo(BaseModel):

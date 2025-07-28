@@ -845,6 +845,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <th>ID</th>
                         <th>剧集名</th>
                         <th>集数</th>
+                        <th>弹幕数</th>
                         <th>采集时间</th>
                         <th>官方链接</th>
                         <th>剧集操作</th>
@@ -868,6 +869,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.insertCell().textContent = ep.id;
                 row.insertCell().textContent = ep.title;
                 row.insertCell().textContent = ep.episode_index;
+                row.insertCell().textContent = ep.comment_count;
                 row.insertCell().textContent = ep.fetched_at ? new Date(ep.fetched_at).toLocaleString() : 'N/A';
                 
                 const linkCell = row.insertCell();
@@ -893,7 +895,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             });
         } else {
-            episodeTableBody.innerHTML = `<tr><td colspan="6">未找到任何分集数据。</td></tr>`;
+            episodeTableBody.innerHTML = `<tr><td colspan="7">未找到任何分集数据。</td></tr>`;
         }
 
         document.getElementById('back-to-detail-view-btn').addEventListener('click', () => {

@@ -139,6 +139,9 @@ async def bulk_insert_comments(pool: aiomysql.Pool, episode_id: int, comments: L
                 (episode_id, c['cid'], c['p'], c['m'], c['t']) for c in comments
             ]
             affected_rows = await cursor.executemany(query, data_to_insert)
+            # 如果成功插入了新弹幕，则更新分集的弹幕计数
+            if affected_rows > 0:
+                await cursor.execute("UPDATE episode SET comment_count = comment_count + %s WHERE id = %s", (affected_rows, episode_id))
             return affected_rows
 
 
@@ -197,7 +200,7 @@ async def get_episodes_for_source(pool: aiomysql.Pool, source_id: int) -> List[D
     """获取指定数据源的所有分集信息。"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            query = "SELECT id, title, episode_index, source_url, fetched_at FROM episode WHERE source_id = %s ORDER BY episode_index ASC"
+            query = "SELECT id, title, episode_index, source_url, fetched_at, comment_count FROM episode WHERE source_id = %s ORDER BY episode_index ASC"
             await cursor.execute(query, (source_id,))
             return await cursor.fetchall()
 
@@ -233,6 +236,7 @@ async def clear_source_data(pool: aiomysql.Pool, source_id: int):
             if episode_ids:
                 format_strings = ','.join(['%s'] * len(episode_ids))
                 await cursor.execute(f"DELETE FROM comment WHERE episode_id IN ({format_strings})", tuple(episode_ids))
+                # 在此场景下，episode 很快会被删除，所以无需更新 comment_count
                 await cursor.execute(f"DELETE FROM episode WHERE id IN ({format_strings})", tuple(episode_ids))
 
 async def clear_episode_comments(pool: aiomysql.Pool, episode_id: int):
@@ -240,6 +244,8 @@ async def clear_episode_comments(pool: aiomysql.Pool, episode_id: int):
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("DELETE FROM comment WHERE episode_id = %s", (episode_id,))
+            # 在只清空弹幕（用于刷新单个分集）的场景下，必须重置计数器
+            await cursor.execute("UPDATE episode SET comment_count = 0 WHERE id = %s", (episode_id,))
 
 async def update_anime_info(pool: aiomysql.Pool, anime_id: int, title: str, season: int) -> bool:
     """更新番剧信息"""

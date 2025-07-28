@@ -346,8 +346,7 @@ class IqiyiScraper(BaseScraper):
                 color = 16777215 # Default white
 
             timestamp = float(c.show_time)
-            uid = c.user_info.uid if c.user_info else "0"
-            p_string = f"{timestamp},{mode},{color},[{self.provider_name}]{uid}"
+            p_string = f"{timestamp},{mode},{color},[{self.provider_name}]"
             formatted.append({
                 "cid": c.content_id,
                 "p": p_string,

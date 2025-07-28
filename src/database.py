@@ -114,6 +114,7 @@ async def init_db_tables(app: FastAPI):
               `provider_episode_id` VARCHAR(255) NULL,
               `source_url` VARCHAR(512) NULL,
               `fetched_at` TIMESTAMP NULL,
+              `comment_count` INT NOT NULL DEFAULT 0,
               PRIMARY KEY (`id`),
               UNIQUE INDEX `idx_source_episode_unique` (`source_id` ASC, `episode_index` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -236,6 +237,15 @@ async def init_db_tables(app: FastAPI):
                     ALTER TABLE `episode` ADD COLUMN `provider_episode_id` VARCHAR(255) NULL AFTER `episode_index`;
                 """)
                 print("'episode' 表 schema 更新完成。")
+
+            # 迁移检查：episode 表的 comment_count
+            await cursor.execute("SHOW COLUMNS FROM `episode` LIKE 'comment_count'")
+            if not await cursor.fetchone():
+                print("检测到旧的 'episode' 表 schema，正在添加 'comment_count' 字段...")
+                await cursor.execute("""
+                    ALTER TABLE `episode` ADD COLUMN `comment_count` INT NOT NULL DEFAULT 0 AFTER `fetched_at`;
+                """)
+                print("'episode' 表 'comment_count' 字段添加完成。")
 
             # 迁移检查：移除所有 created_at 和 fetched_at 的默认值
             tables_with_timestamps = ['anime', 'users', 'anime_sources', 'episode']
