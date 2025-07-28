@@ -27,6 +27,7 @@ class IqiyiSearchAlbumInfo(BaseModel):
     album_title: str = Field(alias="albumTitle")
     channel: str
     release_date: Optional[str] = Field(None, alias="releaseDate")
+    album_img: Optional[str] = Field(None, alias="albumImg")
     videoinfos: Optional[List[IqiyiSearchVideoInfo]] = None
 
     @property
@@ -144,8 +145,8 @@ class IqiyiScraper(BaseScraper):
                     title=album.album_title,
                     type=media_type,
                     year=album.year,
+                    imageUrl=album.album_img,
                     episodeCount=album.item_total_number,
-                    # iqiyi search does not return poster
                 ))
 
         except Exception as e:
