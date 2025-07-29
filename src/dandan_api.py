@@ -43,6 +43,78 @@ class DandanSearchEpisodesResponse(DandanResponseBase):
     animes: List[DandanAnimeInfo]
 
 
+# --- Models for /bangumi/{anime_id} ---
+
+class BangumiTitle(BaseModel):
+    language: str
+    title: str
+
+class BangumiEpisodeSeason(BaseModel):
+    id: str
+    airDate: Optional[datetime] = None
+    name: str
+    episodeCount: int
+    summary: str
+
+class BangumiEpisode(BaseModel):
+    seasonId: Optional[str] = None
+    episodeId: int
+    episodeTitle: str
+    episodeNumber: str
+    lastWatched: Optional[datetime] = None
+    airDate: Optional[datetime] = None
+
+class BangumiIntro(BaseModel):
+    animeId: int
+    bangumiId: Optional[str] = ""
+    animeTitle: str
+    imageUrl: Optional[str] = None
+    searchKeyword: Optional[str] = None
+    isOnAir: bool = False
+    airDay: int = 0
+    isFavorited: bool = False
+    isRestricted: bool = False
+    rating: float = 0.0
+
+class BangumiTag(BaseModel):
+    id: int
+    name: str
+    count: int
+
+class BangumiOnlineDatabase(BaseModel):
+    name: str
+    url: str
+
+class BangumiTrailer(BaseModel):
+    id: int
+    url: str
+    title: str
+    imageUrl: str
+    date: datetime
+
+class BangumiDetails(BangumiIntro):
+    type: str
+    typeDescription: str
+    titles: List[BangumiTitle] = []
+    seasons: List[BangumiEpisodeSeason] = []
+    episodes: List[BangumiEpisode] = []
+    summary: Optional[str] = ""
+    metadata: List[str] = []
+    bangumiUrl: Optional[str] = None
+    userRating: int = 0
+    favoriteStatus: Optional[str] = None
+    comment: Optional[str] = None
+    ratingDetails: Dict[str, float] = {}
+    relateds: List[BangumiIntro] = []
+    similars: List[BangumiIntro] = []
+    tags: List[BangumiTag] = []
+    onlineDatabases: List[BangumiOnlineDatabase] = []
+    trailers: List[BangumiTrailer] = []
+
+class BangumiDetailsResponse(DandanResponseBase):
+    bangumi: Optional[BangumiDetails] = None
+
+
 async def _search_implementation(
     search_term: str,
     episode: Optional[str],
@@ -146,6 +218,56 @@ async def search_anime_for_dandan(
         )
     return await _search_implementation(search_term, episode, pool)
 
+@dandan_router.get(
+    "/bangumi/{anime_id}",
+    response_model=BangumiDetailsResponse,
+    summary="[dandanplay兼容] 获取番剧详情"
+)
+async def get_bangumi_details(
+    anime_id: int = Path(..., description="作品ID"),
+    token: str = Depends(get_token_from_path),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """
+    模拟 dandanplay 的 /api/v2/bangumi/{bangumiId} 接口。
+    返回数据库中存储的番剧详细信息。
+    """
+    details = await crud.get_anime_details_for_dandan(pool, anime_id)
+    if not details:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Anime not found"
+        )
+
+    anime_data = details['anime']
+    episodes_data = details['episodes']
+
+    type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
+    type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
+    dandan_type = type_mapping.get(anime_data.get('type'), "other")
+    dandan_type_desc = type_desc_mapping.get(anime_data.get('type'), "其他")
+
+    formatted_episodes = [
+        BangumiEpisode(
+            episodeId=ep['episodeId'],
+            episodeTitle=ep['episodeTitle'],
+            episodeNumber=str(ep['episodeNumber'])
+        ) for ep in episodes_data
+    ]
+
+    bangumi_details = BangumiDetails(
+        animeId=anime_data['animeId'],
+        animeTitle=anime_data['animeTitle'],
+        imageUrl=anime_data.get('imageUrl'),
+        searchKeyword=anime_data['animeTitle'],
+        type=dandan_type,
+        typeDescription=dandan_type_desc,
+        episodes=formatted_episodes,
+        bangumiUrl=anime_data.get('bangumiUrl'),
+        summary="暂无简介",
+    )
+
+    return BangumiDetailsResponse(bangumi=bangumi_details)
 
 @dandan_router.get(
     "/comment/{episode_id}",

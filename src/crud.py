@@ -83,6 +83,43 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
             await cursor.execute(query_like, tuple([f"%{clean_title}%"] + params_episode))
             return await cursor.fetchall()
 
+async def get_anime_details_for_dandan(pool: aiomysql.Pool, anime_id: int) -> Optional[Dict[str, Any]]:
+    """获取番剧的详细信息及其所有分集，用于dandanplay API。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            # 1. 获取番剧基本信息
+            await cursor.execute("""
+                SELECT
+                    a.id AS animeId,
+                    a.title AS animeTitle,
+                    a.type,
+                    a.image_url AS imageUrl,
+                    a.created_at AS startDate,
+                    a.source_url AS bangumiUrl,
+                    (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as episodeCount
+                FROM anime a
+                WHERE a.id = %s
+            """, (anime_id,))
+            anime_details = await cursor.fetchone()
+
+            if not anime_details:
+                return None
+
+            # 2. 获取所有分集信息
+            await cursor.execute("""
+                SELECT
+                    e.id AS episodeId,
+                    e.title AS episodeTitle,
+                    e.episode_index AS episodeNumber
+                FROM episode e
+                JOIN anime_sources s ON e.source_id = s.id
+                WHERE s.anime_id = %s
+                ORDER BY e.episode_index ASC
+            """, (anime_id,))
+            episodes = await cursor.fetchall()
+
+            return {"anime": anime_details, "episodes": episodes}
+
 async def find_anime_by_title(pool: aiomysql.Pool, title: str) -> Optional[Dict[str, Any]]:
     """通过标题精确查找番剧"""
     async with pool.acquire() as conn:
