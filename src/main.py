@@ -1,9 +1,10 @@
 import uvicorn
 import asyncio
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 import logging
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+import json
 from .database import create_db_pool, close_db_pool, init_db_tables, create_initial_admin_user
 from .api import router as v2_router, auth_router
 from .dandan_api import dandan_router
@@ -18,6 +19,29 @@ app = FastAPI(
     description="一个基于dandanplay API风格的弹幕服务",
     version="1.0.0",
 )
+
+@app.middleware("http")
+async def log_not_found_requests(request: Request, call_next):
+    """
+    中间件：捕获所有请求，如果响应是 404 Not Found，
+    则以JSON格式记录详细的请求入参，方便调试。
+    """
+    response = await call_next(request)
+    if response.status_code == 404:
+        log_details = {
+            "message": "HTTP 404 Not Found - 未找到匹配的API路由",
+            "method": request.method,
+            "url": str(request.url),
+            "path_params": request.path_params,
+            "query_params": dict(request.query_params),
+            "client": f"{request.client.host}:{request.client.port}",
+            "headers": {
+                "user-agent": request.headers.get("user-agent"),
+                "referer": request.headers.get("referer"),
+            }
+        }
+        logging.getLogger(__name__).warning("未处理的请求详情:\n%s", json.dumps(log_details, indent=2, ensure_ascii=False))
+    return response
 
 async def cleanup_cache_task(app: FastAPI):
     """定期清理过期缓存的后台任务。"""
