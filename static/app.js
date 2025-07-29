@@ -49,6 +49,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const addTokenBtn = document.getElementById('add-token-btn');
     const addTokenView = document.getElementById('add-token-view');
     const addTokenForm = document.getElementById('add-token-form');
+    const customDomainInput = document.getElementById('custom-domain-input');
+    const saveDomainBtn = document.getElementById('save-domain-btn');
+    const domainSaveMessage = document.getElementById('domain-save-message');
 
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
@@ -198,6 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Buttons
         logoutBtn.addEventListener('click', logout);
         saveSourcesBtn.addEventListener('click', handleSaveSources);
+        saveDomainBtn.addEventListener('click', handleSaveDomain);
         toggleSourceBtn.addEventListener('click', handleToggleSource);
         moveSourceUpBtn.addEventListener('click', handleMoveSourceUp);
         moveSourceDownBtn.addEventListener('click', handleMoveSourceDown);
@@ -309,6 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadAndRenderTasks(); // Load immediately on view switch
             } else if (viewId === 'token-manager-view') {
                 loadAndRenderTokens();
+                loadCustomDomain();
             }
         }
     }
@@ -522,6 +527,33 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             saveButton.disabled = false;
             saveButton.textContent = '保存';
+        }
+    }
+
+    async function handleSaveDomain() {
+        const domain = customDomainInput.value.trim();
+        // 自动移除末尾的斜杠，以规范格式
+        const cleanedDomain = domain.endsWith('/') ? domain.slice(0, -1) : domain;
+        
+        domainSaveMessage.textContent = '';
+        domainSaveMessage.className = 'message';
+        saveDomainBtn.disabled = true;
+        saveDomainBtn.textContent = '保存中...';
+
+        try {
+            await apiFetch('/api/ui/config/custom_api_domain', {
+                method: 'PUT',
+                body: JSON.stringify({ value: cleanedDomain })
+            });
+            domainSaveMessage.textContent = '域名保存成功！';
+            domainSaveMessage.classList.add('success');
+            customDomainInput.value = cleanedDomain; // 更新输入框为清理后的值
+        } catch (error) {
+            domainSaveMessage.textContent = `保存失败: ${(error.message || error)}`;
+            domainSaveMessage.classList.add('error');
+        } finally {
+            saveDomainBtn.disabled = false;
+            saveDomainBtn.textContent = '保存域名';
         }
     }
     // --- Task Manager View (Optimized Rendering) ---
@@ -1007,6 +1039,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function loadCustomDomain() {
+        domainSaveMessage.textContent = '';
+        domainSaveMessage.className = 'message';
+        try {
+            const data = await apiFetch('/api/ui/config/custom_api_domain');
+            customDomainInput.value = data.value || '';
+        } catch (error) {
+            domainSaveMessage.textContent = `加载域名失败: ${(error.message || error)}`;
+            domainSaveMessage.classList.add('error');
+        }
+    }
+
     function renderTokens(tokens) {
         tokenTableBody.innerHTML = '';
         if (tokens.length === 0) {
@@ -1022,14 +1066,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const tokenSpan = document.createElement('span');
             tokenSpan.className = 'token-value';
             tokenSpan.textContent = token.token;
-            tokenSpan.title = '点击复制';
-            tokenSpan.addEventListener('click', () => {
-                navigator.clipboard.writeText(token.token).then(() => {
-                    alert('Token已复制到剪贴板');
-                }, () => {
-                    alert('复制失败');
-                });
-            });
             tokenCell.appendChild(tokenSpan);
 
             const statusCell = row.insertCell();
@@ -1043,6 +1079,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const enabledText = token.is_enabled ? '禁用' : '启用';
             actionsCell.innerHTML = `
                 <div class="action-buttons-wrapper">
+                    <button class="action-btn" title="复制链接" onclick="handleTokenAction('copy', ${token.id}, '${token.token}')">📋</button>
                     <button class="action-btn" title="${enabledText}" onclick="handleTokenAction('toggle', ${token.id})">${token.is_enabled ? '⏸️' : '▶️'}</button>
                     <button class="action-btn" title="删除" onclick="handleTokenAction('delete', ${token.id})">🗑️</button>
                 </div>
@@ -1143,8 +1180,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.handleTokenAction = async (action, tokenId) => {
-        if (action === 'toggle') {
+    window.handleTokenAction = async (action, tokenId, tokenValue = '') => {
+        if (action === 'copy') {
+            const domain = document.getElementById('custom-domain-input').value.trim();
+            const textToCopy = domain ? `${domain}/api/${tokenValue}` : tokenValue;
+            
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                alert(`已复制到剪贴板: ${textToCopy}`);
+            }, () => {
+                alert('复制失败，请手动复制。');
+            });
+        } else if (action === 'toggle') {
             try {
                 await apiFetch(`/api/ui/tokens/${tokenId}/toggle`, { method: 'PUT' });
                 loadAndRenderTokens();

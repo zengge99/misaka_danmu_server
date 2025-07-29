@@ -415,6 +415,17 @@ async def set_cache(pool: aiomysql.Pool, key: str, value: Any, ttl_seconds: int)
             query = "INSERT INTO cache_data (cache_key, cache_value, expires_at) VALUES (%s, %s, NOW() + INTERVAL %s SECOND) ON DUPLICATE KEY UPDATE cache_value = VALUES(cache_value), expires_at = VALUES(expires_at)"
             await cursor.execute(query, (key, json_value, ttl_seconds))
 
+async def update_config_value(pool: aiomysql.Pool, key: str, value: str):
+    """更新或插入一个配置项。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            query = """
+                INSERT INTO config (config_key, config_value)
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)
+            """
+            await cursor.execute(query, (key, value))
+
 async def clear_expired_cache(pool: aiomysql.Pool):
     """从数据库中清除过期的缓存条目。"""
     async with pool.acquire() as conn:

@@ -313,7 +313,8 @@ async def _init_default_config(cursor: aiomysql.Cursor):
     default_configs = [
         ('search_ttl_seconds', '300', '搜索结果的缓存时间（秒），默认5分钟。'),
         ('episodes_ttl_seconds', '1800', '分集列表的缓存时间（秒），默认30分钟。'),
-        ('base_info_ttl_seconds', '1800', '基础媒体信息（如爱奇艺）的缓存时间（秒），默认30分钟。')
+        ('base_info_ttl_seconds', '1800', '基础媒体信息（如爱奇艺）的缓存时间（秒），默认30分钟。'),
+        ('custom_api_domain', '', '用于拼接弹幕API地址的自定义域名。')
     ]
     # 使用 INSERT IGNORE 来避免因主键冲突而报错
     query = "INSERT IGNORE INTO config (config_key, config_value, description) VALUES (%s, %s, %s)"

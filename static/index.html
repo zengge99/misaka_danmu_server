@@ -159,10 +159,20 @@
                             <button id="add-token-btn">添加Token</button>
                         </div>
                         <p>在这里管理用于第三方播放器（如dandanplay）的API访问令牌。</p>
+                        <div class="domain-config-section">
+                            <h3>自定义域名设置</h3>
+                            <p>设置后，复制按钮将自动拼接 "域名/api/Token值" 格式的完整URL。</p>
+                            <div class="form-row">
+                                <label for="custom-domain-input">自定义域名</label>
+                                <input type="text" id="custom-domain-input" placeholder="例如: https://danmu.example.com">
+                                <button id="save-domain-btn">保存域名</button>
+                            </div>
+                            <p id="domain-save-message" class="message"></p>
+                        </div>
                         <table id="token-table">
                             <thead>
                                 <tr>
-                                    <th>名称</th><th>Token (点击复制)</th><th>状态</th><th>创建时间</th><th>操作</th>
+                                    <th>名称</th><th>Token</th><th>状态</th><th>创建时间</th><th>操作</th>
                                 </tr>
                             </thead>
                             <tbody>

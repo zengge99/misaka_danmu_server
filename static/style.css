@@ -385,7 +385,6 @@ header {
     background-color: #e9ecef;
     padding: 2px 6px;
     border-radius: 4px;
-    cursor: pointer;
 }
 
 .token-status.disabled {
@@ -535,6 +534,27 @@ header {
     font-size: 1.2em;
 }
 
+/* Add new styles for domain config */
+.domain-config-section {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    padding: 20px;
+    background: var(--secondary-color);
+    border-radius: 8px;
+}
+
+.domain-config-section h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+.domain-config-section .form-row {
+    align-items: center;
+}
+
+.domain-config-section button {
+    margin-left: 10px;
+}
 /* Task Manager Styles */
 #task-list {
     list-style: none;

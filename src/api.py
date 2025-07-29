@@ -2,6 +2,7 @@ import re
 from typing import Optional, List, Any, Dict, Callable
 import asyncio
 import secrets
+import string
 import logging
 
 from datetime import timedelta, datetime, timezone
@@ -324,8 +325,9 @@ async def create_new_api_token(
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
     """创建一个新的、随机的 API Token。"""
-    # 生成一个20位的随机字符串
-    new_token_str = secrets.token_urlsafe(15) # 15字节 -> 20个URL安全字符
+    # 生成一个由大小写字母和数字组成的20位随机字符串
+    alphabet = string.ascii_letters + string.digits
+    new_token_str = ''.join(secrets.choice(alphabet) for _ in range(20))
     token_id = await crud.create_api_token(pool, token_data.name, new_token_str)
     # 重新从数据库获取以包含所有字段
     new_token = await crud.get_api_token_by_id(pool, token_id) # 假设这个函数存在
@@ -354,6 +356,31 @@ async def toggle_api_token_status(
     if not toggled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
     return
+
+@router.get("/config/{config_key}", response_model=Dict[str, str], summary="获取指定配置项的值")
+async def get_config_item(
+    config_key: str,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """获取数据库中单个配置项的值。"""
+    value = await crud.get_config_value(pool, config_key, "") # 默认为空字符串
+    return {"key": config_key, "value": value}
+
+@router.put("/config/{config_key}", status_code=status.HTTP_204_NO_CONTENT, summary="更新指定配置项的值")
+async def update_config_item(
+    config_key: str,
+    payload: Dict[str, str],
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """更新数据库中单个配置项的值。"""
+    value = payload.get("value")
+    if value is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing 'value' in request body")
+    
+    await crud.update_config_value(pool, config_key, value)
+    logger.info(f"用户 '{current_user.username}' 更新了配置项 '{config_key}'。")
 
 @router.get(
     "/comment/{episode_id}",
