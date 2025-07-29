@@ -339,17 +339,80 @@ async def get_bangumi_details(
     summary="[dandanplay兼容] 匹配单个文件"
 )
 async def match_single_file(
-    fileName: str = Query(..., description="视频文件名"),
-    fileHash: Optional[str] = Query(None),
-    fileSize: Optional[int] = Query(None),
-    videoDuration: Optional[int] = Query(None),
+    request: DandanBatchMatchRequestItem,
     token: str = Depends(get_token_from_path),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
     """
     通过文件名匹配弹幕库。此接口不使用文件Hash。
     """
-    parsed_info = _parse_filename_for_match(fileName)
+    parsed_info = _parse_filename_for_match(request.fileName)
+    if not parsed_info:
+        return DandanMatchResponse(isMatched=False)
+
+    results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"])
+    
+    matches = []
+    for res in results:
+        type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
+        type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
+        dandan_type = type_mapping.get(res.get('type'), "other")
+        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+
+        matches.append(DandanMatchInfo(
+            episodeId=res['episodeId'],
+            animeId=res['animeId'],
+            animeTitle=res['animeTitle'],
+            episodeTitle=res['episodeTitle'],
+            type=dandan_type,
+            typeDescription=dandan_type_desc,
+        ))
+
+    is_matched = len(matches) == 1
+    return DandanMatchResponse(isMatched=is_matched, matches=matches)
+
+
+async def _process_single_batch_match(item: DandanBatchMatchRequestItem, pool: aiomysql.Pool) -> DandanMatchResponse:
+    """处理批量匹配中的单个文件，仅在精确匹配（1个结果）时返回成功。"""
+    parsed_info = _parse_filename_for_match(item.fileName)
+    if not parsed_info:
+        return DandanMatchResponse(success=False, isMatched=False)
+
+    results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"])
+
+    if len(results) == 1:
+        res = results[0]
+        type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
+        type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
+        dandan_type = type_mapping.get(res.get('type'), "other")
+        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+
+        match = DandanMatchInfo(
+            episodeId=res['episodeId'],
+            animeId=res['animeId'],
+            animeTitle=res['animeTitle'],
+            episodeTitle=res['episodeTitle'],
+            type=dandan_type,
+            typeDescription=dandan_type_desc,
+        )
+        return DandanMatchResponse(success=True, isMatched=True, matches=[match])
+    
+    return DandanMatchResponse(success=False, isMatched=False)
+
+@implementation_router.post(
+    "/match",
+    response_model=DandanMatchResponse,
+    summary="[dandanplay兼容] 匹配单个文件"
+)
+async def match_single_file(
+    request: DandanBatchMatchRequestItem,
+    token: str = Depends(get_token_from_path),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """
+    通过文件名匹配弹幕库。此接口不使用文件Hash。
+    """
+    parsed_info = _parse_filename_for_match(request.fileName)
     if not parsed_info:
         return DandanMatchResponse(isMatched=False)
 
