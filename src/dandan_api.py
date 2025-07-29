@@ -9,8 +9,14 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, sta
 from . import crud, models
 from .database import get_db_pool
 
-dandan_router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# 这个子路由将包含所有接口的实际实现。
+# 它将被挂载到主路由的不同路径上。
+implementation_router = APIRouter()
+
+# 这是将包含在 main.py 中的主路由。
+dandan_router = APIRouter()
 
 class DandanResponseBase(BaseModel):
     """模仿 dandanplay API v2 的基础响应模型"""
@@ -177,7 +183,7 @@ async def get_token_from_path(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid API token")
     return token
 
-@dandan_router.get(
+@implementation_router.get(
     "/search/episodes",
     response_model=DandanSearchEpisodesResponse,
     summary="[dandanplay兼容] 搜索节目和分集"
@@ -195,7 +201,7 @@ async def search_episodes_for_dandan(
     search_term = anime.strip()
     return await _search_implementation(search_term, episode, pool)
 
-@dandan_router.get(
+@implementation_router.get(
     "/search/anime",
     response_model=DandanSearchEpisodesResponse,
     summary="[dandanplay兼容] 搜索节目和分集 (兼容路径)"
@@ -218,7 +224,7 @@ async def search_anime_for_dandan(
         )
     return await _search_implementation(search_term, episode, pool)
 
-@dandan_router.get(
+@implementation_router.get(
     "/bangumi/{anime_id}",
     response_model=BangumiDetailsResponse,
     summary="[dandanplay兼容] 获取番剧详情"
@@ -269,7 +275,7 @@ async def get_bangumi_details(
 
     return BangumiDetailsResponse(bangumi=bangumi_details)
 
-@dandan_router.get(
+@implementation_router.get(
     "/comment/{episode_id}",
     response_model=models.CommentResponse,
     summary="[dandanplay兼容] 获取弹幕"
@@ -286,3 +292,11 @@ async def get_comments_for_dandan(
     comments_data = await crud.fetch_comments(pool, episode_id)
     comments = [models.Comment(cid=item["cid"], p=item["p"], m=item["m"]) for item in comments_data]
     return models.CommentResponse(count=len(comments), comments=comments)
+
+# --- 路由挂载 ---
+# 将实现路由挂载到主路由上，以支持两种URL结构。
+
+# 1. 挂载以支持直接路径: /api/{token}/bangumi/{anime_id}
+dandan_router.include_router(implementation_router)
+# 2. 挂载以支持兼容路径: /api/{token}/api/v2/bangumi/{anime_id}
+dandan_router.include_router(implementation_router, prefix="/api/v2")
