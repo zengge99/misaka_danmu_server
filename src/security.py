@@ -22,14 +22,20 @@ def get_password_hash(password: str) -> str:
     """生成密码哈希"""
     return pwd_context.hash(password)
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+async def create_access_token(data: dict, pool: aiomysql.Pool, expires_delta: Optional[timedelta] = None):
     """创建JWT访问令牌"""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
+        to_encode.update({"exp": expire})
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt.access_token_expire_minutes)
-    to_encode.update({"exp": expire})
+        expire_minutes_str = await crud.get_config_value(pool, 'jwt_expire_minutes', str(settings.jwt.access_token_expire_minutes))
+        expire_minutes = int(expire_minutes_str)
+        # 如果有效期不为-1，则设置过期时间
+        if expire_minutes != -1:
+            expire = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
+            to_encode.update({"exp": expire})
+        # 如果是-1，则不添加 "exp" 字段，令牌将永不过期
     encoded_jwt = jwt.encode(to_encode, settings.jwt.secret_key, algorithm=settings.jwt.algorithm)
     return encoded_jwt
 

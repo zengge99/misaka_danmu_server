@@ -577,9 +577,8 @@ async def login_for_access_token(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token_expires = timedelta(minutes=settings.jwt.access_token_expire_minutes)
-    access_token = security.create_access_token(
-        data={"sub": user["username"]}, expires_delta=access_token_expires
+    access_token = await security.create_access_token(
+        data={"sub": user["username"]}, pool=pool
     )
     # 更新用户的登录信息
     await crud.update_user_login_info(pool, user["username"], access_token)
