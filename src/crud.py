@@ -506,7 +506,14 @@ async def set_cache(pool: aiomysql.Pool, key: str, value: Any, ttl_seconds: int,
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             json_value = json.dumps(value, ensure_ascii=False)
-            query = "INSERT INTO cache_data (cache_provider, cache_key, cache_value, expires_at) VALUES (%s, %s, %s, NOW() + INTERVAL %s SECOND) ON DUPLICATE KEY UPDATE cache_value = VALUES(cache_value), expires_at = VALUES(expires_at)"
+            query = """
+                INSERT INTO cache_data (cache_provider, cache_key, cache_value, expires_at) 
+                VALUES (%s, %s, %s, NOW() + INTERVAL %s SECOND) 
+                ON DUPLICATE KEY UPDATE 
+                    cache_provider = VALUES(cache_provider), 
+                    cache_value = VALUES(cache_value), 
+                    expires_at = VALUES(expires_at)
+            """
             await cursor.execute(query, (provider, key, json_value, ttl_seconds))
 
 async def update_config_value(pool: aiomysql.Pool, key: str, value: str):

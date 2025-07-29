@@ -275,12 +275,26 @@ async def init_db_tables(app: FastAPI):
                 """)
                 print("'episode' 表 'comment_count' 字段添加完成。")
 
-            # 迁移检查：anime_metadata 表的 imdb_id
-            await cursor.execute("SHOW COLUMNS FROM `anime_metadata` LIKE 'imdb_id'")
-            if not await cursor.fetchone():
-                print("检测到旧的 'anime_metadata' 表 schema，正在添加 'imdb_id' 字段...")
+            # 迁移检查：cache_data 表的 cache_provider。使用更健壮的 "try-except" 模式。
+            try:
+                await cursor.execute("ALTER TABLE `cache_data` ADD COLUMN `cache_provider` VARCHAR(50) NULL FIRST;")
+                print("'cache_data' 表 'cache_provider' 字段添加完成。")
+            except aiomysql.OperationalError as e:
+                # Error 1060: Duplicate column name. 表示字段已存在，这是预期的。
+                if e.args[0] == 1060:
+                    pass
+                else:
+                    raise
+
+            # 迁移检查：anime_metadata 表的 imdb_id。使用更健壮的 "try-except" 模式。
+            try:
                 await cursor.execute("ALTER TABLE `anime_metadata` ADD COLUMN `imdb_id` VARCHAR(50) NULL AFTER `tvdb_id`;")
                 print("'anime_metadata' 表 'imdb_id' 字段添加完成。")
+            except aiomysql.OperationalError as e:
+                if e.args[0] == 1060: # Duplicate column name
+                    pass
+                else:
+                    raise
 
             # 迁移检查：移除所有 created_at 和 fetched_at 的默认值
             tables_with_timestamps = ['anime', 'users', 'anime_sources', 'episode']
