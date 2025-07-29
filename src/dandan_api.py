@@ -19,8 +19,13 @@ class DandanResponseBase(BaseModel):
     errorMessage: Optional[str] = Field(None, description="错误信息")
 
 
-class DandanSearchAnimeDetails(BaseModel):
-    """dandanplay /search/anime 接口中的番剧信息模型"""
+class DandanEpisodeInfo(BaseModel):
+    """dandanplay /search/episodes 接口中的分集信息模型"""
+    episodeId: int
+    episodeTitle: str
+
+class DandanAnimeInfo(BaseModel):
+    """dandanplay /search/episodes 接口中的番剧信息模型"""
     animeId: int
     bangumiId: Optional[str] = ""
     animeTitle: str
@@ -31,10 +36,11 @@ class DandanSearchAnimeDetails(BaseModel):
     episodeCount: int
     rating: int = 0
     isFavorited: bool = False
+    episodes: List[DandanEpisodeInfo]
 
-class DandanSearchAnimeResponse(DandanResponseBase):
-    """dandanplay /search/anime 接口的响应模型"""
-    animes: List[DandanSearchAnimeDetails]
+class DandanSearchEpisodesResponse(DandanResponseBase):
+    hasMore: bool = False
+    animes: List[DandanAnimeInfo]
 
 
 async def get_token_from_path(
@@ -52,18 +58,19 @@ async def get_token_from_path(
     return token
 
 @dandan_router.get(
-    "/search/anime",
-    response_model=DandanSearchAnimeResponse,
-    summary="[dandanplay兼容] 搜索作品"
+    "/search/episodes",
+    response_model=DandanSearchEpisodesResponse,
+    summary="[dandanplay兼容] 搜索节目和分集"
 )
-async def search_anime_for_dandan(
+async def search_episodes_for_dandan(
     anime: str = Query(..., description="节目名称"),
+    episode: Optional[str] = Query(None, description="分集标题 (通常是数字)"),
     token: str = Depends(get_token_from_path),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
     """
-    模拟 dandanplay 的 /api/v2/search/anime 接口。
-    它会搜索 **本地弹幕库** 中的番剧信息。
+    模拟 dandanplay 的 /api/v2/search/episodes 接口。
+    它会搜索 **本地弹幕库** 中的番剧和分集信息。
     """
     search_term = anime.strip()
     if not search_term:
@@ -72,38 +79,50 @@ async def search_anime_for_dandan(
             detail="Missing required query parameter: 'anime'"
         )
 
-    db_results = await crud.search_animes_for_dandan(pool, search_term)
+    episode_number = int(episode) if episode and episode.isdigit() else None
     
-    animes = []
-    for res in db_results:
-        # 将我们的内部类型映射到dandanplay的类型
-        type_mapping = {
-            "tv_series": "tvseries",
-            "movie": "movie",
-            "ova": "ova",
-            "other": "其他"
-        }
-        type_desc_mapping = {
-            "tv_series": "TV动画",
-            "movie": "剧场版",
-            "ova": "OVA",
-            "other": "其他"
-        }
-        
-        dandan_type = type_mapping.get(res.get('type'), "other")
-        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+    flat_results = await crud.search_episodes_in_library(pool, search_term, episode_number)
 
-        animes.append(DandanSearchAnimeDetails(
-            animeId=res['animeId'],
-            animeTitle=res['animeTitle'],
-            type=dandan_type,
-            typeDescription=dandan_type_desc,
-            imageUrl=res.get('imageUrl'),
-            startDate=res.get('startDate'),
-            episodeCount=res.get('episodeCount', 0),
-        ))
+    grouped_animes: Dict[int, DandanAnimeInfo] = {}
+
+    for res in flat_results:
+        anime_id = res['animeId']
+        if anime_id not in grouped_animes:
+            type_mapping = {
+                "tv_series": "tvseries",
+                "movie": "movie",
+                "ova": "ova",
+                "other": "other"
+            }
+            type_desc_mapping = {
+                "tv_series": "TV动画",
+                "movie": "剧场版",
+                "ova": "OVA",
+                "other": "其他"
+            }
+            
+            dandan_type = type_mapping.get(res.get('type'), "other")
+            dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+
+            grouped_animes[anime_id] = DandanAnimeInfo(
+                animeId=anime_id,
+                animeTitle=res['animeTitle'],
+                type=dandan_type,
+                typeDescription=dandan_type_desc,
+                imageUrl=res.get('imageUrl'),
+                startDate=res.get('startDate'),
+                episodeCount=res.get('totalEpisodeCount', 0),
+                episodes=[]
+            )
+        
+        grouped_animes[anime_id].episodes.append(
+            DandanEpisodeInfo(
+                episodeId=res['episodeId'],
+                episodeTitle=res['episodeTitle']
+            )
+        )
     
-    return DandanSearchAnimeResponse(animes=animes)
+    return DandanSearchEpisodesResponse(animes=list(grouped_animes.values()))
 
 
 @dandan_router.get(
