@@ -162,6 +162,21 @@ async def init_db_tables(app: FastAPI):
               UNIQUE INDEX `idx_anime_provider_media_unique` (`anime_id` ASC, `provider_name` ASC, `media_id` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
+            # 创建 anime_metadata 扩展表
+            await cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `anime_metadata` (
+              `id` BIGINT NOT NULL AUTO_INCREMENT,
+              `anime_id` BIGINT NOT NULL,
+              `tmdb_id` VARCHAR(50) NULL,
+              `tmdb_episode_group_id` VARCHAR(50) NULL,
+              `imdb_id` VARCHAR(50) NULL,
+              `tvdb_id` VARCHAR(50) NULL,
+              `douban_id` VARCHAR(50) NULL,
+              `bangumi_id` VARCHAR(50) NULL,
+              PRIMARY KEY (`id`),
+              UNIQUE INDEX `idx_anime_id_unique` (`anime_id` ASC)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
             # 创建缓存配置表
             await cursor.execute("""
             CREATE TABLE IF NOT EXISTS `config` (
@@ -258,6 +273,13 @@ async def init_db_tables(app: FastAPI):
                     ALTER TABLE `episode` ADD COLUMN `comment_count` INT NOT NULL DEFAULT 0 AFTER `fetched_at`;
                 """)
                 print("'episode' 表 'comment_count' 字段添加完成。")
+
+            # 迁移检查：anime_metadata 表的 imdb_id
+            await cursor.execute("SHOW COLUMNS FROM `anime_metadata` LIKE 'imdb_id'")
+            if not await cursor.fetchone():
+                print("检测到旧的 'anime_metadata' 表 schema，正在添加 'imdb_id' 字段...")
+                await cursor.execute("ALTER TABLE `anime_metadata` ADD COLUMN `imdb_id` VARCHAR(50) NULL AFTER `tvdb_id`;")
+                print("'anime_metadata' 表 'imdb_id' 字段添加完成。")
 
             # 迁移检查：移除所有 created_at 和 fetched_at 的默认值
             tables_with_timestamps = ['anime', 'users', 'anime_sources', 'episode']

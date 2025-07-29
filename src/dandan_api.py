@@ -181,7 +181,7 @@ async def _search_implementation(
             dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
 
             grouped_animes[anime_id] = DandanAnimeInfo(
-                bangumiId=str(anime_id),
+                bangumiId=res.get('bangumiId') or f"A@{anime_id}",
                 animeId=anime_id,
                 animeTitle=res['animeTitle'],
                 type=dandan_type,
@@ -311,7 +311,7 @@ async def search_anime_for_dandan(
     summary="[dandanplay兼容] 获取番剧详情"
 )
 async def get_bangumi_details(
-    anime_id: int = Path(..., description="作品ID"),
+    identifier: str = Path(..., description="作品ID, A开头的备用ID, 或真实的Bangumi ID"),
     token: str = Depends(get_token_from_path),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
@@ -319,6 +319,18 @@ async def get_bangumi_details(
     模拟 dandanplay 的 /api/v2/bangumi/{bangumiId} 接口。
     返回数据库中存储的番剧详细信息。
     """
+    anime_id: Optional[int] = None
+    if identifier.startswith('A@') and identifier[2:].isdigit():
+        anime_id = int(identifier[2:])
+    elif identifier.isdigit():
+        anime_id = int(identifier)
+    else:
+        # 假定为真实的 bangumi_id
+        anime_id = await crud.get_anime_id_by_bangumi_id(pool, identifier)
+
+    if anime_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anime not found by identifier")
+
     details = await crud.get_anime_details_for_dandan(pool, anime_id)
     if not details:
         raise HTTPException(
@@ -342,8 +354,11 @@ async def get_bangumi_details(
         ) for ep in episodes_data
     ]
 
+    bangumi_id_str = anime_data.get('bangumiId') or f"A@{anime_data['animeId']}"
+
     bangumi_details = BangumiDetails(
         animeId=anime_data['animeId'],
+        bangumiId=bangumi_id_str,
         animeTitle=anime_data['animeTitle'],
         imageUrl=anime_data.get('imageUrl'),
         searchKeyword=anime_data['animeTitle'],

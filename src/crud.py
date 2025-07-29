@@ -60,10 +60,12 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
             a.created_at AS startDate,
             e.id AS episodeId,
             e.title AS episodeTitle,
-            (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as totalEpisodeCount
+            (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as totalEpisodeCount,
+            m.bangumi_id AS bangumiId
         FROM episode e
         JOIN anime_sources s ON e.source_id = s.id
         JOIN anime a ON s.anime_id = a.id
+        LEFT JOIN anime_metadata m ON a.id = m.anime_id
         WHERE {{title_condition}} {episode_condition}
         ORDER BY a.id, e.episode_index
     """
@@ -96,8 +98,10 @@ async def get_anime_details_for_dandan(pool: aiomysql.Pool, anime_id: int) -> Op
                     a.image_url AS imageUrl,
                     a.created_at AS startDate,
                     a.source_url AS bangumiUrl,
-                    (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as episodeCount
+                    (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as episodeCount,
+                    m.bangumi_id AS bangumiId
                 FROM anime a
+                LEFT JOIN anime_metadata m ON a.id = m.anime_id
                 WHERE a.id = %s
             """, (anime_id,))
             anime_details = await cursor.fetchone()
@@ -132,6 +136,14 @@ async def get_anime_details_for_dandan(pool: aiomysql.Pool, anime_id: int) -> Op
 
             # 3. 返回整合后的数据
             return {"anime": anime_details, "episodes": episodes}
+
+async def get_anime_id_by_bangumi_id(pool: aiomysql.Pool, bangumi_id: str) -> Optional[int]:
+    """通过 bangumi_id 查找 anime_id。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT anime_id FROM anime_metadata WHERE bangumi_id = %s", (bangumi_id,))
+            result = await cursor.fetchone()
+            return result[0] if result else None
 
 async def find_anime_by_title(pool: aiomysql.Pool, title: str) -> Optional[Dict[str, Any]]:
     """通过标题精确查找番剧"""

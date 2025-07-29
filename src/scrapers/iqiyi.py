@@ -61,7 +61,7 @@ class IqiyiSearchResult(BaseModel):
     data: IqiyiSearchDoc
 
 class IqiyiHtmlAlbumInfo(BaseModel):
-    video_count: int = Field(alias="videoCount")
+    video_count: Optional[int] = Field(None, alias="videoCount")
 
 class IqiyiHtmlVideoInfo(BaseModel):
     album_id: int = Field(alias="albumQipuId")
@@ -215,8 +215,9 @@ class IqiyiScraper(BaseScraper):
                         if brace_count == 0:
                             json_str = html[brace_start_index:i]
                             album_info_data = json.loads(json_str)
-                            album_info = IqiyiHtmlAlbumInfo.model_validate(album_info_data)
-                            video_info.video_count = album_info.video_count
+                            album_info = IqiyiHtmlAlbumInfo.model_validate(album_info_data) # 即使是 {} 也能验证通过
+                            if album_info.video_count is not None:
+                                video_info.video_count = album_info.video_count
                 except (json.JSONDecodeError, ValidationError) as e:
                     log_str = json_str[:200] if json_str else "N/A"
                     self.logger.error(f"爱奇艺: 解析或验证 albumInfo 失败: {e}. 提取的字符串(前200字符): {log_str}")
