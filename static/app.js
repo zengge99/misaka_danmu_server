@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         try {
-            const user = await apiFetch('/api/v2/auth/users/me');
+            const user = await apiFetch('/api/ui/auth/users/me');
             if (!user || !user.username) {
                 throw new Error('未能获取到有效的用户信息。');
             }
@@ -148,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function refreshServerLogs() {
         if (!token || !logOutput) return;
         try {
-            const logs = await apiFetch('/api/v2/logs');
+            const logs = await apiFetch('/api/ui/logs');
             logOutput.textContent = logs.join('\n');
         } catch (error) {
             console.error("刷新日志失败:", error.message);
@@ -159,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadAndRenderTasks() {
         if (!token || taskManagerView.classList.contains('hidden')) return;
         try {
-            const tasks = await apiFetch('/api/v2/tasks');
+            const tasks = await apiFetch('/api/ui/tasks');
             renderTasks(tasks);
         } catch (error) {
             console.error("刷新日志失败:", error.message);
@@ -237,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = document.getElementById('register-password').value;
 
         try {
-            await apiFetch('/api/v2/auth/register', {
+            await apiFetch('/api/ui/auth/register', {
                 method: 'POST',
                 body: JSON.stringify({ username, password }),
             });
@@ -260,7 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('password', password);
 
         try {
-            const response = await fetch('/api/v2/auth/token', {
+            const response = await fetch('/api/ui/auth/token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: formData,
@@ -322,7 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleLoader(true);
 
         try {
-            const data = await apiFetch(`/api/v2/search/provider?keyword=${encodeURIComponent(keyword)}`);
+            const data = await apiFetch(`/api/ui/search/provider?keyword=${encodeURIComponent(keyword)}`);
             displayResults(data.results);
         } catch (error) {
             alert(`搜索失败: ${(error.message || error)}`);
@@ -353,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            await apiFetch('/api/v2/auth/users/me/password', {
+            await apiFetch('/api/ui/auth/users/me/password', {
                 method: 'PUT',
                 body: JSON.stringify({
                     old_password: oldPassword,
@@ -404,7 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             saveSourcesBtn.disabled = true;
             saveSourcesBtn.textContent = '保存中...';
-            await apiFetch('/api/v2/scrapers', {
+            await apiFetch('/api/ui/scrapers', {
                 method: 'PUT',
                 body: JSON.stringify(settingsToSave),
             });
@@ -446,7 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
         saveButton.textContent = '保存中...';
 
         try {
-            await apiFetch(`/api/v2/library/anime/${animeId}`, {
+            await apiFetch(`/api/ui/library/anime/${animeId}`, {
                 method: 'PUT',
                 body: JSON.stringify({ title: newTitle, season: newSeason }),
             });
@@ -478,7 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
         saveButton.textContent = '保存中...';
 
         try {
-            await apiFetch(`/api/v2/library/episode/${episodeId}`, {
+            await apiFetch(`/api/ui/library/episode/${episodeId}`, {
                 method: 'PUT',
                 body: JSON.stringify({
                     title: newTitle,
@@ -510,7 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
         saveButton.textContent = '保存中...';
 
         try {
-            await apiFetch('/api/v2/tokens', {
+            await apiFetch('/api/ui/tokens', {
                 method: 'POST',
                 body: JSON.stringify({ name: name }),
             });
@@ -662,7 +662,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 importBtn.disabled = true;
                 importBtn.textContent = '导入中...';
                 try {
-                    const data = await apiFetch('/api/v2/import', {
+                    const data = await apiFetch('/api/ui/import', {
                         method: 'POST',
                         body: JSON.stringify({
                             provider: item.provider,
@@ -692,7 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!libraryTableBody) return;
         libraryTableBody.innerHTML = '<tr><td colspan="7">加载中...</td></tr>';
         try {
-            const data = await apiFetch('/api/v2/library');
+            const data = await apiFetch('/api/ui/library');
             renderLibrary(data.animes);
         } catch (error) {
             libraryTableBody.innerHTML = `<tr><td colspan="7" class="error">加载失败: ${(error.message || error)}</td></tr>`;
@@ -739,7 +739,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!sourcesList) return;
         sourcesList.innerHTML = '<li>加载中...</li>';
         try {
-            const settings = await apiFetch('/api/v2/scrapers');
+            const settings = await apiFetch('/api/ui/scrapers');
             renderScraperSettings(settings);
         } catch (error) {
             sourcesList.innerHTML = `<li class="error">加载失败: ${(error.message || error)}</li>`;
@@ -776,11 +776,11 @@ document.addEventListener('DOMContentLoaded', () => {
         animeDetailView.innerHTML = '<div>加载中...</div>';
 
         try {
-            const fullLibrary = await apiFetch('/api/v2/library');
+            const fullLibrary = await apiFetch('/api/ui/library');
             const anime = fullLibrary.animes.find(a => a.animeId === animeId);
             if (!anime) throw new Error("找不到该作品的信息。");
 
-            const sources = await apiFetch(`/api/v2/library/anime/${animeId}/sources`);
+            const sources = await apiFetch(`/api/ui/library/anime/${animeId}/sources`);
             
             renderAnimeDetailView(anime, sources);
 
@@ -848,7 +848,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function refreshSource(sourceId, title) {
         if (confirm(`您确定要为 '${title}' 的这个数据源执行全量刷新吗？`)) {
-            apiFetch(`/api/v2/library/source/${sourceId}/refresh`, {
+            apiFetch(`/api/ui/library/source/${sourceId}/refresh`, {
                 method: 'POST',
             }).then(response => {
                 alert(response.message || "刷新任务已开始，请在日志中查看进度。");
@@ -877,7 +877,7 @@ document.addEventListener('DOMContentLoaded', () => {
         episodeListView.innerHTML = '<div>加载中...</div>';
 
         try {
-            const episodes = await apiFetch(`/api/v2/library/source/${sourceId}/episodes`);
+            const episodes = await apiFetch(`/api/ui/library/source/${sourceId}/episodes`);
             renderEpisodeListView(sourceId, animeTitle, episodes, animeId);
         } catch (error) {
             episodeListView.innerHTML = `<div class="error">加载分集列表失败: ${(error.message || error)}</div>`;
@@ -964,7 +964,7 @@ document.addEventListener('DOMContentLoaded', () => {
         danmakuListView.innerHTML = '<div>加载中...</div>';
 
         try {
-            const data = await apiFetch(`/api/v2/comment/${episodeId}`);
+            const data = await apiFetch(`/api/ui/comment/${episodeId}`);
             renderDanmakuListView(episodeId, episodeTitle, sourceId, animeTitle, animeId, data.comments);
         } catch (error) {
             danmakuListView.innerHTML = `<div class="error">加载弹幕失败: ${(error.message || error)}</div>`;
@@ -1000,7 +1000,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!tokenTableBody) return;
         tokenTableBody.innerHTML = '<tr><td colspan="5">加载中...</td></tr>';
         try {
-            const tokens = await apiFetch('/api/v2/tokens');
+            const tokens = await apiFetch('/api/ui/tokens');
             renderTokens(tokens);
         } catch (error) {
             tokenTableBody.innerHTML = `<tr><td colspan="5" class="error">加载失败: ${(error.message || error)}</td></tr>`;
@@ -1075,7 +1075,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (action === 'delete') {
             if (confirm(`您确定要删除番剧 '${title}' 吗？\n此操作将删除其所有分集和弹幕，且不可恢复。`)) {
-                apiFetch(`/api/v2/library/anime/${animeId}`, {
+                apiFetch(`/api/ui/library/anime/${animeId}`, {
                     method: 'DELETE',
                 }).then(() => {
                     loadLibrary();
@@ -1108,7 +1108,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (action === 'delete') {
             if (confirm(`您确定要删除分集 '${title}' 吗？\n此操作将删除该分集及其所有弹幕，且不可恢复。`)) {
-                apiFetch(`/api/v2/library/episode/${episodeId}`, {
+                apiFetch(`/api/ui/library/episode/${episodeId}`, {
                     method: 'DELETE',
                 }).then(() => {
                     if (row) row.remove();
@@ -1123,7 +1123,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showEditEpisodeView(episodeId, title, episodeIndex, sourceUrl, sourceId, animeTitle, animeId);
         } else if (action === 'refresh') {
             if (confirm(`您确定要刷新分集 '${title}' 的弹幕吗？\n这将清空现有弹幕并从源重新获取。`)) {
-                apiFetch(`/api/v2/library/episode/${episodeId}/refresh`, { method: 'POST' })
+                apiFetch(`/api/ui/library/episode/${episodeId}/refresh`, { method: 'POST' })
                     .then(response => alert(response.message || "刷新任务已开始。"))
                     .catch(error => alert(`启动刷新任务失败: ${(error.message || error)}`));
             }
@@ -1146,7 +1146,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.handleTokenAction = async (action, tokenId) => {
         if (action === 'toggle') {
             try {
-                await apiFetch(`/api/v2/tokens/${tokenId}/toggle`, { method: 'PUT' });
+                await apiFetch(`/api/ui/tokens/${tokenId}/toggle`, { method: 'PUT' });
                 loadAndRenderTokens();
             } catch (error) {
                 alert(`操作失败: ${error.message}`);
@@ -1154,7 +1154,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (action === 'delete') {
             if (confirm("您确定要删除这个Token吗？此操作不可恢复。")) {
                 try {
-                    await apiFetch(`/api/v2/tokens/${tokenId}`, { method: 'DELETE' });
+                    await apiFetch(`/api/ui/tokens/${tokenId}`, { method: 'DELETE' });
                     loadAndRenderTokens();
                 } catch (error) {
                     alert(`删除失败: ${error.message}`);

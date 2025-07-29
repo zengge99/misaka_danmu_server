@@ -71,8 +71,8 @@ async def shutdown_event():
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 包含 v2 版本的 API 路由
-app.include_router(v2_router, prefix="/api/v2", tags=["Web UI API"])
-app.include_router(auth_router, prefix="/api/v2/auth", tags=["Auth"])
+app.include_router(v2_router, prefix="/api/ui", tags=["Web UI API"])
+app.include_router(auth_router, prefix="/api/ui/auth", tags=["Auth"])
 app.include_router(dandan_router, prefix="/api/{token}", tags=["DanDanPlay Compatible"])
 
 # 根路径返回前端页面

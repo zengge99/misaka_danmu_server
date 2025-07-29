@@ -12,7 +12,7 @@ from .config import settings
 from .database import get_db_pool
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v2/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/ui/auth/token")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """验证密码"""
