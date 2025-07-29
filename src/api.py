@@ -550,21 +550,6 @@ async def import_from_provider(
 
     return {"message": f"'{request_data.anime_title}' 的导入任务已提交。请在任务管理器中查看进度。", "task_id": task_id}
 
-@auth_router.post("/register", response_model=models.User, status_code=status.HTTP_201_CREATED, summary="注册新用户")
-async def register_user(
-    user: models.UserCreate,
-    pool: aiomysql.Pool = Depends(get_db_pool)
-):
-    db_user = await crud.get_user_by_username(pool, user.username)
-    if db_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered"
-        )
-    user_id = await crud.create_user(pool, user)
-    return {"id": user_id, "username": user.username}
-
-
 @auth_router.post("/token", response_model=models.Token, summary="用户登录获取令牌")
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),

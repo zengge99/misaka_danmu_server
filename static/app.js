@@ -2,9 +2,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Element Selectors ---
     const authView = document.getElementById('auth-view');
     const loginForm = document.getElementById('login-form');
-    const registerForm = document.getElementById('register-form');
-    const showRegisterLink = document.getElementById('show-register-link');
-    const showLoginLink = document.getElementById('show-login-link');
     const authError = document.getElementById('auth-error');
 
     const mainView = document.getElementById('main-view');
@@ -172,23 +169,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Event Listeners Setup ---
     function setupEventListeners() {
         // ... (其他监听器保持不变)
-        // Auth Form Switching
-        showRegisterLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            loginForm.classList.add('hidden');
-            registerForm.classList.remove('hidden');
-            authError.textContent = '';
-        });
-
-        showLoginLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            registerForm.classList.add('hidden');
-            loginForm.classList.remove('hidden');
-            authError.textContent = '';
-        });
 
         // Forms
-        registerForm.addEventListener('submit', handleRegister);
         loginForm.addEventListener('submit', handleLogin);
         searchForm.addEventListener('submit', handleSearch);
         changePasswordForm.addEventListener('submit', handleChangePassword);
@@ -233,25 +215,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Event Handlers ---
-
-    async function handleRegister(e) {
-        e.preventDefault();
-        authError.textContent = '';
-        const username = document.getElementById('register-username').value;
-        const password = document.getElementById('register-password').value;
-
-        try {
-            await apiFetch('/api/ui/auth/register', {
-                method: 'POST',
-                body: JSON.stringify({ username, password }),
-            });
-            alert(`用户 '${username}' 注册成功，请登录。`);
-            registerForm.reset();
-            showLoginLink.click();
-        } catch (error) {
-            authError.textContent = `注册失败: ${(error.message || error)}`;
-        }
-    }
 
     async function handleLogin(e) {
         e.preventDefault();
@@ -1069,7 +1032,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tokenCell.appendChild(tokenSpan);
 
             const statusCell = row.insertCell();
-            statusCell.textContent = token.is_enabled ? '已启用' : '已禁用';
+            statusCell.textContent = token.is_enabled ? '✅' : '❌';
             statusCell.className = token.is_enabled ? 'token-status' : 'token-status disabled';
 
             row.insertCell().textContent = new Date(token.created_at).toLocaleString();

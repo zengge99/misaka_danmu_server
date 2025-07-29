@@ -181,7 +181,7 @@ async def _search_implementation(
             dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
 
             grouped_animes[anime_id] = DandanAnimeInfo(
-                bangumiId=res.get('bangumiId') or f"A@{anime_id}",
+                bangumiId=res.get('bangumiId') or f"A{anime_id}",
                 animeId=anime_id,
                 animeTitle=res['animeTitle'],
                 type=dandan_type,
@@ -320,8 +320,8 @@ async def get_bangumi_details(
     返回数据库中存储的番剧详细信息。
     """
     anime_id: Optional[int] = None
-    if identifier.startswith('A@') and identifier[2:].isdigit():
-        anime_id = int(identifier[2:])
+    if identifier.startswith('A') and identifier[1:].isdigit():
+        anime_id = int(identifier[1:])
     elif identifier.isdigit():
         anime_id = int(identifier)
     else:
@@ -354,7 +354,7 @@ async def get_bangumi_details(
         ) for ep in episodes_data
     ]
 
-    bangumi_id_str = anime_data.get('bangumiId') or f"A@{anime_data['animeId']}"
+    bangumi_id_str = anime_data.get('bangumiId') or f"A{anime_data['animeId']}"
 
     bangumi_details = BangumiDetails(
         animeId=anime_data['animeId'],
