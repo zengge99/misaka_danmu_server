@@ -38,29 +38,41 @@ async def search_anime(pool: aiomysql.Pool, keyword: str) -> List[Dict[str, Any]
             await cursor.execute(query, (keyword + '*',))
             return await cursor.fetchall()
 
-async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, episode_number: int) -> List[Dict[str, Any]]:
+async def search_animes_for_dandan(pool: aiomysql.Pool, keyword: str) -> List[Dict[str, Any]]:
     """
-    在本地库中通过番剧标题和集数搜索匹配的分集。
+    在本地库中通过番剧标题搜索匹配的番剧。
+    返回一个扁平化的番剧列表，包含番剧信息。
     """
+    clean_title = keyword.strip()
+    if not clean_title:
+        return []
+
+    query_template = """
+        SELECT
+            a.id AS animeId,
+            a.title AS animeTitle,
+            a.type,
+            a.image_url AS imageUrl,
+            a.created_at AS startDate,
+            (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as episodeCount
+        FROM anime a
+        WHERE {title_condition}
+        ORDER BY a.id
+    """
+
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            # 使用 JOIN 查询来直接匹配
-            # MATCH...AGAINST 用于模糊匹配标题
-            query = """
-                SELECT
-                    a.id AS animeId,
-                    a.title AS animeTitle,
-                    e.id AS episodeId,
-                    e.title AS episodeTitle,
-                    a.type AS type
-                FROM episode e
-                JOIN anime_sources s ON e.source_id = s.id
-                JOIN anime a ON s.anime_id = a.id
-                WHERE
-                    MATCH(a.title) AGAINST(%s IN BOOLEAN MODE)
-                    AND e.episode_index = %s
-            """
-            await cursor.execute(query, (anime_title + '*', episode_number))
+            # 1. 优先尝试 FULLTEXT 搜索
+            query_ft = query_template.format(title_condition="MATCH(a.title) AGAINST(%s IN BOOLEAN MODE)")
+            await cursor.execute(query_ft, (clean_title + '*',))
+            results = await cursor.fetchall()
+            if results:
+                return results
+
+            # 2. 如果 FULLTEXT 没有结果，回退到 LIKE 搜索
+            logging.info(f"FULLTEXT search for '{clean_title}' yielded no results, falling back to LIKE search.")
+            query_like = query_template.format(title_condition="a.title LIKE %s")
+            await cursor.execute(query_like, (f"%{clean_title}%",))
             return await cursor.fetchall()
 
 async def find_anime_by_title(pool: aiomysql.Pool, title: str) -> Optional[Dict[str, Any]]:
