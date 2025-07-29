@@ -151,7 +151,7 @@ async def get_all_anime_paginated(pool: aiomysql.Pool, page: int, page_size: int
                     a.created_at AS startDate,
                     a.source_url AS bangumiUrl,
                     (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as episodeCount
-                FROM anime
+                FROM anime a
                 ORDER BY created_at DESC
                 LIMIT %s OFFSET %s
             """
