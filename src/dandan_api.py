@@ -120,6 +120,13 @@ class BangumiDetails(BangumiIntro):
 class BangumiDetailsResponse(DandanResponseBase):
     bangumi: Optional[BangumiDetails] = None
 
+class PaginatedBangumiListResponse(DandanResponseBase):
+    """用于 /bangumi/ 接口的响应模型，包含分页信息"""
+    bangumiList: List[BangumiIntro]
+    total: int
+    page: int
+    pageSize: int
+
 
 async def _search_implementation(
     search_term: str,
@@ -223,6 +230,42 @@ async def search_anime_for_dandan(
             detail="Missing required query parameter: 'keyword' or 'anime'"
         )
     return await _search_implementation(search_term, episode, pool)
+
+@implementation_router.get(
+    "/bangumi/",
+    response_model=PaginatedBangumiListResponse,
+    summary="[dandanplay兼容] 获取所有番剧列表（分页）"
+)
+async def get_all_bangumi(
+    page: int = Query(1, ge=1, description="页码"),
+    pageSize: int = Query(20, ge=1, le=100, description="每页数量"),
+    token: str = Depends(get_token_from_path),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """
+    获取媒体库中所有番剧的列表，支持分页。
+    这是为了兼容某些客户端对 /bangumi/ 的请求。
+    """
+    paginated_data = await crud.get_all_anime_paginated(pool, page, pageSize)
+    
+    bangumi_list = []
+    for anime_data in paginated_data['animes']:
+        bangumi_list.append(
+            BangumiIntro(
+                animeId=anime_data['animeId'],
+                animeTitle=anime_data['animeTitle'],
+                imageUrl=anime_data.get('imageUrl'),
+                searchKeyword=anime_data['animeTitle']
+                # Other fields will use default values from the model
+            )
+        )
+
+    return PaginatedBangumiListResponse(
+        bangumiList=bangumi_list,
+        total=paginated_data['total'],
+        page=page,
+        pageSize=pageSize
+    )
 
 @implementation_router.get(
     "/bangumi/{anime_id}",

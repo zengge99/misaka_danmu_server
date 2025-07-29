@@ -132,6 +132,31 @@ async def get_anime_details_for_dandan(pool: aiomysql.Pool, anime_id: int) -> Op
             # 3. 返回整合后的数据
             return {"anime": anime_details, "episodes": episodes}
 
+async def get_all_anime_paginated(pool: aiomysql.Pool, page: int, page_size: int) -> Dict[str, Any]:
+    """获取所有番剧，分页。"""
+    offset = (page - 1) * page_size
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            # Get total count
+            await cursor.execute("SELECT COUNT(*) as total FROM anime")
+            total_count = (await cursor.fetchone())['total']
+
+            # Get paginated data
+            query = """
+                SELECT
+                    id as animeId,
+                    title as animeTitle,
+                    image_url as imageUrl,
+                    type
+                FROM anime
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+            """
+            await cursor.execute(query, (page_size, offset))
+            animes = await cursor.fetchall()
+            
+            return {"total": total_count, "animes": animes}
+
 async def find_anime_by_title(pool: aiomysql.Pool, title: str) -> Optional[Dict[str, Any]]:
     """通过标题精确查找番剧"""
     async with pool.acquire() as conn:
