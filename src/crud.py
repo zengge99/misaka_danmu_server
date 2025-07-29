@@ -165,7 +165,7 @@ async def fetch_comments(pool: aiomysql.Pool, episode_id: int) -> List[Dict[str,
     """获取指定分集的所有弹幕"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            query = "SELECT cid, p, m FROM comment WHERE episode_id = %s"
+            query = "SELECT id as cid, p, m FROM comment WHERE episode_id = %s"
             await cursor.execute(query, (episode_id,))
             return await cursor.fetchall()
 

@@ -34,8 +34,7 @@ class MatchResponse(BaseModel):
 
 # Comment 模块模型
 class Comment(BaseModel):
-    # 注意：官方文档定义 cid 为 int64，但为兼容各爬虫源，此处使用 str。
-    cid: str = Field(..., description="弹幕ID")
+    cid: int = Field(..., description="弹幕ID (数据库主键)")
     p: str = Field(..., description="弹幕参数: time,mode,color,source")
     m: str = Field(..., description="弹幕内容")
 
