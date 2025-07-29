@@ -105,30 +105,31 @@ async def get_anime_details_for_dandan(pool: aiomysql.Pool, anime_id: int) -> Op
             if not anime_details:
                 return None
 
-        episodes = []
-        # 根据番剧类型决定如何获取“分集”列表
-        if anime_details['type'] == 'movie':
-            # 对于电影，我们将每个数据源视为一个“分集”
-            await cursor.execute("""
-                SELECT
-                    e.id AS episodeId,
-                    CONCAT(s.provider_name, ' 源') AS episodeTitle,
-                    s.id AS episodeNumber
-                FROM anime_sources s
-                JOIN episode e ON s.id = e.source_id
-                WHERE s.anime_id = %s
-                ORDER BY s.provider_name
-            """, (anime_id,))
-            episodes = await cursor.fetchall()
-        else:
-            # 对于电视剧，正常获取分集列表
-            await cursor.execute("""
-                SELECT e.id AS episodeId, e.title AS episodeTitle, e.episode_index AS episodeNumber
-                FROM episode e JOIN anime_sources s ON e.source_id = s.id
-                WHERE s.anime_id = %s ORDER BY e.episode_index ASC
-            """, (anime_id,))
-            episodes = await cursor.fetchall()
+            episodes = []
+            # 2. 根据番剧类型决定如何获取“分集”列表
+            if anime_details['type'] == 'movie':
+                # 对于电影，我们将每个数据源视为一个“分集”
+                await cursor.execute("""
+                    SELECT
+                        e.id AS episodeId,
+                        CONCAT(s.provider_name, ' 源') AS episodeTitle,
+                        s.id AS episodeNumber
+                    FROM anime_sources s
+                    JOIN episode e ON s.id = e.source_id
+                    WHERE s.anime_id = %s
+                    ORDER BY s.provider_name
+                """, (anime_id,))
+                episodes = await cursor.fetchall()
+            else:
+                # 对于电视剧，正常获取分集列表
+                await cursor.execute("""
+                    SELECT e.id AS episodeId, e.title AS episodeTitle, e.episode_index AS episodeNumber
+                    FROM episode e JOIN anime_sources s ON e.source_id = s.id
+                    WHERE s.anime_id = %s ORDER BY e.episode_index ASC
+                """, (anime_id,))
+                episodes = await cursor.fetchall()
 
+            # 3. 返回整合后的数据
             return {"anime": anime_details, "episodes": episodes}
 
 async def find_anime_by_title(pool: aiomysql.Pool, title: str) -> Optional[Dict[str, Any]]:
