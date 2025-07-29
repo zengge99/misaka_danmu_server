@@ -43,6 +43,54 @@ class DandanSearchEpisodesResponse(DandanResponseBase):
     animes: List[DandanAnimeInfo]
 
 
+async def _search_implementation(
+    search_term: str,
+    episode: Optional[str],
+    pool: aiomysql.Pool
+) -> DandanSearchEpisodesResponse:
+    """搜索接口的通用实现，避免代码重复。"""
+    search_term = search_term.strip()
+    if not search_term:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Missing required query parameter: 'anime' or 'keyword'"
+        )
+
+    episode_number = int(episode) if episode and episode.isdigit() else None
+    
+    flat_results = await crud.search_episodes_in_library(pool, search_term, episode_number)
+
+    grouped_animes: Dict[int, DandanAnimeInfo] = {}
+
+    for res in flat_results:
+        anime_id = res['animeId']
+        if anime_id not in grouped_animes:
+            type_mapping = {
+                "tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"
+            }
+            type_desc_mapping = {
+                "tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"
+            }
+            dandan_type = type_mapping.get(res.get('type'), "other")
+            dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+
+            grouped_animes[anime_id] = DandanAnimeInfo(
+                animeId=anime_id,
+                animeTitle=res['animeTitle'],
+                type=dandan_type,
+                typeDescription=dandan_type_desc,
+                imageUrl=res.get('imageUrl'),
+                startDate=res.get('startDate'),
+                episodeCount=res.get('totalEpisodeCount', 0),
+                episodes=[]
+            )
+        
+        grouped_animes[anime_id].episodes.append(
+            DandanEpisodeInfo(episodeId=res['episodeId'], episodeTitle=res['episodeTitle'])
+        )
+    
+    return DandanSearchEpisodesResponse(animes=list(grouped_animes.values()))
+
 async def get_token_from_path(
     token: str = Path(..., description="路径中的API授权令牌"),
     pool: aiomysql.Pool = Depends(get_db_pool)
@@ -73,56 +121,30 @@ async def search_episodes_for_dandan(
     它会搜索 **本地弹幕库** 中的番剧和分集信息。
     """
     search_term = anime.strip()
+    return await _search_implementation(search_term, episode, pool)
+
+@dandan_router.get(
+    "/search/anime",
+    response_model=DandanSearchEpisodesResponse,
+    summary="[dandanplay兼容] 搜索节目和分集 (兼容路径)"
+)
+async def search_anime_for_dandan(
+    keyword: Optional[str] = Query(None, description="节目名称 (兼容 keyword)"),
+    anime: Optional[str] = Query(None, description="节目名称 (兼容 anime)"),
+    episode: Optional[str] = Query(None, description="分集标题 (通常是数字)"),
+    token: str = Depends(get_token_from_path),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """
+    模拟 dandanplay 的搜索接口，兼容 /search/anime 路径。
+    """
+    search_term = keyword or anime
     if not search_term:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Missing required query parameter: 'anime'"
+            detail="Missing required query parameter: 'keyword' or 'anime'"
         )
-
-    episode_number = int(episode) if episode and episode.isdigit() else None
-    
-    flat_results = await crud.search_episodes_in_library(pool, search_term, episode_number)
-
-    grouped_animes: Dict[int, DandanAnimeInfo] = {}
-
-    for res in flat_results:
-        anime_id = res['animeId']
-        if anime_id not in grouped_animes:
-            type_mapping = {
-                "tv_series": "tvseries",
-                "movie": "movie",
-                "ova": "ova",
-                "other": "other"
-            }
-            type_desc_mapping = {
-                "tv_series": "TV动画",
-                "movie": "剧场版",
-                "ova": "OVA",
-                "other": "其他"
-            }
-            
-            dandan_type = type_mapping.get(res.get('type'), "other")
-            dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
-
-            grouped_animes[anime_id] = DandanAnimeInfo(
-                animeId=anime_id,
-                animeTitle=res['animeTitle'],
-                type=dandan_type,
-                typeDescription=dandan_type_desc,
-                imageUrl=res.get('imageUrl'),
-                startDate=res.get('startDate'),
-                episodeCount=res.get('totalEpisodeCount', 0),
-                episodes=[]
-            )
-        
-        grouped_animes[anime_id].episodes.append(
-            DandanEpisodeInfo(
-                episodeId=res['episodeId'],
-                episodeTitle=res['episodeTitle']
-            )
-        )
-    
-    return DandanSearchEpisodesResponse(animes=list(grouped_animes.values()))
+    return await _search_implementation(search_term, episode, pool)
 
 
 @dandan_router.get(
