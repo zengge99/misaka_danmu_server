@@ -375,7 +375,7 @@ async def match_single_file(
     return DandanMatchResponse(isMatched=is_matched, matches=matches)
 
 
-async def _process_single_batch_match(item: DandanBatchRequestItem, pool: aiomysql.Pool) -> DandanMatchResponse:
+async def _process_single_batch_match(item: DandanBatchMatchRequestItem, pool: aiomysql.Pool) -> DandanMatchResponse:
     """处理批量匹配中的单个文件，仅在精确匹配（1个结果）时返回成功。"""
     parsed_info = _parse_filename_for_match(item.fileName)
     if not parsed_info:
