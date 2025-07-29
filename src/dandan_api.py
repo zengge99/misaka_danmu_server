@@ -181,6 +181,7 @@ async def _search_implementation(
             dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
 
             grouped_animes[anime_id] = DandanAnimeInfo(
+                bangumiId=str(anime_id),
                 animeId=anime_id,
                 animeTitle=res['animeTitle'],
                 type=dandan_type,
@@ -224,6 +225,28 @@ def _parse_filename_for_match(filename: str) -> Optional[Dict[str, Any]]:
                 "title": title,
                 "episode": int(data["episode"]),
             }
+    
+    # 如果以上模式都未匹配，则假定为电影或单文件视频
+    # 1. 移除文件扩展名
+    title_part = filename
+    if '.' in filename:
+        title_part = filename.rsplit('.', 1)[0]
+    
+    # 2. 移除括号内的常见标签
+    cleaned_title = re.sub(r'\[.*?\]|\(.*?\)|\【.*?\】', '', title_part).strip()
+    
+    # 3. 移除常见质量和编码标签
+    cleaned_title = re.sub(r'1080p|720p|4k|bluray|x264|x265|aac|flac|web-dl', '', cleaned_title, flags=re.IGNORECASE).strip()
+    
+    # 4. 将分隔符替换为空格并清理
+    cleaned_title = cleaned_title.replace("_", " ").replace(".", " ").strip()
+    
+    if cleaned_title:
+        return {
+            "title": cleaned_title,
+            "episode": 1, # 对电影或单文件，默认匹配第1集
+        }
+
     return None
 
 
@@ -333,45 +356,6 @@ async def get_bangumi_details(
 
     return BangumiDetailsResponse(bangumi=bangumi_details)
 
-@implementation_router.get(
-    "/match",
-    response_model=DandanMatchResponse,
-    summary="[dandanplay兼容] 匹配单个文件"
-)
-async def match_single_file(
-    request: DandanBatchMatchRequestItem,
-    token: str = Depends(get_token_from_path),
-    pool: aiomysql.Pool = Depends(get_db_pool)
-):
-    """
-    通过文件名匹配弹幕库。此接口不使用文件Hash。
-    """
-    parsed_info = _parse_filename_for_match(request.fileName)
-    if not parsed_info:
-        return DandanMatchResponse(isMatched=False)
-
-    results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"])
-    
-    matches = []
-    for res in results:
-        type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
-        type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
-        dandan_type = type_mapping.get(res.get('type'), "other")
-        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
-
-        matches.append(DandanMatchInfo(
-            episodeId=res['episodeId'],
-            animeId=res['animeId'],
-            animeTitle=res['animeTitle'],
-            episodeTitle=res['episodeTitle'],
-            type=dandan_type,
-            typeDescription=dandan_type_desc,
-        ))
-
-    is_matched = len(matches) == 1
-    return DandanMatchResponse(isMatched=is_matched, matches=matches)
-
-
 async def _process_single_batch_match(item: DandanBatchMatchRequestItem, pool: aiomysql.Pool) -> DandanMatchResponse:
     """处理批量匹配中的单个文件，仅在精确匹配（1个结果）时返回成功。"""
     parsed_info = _parse_filename_for_match(item.fileName)
@@ -437,33 +421,6 @@ async def match_single_file(
     is_matched = len(matches) == 1
     return DandanMatchResponse(isMatched=is_matched, matches=matches)
 
-
-async def _process_single_batch_match(item: DandanBatchMatchRequestItem, pool: aiomysql.Pool) -> DandanMatchResponse:
-    """处理批量匹配中的单个文件，仅在精确匹配（1个结果）时返回成功。"""
-    parsed_info = _parse_filename_for_match(item.fileName)
-    if not parsed_info:
-        return DandanMatchResponse(success=False, isMatched=False)
-
-    results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"])
-
-    if len(results) == 1:
-        res = results[0]
-        type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
-        type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
-        dandan_type = type_mapping.get(res.get('type'), "other")
-        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
-
-        match = DandanMatchInfo(
-            episodeId=res['episodeId'],
-            animeId=res['animeId'],
-            animeTitle=res['animeTitle'],
-            episodeTitle=res['episodeTitle'],
-            type=dandan_type,
-            typeDescription=dandan_type_desc,
-        )
-        return DandanMatchResponse(success=True, isMatched=True, matches=[match])
-    
-    return DandanMatchResponse(success=False, isMatched=False)
 
 @implementation_router.post(
     "/match/batch",
