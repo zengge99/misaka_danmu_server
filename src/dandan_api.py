@@ -101,6 +101,7 @@ class BangumiTrailer(BaseModel):
 class BangumiDetails(BangumiIntro):
     type: str
     typeDescription: str
+    episodeCount: int
     titles: List[BangumiTitle] = []
     seasons: List[BangumiEpisodeSeason] = []
     episodes: List[BangumiEpisode] = []
@@ -122,7 +123,7 @@ class BangumiDetailsResponse(DandanResponseBase):
 
 class PaginatedBangumiListResponse(DandanResponseBase):
     """用于 /bangumi/ 接口的响应模型，包含分页信息"""
-    bangumiList: List[BangumiIntro]
+    bangumiList: List[BangumiDetails]
     total: int
     page: int
     pageSize: int
@@ -250,13 +251,31 @@ async def get_all_bangumi(
     
     bangumi_list = []
     for anime_data in paginated_data['animes']:
+        type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
+        type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
+        dandan_type = type_mapping.get(anime_data.get('type'), "other")
+        dandan_type_desc = type_desc_mapping.get(anime_data.get('type'), "其他")
+
+        formatted_episodes = [
+            BangumiEpisode(
+                episodeId=ep['episodeId'],
+                episodeTitle=ep['episodeTitle'],
+                episodeNumber=str(ep['episodeNumber'])
+            ) for ep in anime_data.get('episodes', [])
+        ]
+
         bangumi_list.append(
-            BangumiIntro(
+            BangumiDetails(
                 animeId=anime_data['animeId'],
                 animeTitle=anime_data['animeTitle'],
                 imageUrl=anime_data.get('imageUrl'),
-                searchKeyword=anime_data['animeTitle']
-                # Other fields will use default values from the model
+                searchKeyword=anime_data['animeTitle'],
+                type=dandan_type,
+                typeDescription=dandan_type_desc,
+                episodeCount=anime_data.get('episodeCount', 0),
+                episodes=formatted_episodes,
+                bangumiUrl=anime_data.get('bangumiUrl'),
+                summary="暂无简介",
             )
         )
 
@@ -311,6 +330,7 @@ async def get_bangumi_details(
         searchKeyword=anime_data['animeTitle'],
         type=dandan_type,
         typeDescription=dandan_type_desc,
+        episodeCount=anime_data.get('episodeCount', 0),
         episodes=formatted_episodes,
         bangumiUrl=anime_data.get('bangumiUrl'),
         summary="暂无简介",

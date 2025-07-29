@@ -133,28 +133,56 @@ async def get_anime_details_for_dandan(pool: aiomysql.Pool, anime_id: int) -> Op
             return {"anime": anime_details, "episodes": episodes}
 
 async def get_all_anime_paginated(pool: aiomysql.Pool, page: int, page_size: int) -> Dict[str, Any]:
-    """获取所有番剧，分页。"""
+    """获取所有番剧的详细信息，分页。"""
     offset = (page - 1) * page_size
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            # Get total count
+            # 1. 获取总数
             await cursor.execute("SELECT COUNT(*) as total FROM anime")
             total_count = (await cursor.fetchone())['total']
 
-            # Get paginated data
-            query = """
+            # 2. 获取分页后的番剧基本数据
+            query_anime = """
                 SELECT
-                    id as animeId,
-                    title as animeTitle,
-                    image_url as imageUrl,
-                    type
+                    a.id AS animeId,
+                    a.title AS animeTitle,
+                    a.type,
+                    a.image_url AS imageUrl,
+                    a.created_at AS startDate,
+                    a.source_url AS bangumiUrl,
+                    (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as episodeCount
                 FROM anime
                 ORDER BY created_at DESC
                 LIMIT %s OFFSET %s
             """
-            await cursor.execute(query, (page_size, offset))
+            await cursor.execute(query_anime, (page_size, offset))
             animes = await cursor.fetchall()
             
+            if not animes:
+                return {"total": total_count, "animes": []}
+
+            anime_ids = [anime['animeId'] for anime in animes]
+            
+            # 3. 一次性获取当前页所有番剧的所有分集
+            format_strings = ','.join(['%s'] * len(anime_ids))
+            query_episodes = f"""
+                SELECT s.anime_id as animeId, e.id AS episodeId, e.title AS episodeTitle, e.episode_index AS episodeNumber
+                FROM episode e JOIN anime_sources s ON e.source_id = s.id
+                WHERE s.anime_id IN ({format_strings})
+                ORDER BY s.anime_id, e.episode_index ASC
+            """
+            await cursor.execute(query_episodes, tuple(anime_ids))
+            all_episodes = await cursor.fetchall()
+
+            # 4. 按番剧ID对分集进行分组
+            episodes_by_anime = {anime_id: [] for anime_id in anime_ids}
+            for ep in all_episodes:
+                episodes_by_anime[ep['animeId']].append(ep)
+
+            # 5. 将分集列表附加到对应的番剧上
+            for anime in animes:
+                anime['episodes'] = episodes_by_anime.get(anime['animeId'], [])
+
             return {"total": total_count, "animes": animes}
 
 async def find_anime_by_title(pool: aiomysql.Pool, title: str) -> Optional[Dict[str, Any]]:
