@@ -255,14 +255,37 @@ class IqiyiScraper(BaseScraper):
 
         episodes: List[IqiyiEpisodeInfo] = []
         if base_info.channel_name == "电影":
-            episodes.append(IqiyiEpisodeInfo(
-                tv_id=base_info.tv_id or 0, # 确保 tv_id 不为 None，模仿 C# long 的默认值 0
-                name=base_info.video_name,
-                order=1,
-                play_url=base_info.video_url
-            ))
+            # 修正：手动创建符合Pydantic别名的字典，然后进行验证
+            episode_data = {
+                "tvId": base_info.tv_id or 0,
+                "name": base_info.video_name,
+                "order": 1,
+                "playUrl": base_info.video_url
+            }
+            episodes.append(IqiyiEpisodeInfo.model_validate(episode_data))
+
         elif base_info.channel_name == "电视剧" or base_info.channel_name == "动漫":
             episodes = await self._get_tv_episodes(base_info.album_id, base_info.video_count)
+            
+            # 为了获取更准确的分集标题（如“林朝夕平行世界变孤儿”），
+            # 我们需要并发地访问每个分集的页面。
+            self.logger.info(f"爱奇艺: 正在为 {len(episodes)} 个分集并发获取真实标题...")
+            tasks = [self._get_video_base_info(ep.link_id) for ep in episodes if ep.link_id]
+            detailed_infos = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # 创建一个从 tv_id 到真实标题的映射
+            specific_title_map = {}
+            for info in detailed_infos:
+                if isinstance(info, IqiyiHtmlVideoInfo) and info.tv_id:
+                    specific_title_map[info.tv_id] = info.video_name
+            
+            # 在创建最终列表时，使用真实标题替换通用标题
+            for ep in episodes:
+                specific_title = specific_title_map.get(ep.tv_id)
+                if specific_title and specific_title != ep.name:
+                    self.logger.debug(f"爱奇艺: 标题替换: '{ep.name}' -> '{specific_title}'")
+                    ep.name = specific_title
+
         else: # 综艺等其他类型暂不处理，C#代码中综艺逻辑复杂且易出错
             self.logger.warning(f"爱奇艺: 不支持的频道类型 '{base_info.channel_name}'，无法获取分集。")
             # 尝试使用电视剧逻辑获取，可能对某些频道有效
