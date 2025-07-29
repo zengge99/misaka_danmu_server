@@ -421,7 +421,7 @@ class TencentScraper(BaseScraper):
             # 将字符串类型的 time_offset 转为浮点数秒
             timestamp = int(c.time_offset) / 1000.0
             # 格式: 时间,模式,颜色,[来源]
-            p_string = f"{timestamp},{mode},{color},[{self.provider_name}]"
+            p_string = f"{timestamp:.2f},{mode},{color},[{self.provider_name}]"
             formatted_comments.append({"cid": c.id, "p": p_string, "m": c.content, "t": timestamp})
 
         return formatted_comments
