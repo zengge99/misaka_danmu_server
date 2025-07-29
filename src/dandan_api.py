@@ -402,6 +402,34 @@ async def match_single_file(
 
     results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"])
     
+    if not results:
+        return DandanMatchResponse(isMatched=False, matches=[])
+
+    # 检查所有匹配项是否都指向同一个番剧ID
+    # 这对于处理拥有多个数据源的电影或剧集非常重要
+    first_anime_id = results[0]['animeId']
+    all_from_same_anime = all(res['animeId'] == first_anime_id for res in results)
+
+    # 如果所有匹配项都属于同一个番剧（例如，一个电影有多个源），
+    # 我们就认为这是一个精确匹配，并只返回第一个源作为代表。
+    if all_from_same_anime:
+        res = results[0]
+        type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
+        type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
+        dandan_type = type_mapping.get(res.get('type'), "other")
+        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+
+        match = DandanMatchInfo(
+            episodeId=res['episodeId'],
+            animeId=res['animeId'],
+            animeTitle=res['animeTitle'],
+            episodeTitle=res['episodeTitle'],
+            type=dandan_type,
+            typeDescription=dandan_type_desc,
+        )
+        return DandanMatchResponse(isMatched=True, matches=[match])
+
+    # 如果匹配到了多个不同的番剧，则返回所有结果让用户选择
     matches = []
     for res in results:
         type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
@@ -418,8 +446,7 @@ async def match_single_file(
             typeDescription=dandan_type_desc,
         ))
 
-    is_matched = len(matches) == 1
-    return DandanMatchResponse(isMatched=is_matched, matches=matches)
+    return DandanMatchResponse(isMatched=False, matches=matches)
 
 
 @implementation_router.post(

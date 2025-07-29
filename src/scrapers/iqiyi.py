@@ -116,7 +116,6 @@ class IqiyiScraper(BaseScraper):
         super().__init__(pool)
         self.mobile_user_agent = "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36 Edg/136.0.0.0"
         self.reg_video_info = re.compile(r'"videoInfo":(\{.+?\}),')
-        self.reg_album_info = re.compile(r'"albumInfo":(\{.+?\}),')
 
         self.client = httpx.AsyncClient(timeout=20.0, follow_redirects=True)
 
@@ -189,17 +188,39 @@ class IqiyiScraper(BaseScraper):
             html = response.text
 
             video_match = self.reg_video_info.search(html)
-            album_match = self.reg_album_info.search(html)
 
             if not video_match:
                 self.logger.warning(f"爱奇艺: 在 link_id {link_id} 的HTML中找不到 videoInfo JSON")
                 return None
 
             video_info = IqiyiHtmlVideoInfo.model_validate(json.loads(video_match.group(1)))
-            if album_match:
-                album_info = IqiyiHtmlAlbumInfo.model_validate(json.loads(album_match.group(1)))
-                video_info.video_count = album_info.video_count
             
+            # 使用更健壮的方法解析 albumInfo，而不是依赖于脆弱的正则表达式
+            album_info_start_str = '"albumInfo":'
+            album_info_start_index = html.find(album_info_start_str)
+            if album_info_start_index != -1:
+                json_str = None
+                try:
+                    # 找到 "albumInfo": 后面的第一个 '{'
+                    brace_start_index = html.find('{', album_info_start_index + len(album_info_start_str))
+                    if brace_start_index != -1:
+                        brace_count = 1
+                        i = brace_start_index + 1
+                        # 通过计算括号对来找到完整的JSON对象
+                        while i < len(html) and brace_count > 0:
+                            if html[i] == '{': brace_count += 1
+                            elif html[i] == '}': brace_count -= 1
+                            i += 1
+                        
+                        if brace_count == 0:
+                            json_str = html[brace_start_index:i]
+                            album_info_data = json.loads(json_str)
+                            album_info = IqiyiHtmlAlbumInfo.model_validate(album_info_data)
+                            video_info.video_count = album_info.video_count
+                except (json.JSONDecodeError, ValidationError) as e:
+                    log_str = json_str[:200] if json_str else "N/A"
+                    self.logger.error(f"爱奇艺: 解析或验证 albumInfo 失败: {e}. 提取的字符串(前200字符): {log_str}")
+
             info_to_cache = video_info.model_dump()
             await self._set_to_cache(cache_key, info_to_cache, 'base_info_ttl_seconds', 1800)
             return video_info
