@@ -185,7 +185,8 @@ async def get_or_create_anime(pool: aiomysql.Pool, title: str, media_type: str, 
     """通过标题查找番剧，如果不存在则创建。如果存在但缺少海报，则更新海报。返回其ID。"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
-            await cursor.execute("SELECT id, image_url FROM anime WHERE title = %s", (title,))
+            # 1. 检查番剧是否已存在
+            await cursor.execute("SELECT id, image_url FROM anime WHERE title = %s", (title, ))
             result = await cursor.fetchone()
             if result:
                 anime_id = result[0]
@@ -195,12 +196,23 @@ async def get_or_create_anime(pool: aiomysql.Pool, title: str, media_type: str, 
                     await cursor.execute("UPDATE anime SET image_url = %s WHERE id = %s", (image_url, anime_id))
                 return anime_id
             
-            # 番剧不存在，创建新记录
-            await cursor.execute(
-                "INSERT INTO anime (title, type, image_url, created_at) VALUES (%s, %s, %s, %s)",
-                (title, media_type, image_url, datetime.now())
-            )
-            return cursor.lastrowid
+            # 2. 番剧不存在，在事务中创建新记录
+            try:
+                await conn.begin()
+                # 2.1 插入主表
+                await cursor.execute(
+                    "INSERT INTO anime (title, type, image_url, created_at) VALUES (%s, %s, %s, %s)",
+                    (title, media_type, image_url, datetime.now())
+                )
+                anime_id = cursor.lastrowid
+                # 2.2 插入元数据表
+                await cursor.execute("INSERT INTO anime_metadata (anime_id) VALUES (%s)", (anime_id, ))
+                await conn.commit()
+                return anime_id
+            except Exception as e:
+                await conn.rollback()
+                logging.error(f"创建番剧 '{title}' 时发生数据库错误: {e}", exc_info=True)
+                raise
 
 async def link_source_to_anime(pool: aiomysql.Pool, anime_id: int, provider: str, media_id: str) -> int:
     """将一个外部数据源链接到一个番剧，如果链接已存在则直接返回，否则创建新链接。"""
@@ -489,13 +501,13 @@ async def get_cache(pool: aiomysql.Pool, key: str) -> Optional[Any]:
                     return None # 缓存数据损坏
     return None
 
-async def set_cache(pool: aiomysql.Pool, key: str, value: Any, ttl_seconds: int):
+async def set_cache(pool: aiomysql.Pool, key: str, value: Any, ttl_seconds: int, provider: Optional[str] = None):
     """将数据存入数据库缓存。"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             json_value = json.dumps(value, ensure_ascii=False)
-            query = "INSERT INTO cache_data (cache_key, cache_value, expires_at) VALUES (%s, %s, NOW() + INTERVAL %s SECOND) ON DUPLICATE KEY UPDATE cache_value = VALUES(cache_value), expires_at = VALUES(expires_at)"
-            await cursor.execute(query, (key, json_value, ttl_seconds))
+            query = "INSERT INTO cache_data (cache_provider, cache_key, cache_value, expires_at) VALUES (%s, %s, %s, NOW() + INTERVAL %s SECOND) ON DUPLICATE KEY UPDATE cache_value = VALUES(cache_value), expires_at = VALUES(expires_at)"
+            await cursor.execute(query, (provider, key, json_value, ttl_seconds))
 
 async def update_config_value(pool: aiomysql.Pool, key: str, value: str):
     """更新或插入一个配置项。"""

@@ -189,6 +189,7 @@ async def init_db_tables(app: FastAPI):
             # 创建缓存数据表
             await cursor.execute("""
             CREATE TABLE IF NOT EXISTS `cache_data` (
+              `cache_provider` VARCHAR(50) NULL,
               `cache_key` VARCHAR(255) NOT NULL,
               `cache_value` LONGTEXT NOT NULL,
               `expires_at` TIMESTAMP NOT NULL,

@@ -34,7 +34,7 @@ class BaseScraper(ABC):
         """将数据存入数据库缓存，TTL从配置中读取。"""
         ttl = await self._get_ttl(config_key, default_ttl)
         if ttl > 0:
-            await crud.set_cache(self.pool, key, value, ttl)
+            await crud.set_cache(self.pool, key, value, ttl, provider=self.provider_name)
 
     # 每个子类都必须覆盖这个类属性
     provider_name: str

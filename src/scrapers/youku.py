@@ -109,7 +109,7 @@ class YoukuScraper(BaseScraper):
         await self.client.aclose()
 
     async def search(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:
-        cache_key = f"search_{keyword}"
+        cache_key = f"search_{self.provider_name}_{keyword}"
         cached_results = await self._get_from_cache(cache_key)
         if cached_results is not None:
             self.logger.info(f"Youku: 从缓存中命中搜索结果 '{keyword}'")
