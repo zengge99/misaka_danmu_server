@@ -60,31 +60,21 @@ async def search_for_dandan(
     模拟 dandanplay 的搜索接口。
     它会搜索 **本地弹幕库**，而不是调用外部爬虫。支持电视剧和电影的匹配。
     """
-    search_term = keyword or anime
+    search_term = (keyword or anime or "").strip()
     if not search_term:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Missing required query parameter: 'keyword' or 'anime'"
         )
 
-    results = []
     # 检查是否提供了有效的分集号
     if episode and episode.isdigit():
-        # 如果有分集号，则进行精确的剧集搜索
         episode_number = int(episode)
         results = await crud.search_episodes_in_library(pool, search_term, episode_number)
     else:
-        # 如果没有分集号，则假定为电影或对剧集进行模糊匹配
-        # 电影通常被记为第1集，所以我们尝试匹配第1集
-        potential_matches = await crud.search_episodes_in_library(pool, search_term, 1)
-        
-        # 过滤结果，只保留类型为 'movie' 的匹配项
-        # 这样可以避免将 "xxx 第一季" 错误地匹配为电影
-        movie_matches = [m for m in potential_matches if m.get('type') == 'movie']
-        if movie_matches:
-            results = movie_matches
-        # 如果没有找到电影，但有其他匹配（例如，系列剧的第一集），也可以考虑返回，这取决于期望的行为
-        # 为简单起见，我们目前只精确匹配电影
+        # 如果没有提供分集号，则假定为电影或对剧集进行模糊匹配。
+        # 这种情况下，我们搜索第1集，这通常能匹配到电影，或是系列剧的开端。
+        results = await crud.search_episodes_in_library(pool, search_term, 1)
     
     matches = []
     for res in results:

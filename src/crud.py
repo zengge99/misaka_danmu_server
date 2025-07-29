@@ -1,5 +1,6 @@
 import aiomysql
 import json
+import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
@@ -50,7 +51,8 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
                     a.id AS animeId,
                     a.title AS animeTitle,
                     e.id AS episodeId,
-                    e.title AS episodeTitle
+                    e.title AS episodeTitle,
+                    a.type AS type
                 FROM episode e
                 JOIN anime_sources s ON e.source_id = s.id
                 JOIN anime a ON s.anime_id = a.id
