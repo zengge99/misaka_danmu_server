@@ -1185,11 +1185,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const domain = document.getElementById('custom-domain-input').value.trim();
             const textToCopy = domain ? `${domain}/api/${tokenValue}` : tokenValue;
             
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                alert(`已复制到剪贴板: ${textToCopy}`);
-            }, () => {
-                alert('复制失败，请手动复制。');
-            });
+            // 优先使用现代的、安全的剪贴板API
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    alert(`已复制到剪贴板: ${textToCopy}`);
+                }, (err) => {
+                    alert(`复制失败: ${err}。请手动复制。`);
+                });
+            } else {
+                // 为 HTTP 或旧版浏览器提供后备方案
+                const textArea = document.createElement("textarea");
+                textArea.value = textToCopy;
+                textArea.style.position = "fixed";
+                textArea.style.top = "-9999px";
+                textArea.style.left = "-9999px";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    alert(`已复制到剪贴板: ${textToCopy}`);
+                } catch (err) {
+                    alert('复制失败，请手动复制。');
+                }
+                document.body.removeChild(textArea);
+            }
         } else if (action === 'toggle') {
             try {
                 await apiFetch(`/api/ui/tokens/${tokenId}/toggle`, { method: 'PUT' });

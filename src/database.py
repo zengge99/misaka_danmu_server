@@ -123,7 +123,7 @@ async def init_db_tables(app: FastAPI):
             await cursor.execute("""
             CREATE TABLE IF NOT EXISTS `comment` (
               `id` BIGINT NOT NULL AUTO_INCREMENT, `cid` VARCHAR(255) NOT NULL, `episode_id` BIGINT NOT NULL,
-              `p` VARCHAR(255) NOT NULL, `m` TEXT NOT NULL, `t` DECIMAL(10, 3) NOT NULL,
+              `p` VARCHAR(255) NOT NULL, `m` TEXT NOT NULL, `t` DECIMAL(10, 2) NOT NULL,
               PRIMARY KEY (`id`), UNIQUE INDEX `idx_episode_cid_unique` (`episode_id` ASC, `cid` ASC),
               INDEX `idx_episode_time` (`episode_id` ASC, `t` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -223,9 +223,9 @@ async def init_db_tables(app: FastAPI):
                 WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'comment' AND COLUMN_NAME = 't'
             """, (db_name,))
             t_column_info = await cursor.fetchone()
-            if t_column_info and t_column_info[0] != 3:
+            if t_column_info and t_column_info[0] != 2:
                 print("检测到旧的 'comment' 表 schema，正在更新 't' 字段的精度...")
-                await cursor.execute("ALTER TABLE `comment` MODIFY COLUMN `t` DECIMAL(10, 3) NOT NULL;")
+                await cursor.execute("ALTER TABLE `comment` MODIFY COLUMN `t` DECIMAL(10, 2) NOT NULL;")
                 print("'comment' 表 't' 字段精度更新完成。")
 
             # 迁移检查：episode 表的 source_url 和 fetched_at

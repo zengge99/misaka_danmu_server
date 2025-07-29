@@ -397,7 +397,7 @@ async def get_comments(
 
     comments_data = await crud.fetch_comments(pool, episode_id)
     
-    comments = [models.Comment(p=item["p"], m=item["m"]) for item in comments_data]
+    comments = [models.Comment(cid=item["cid"], p=item["p"], m=item["m"]) for item in comments_data]
     return models.CommentResponse(count=len(comments), comments=comments)
 
 async def generic_import_task(
