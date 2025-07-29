@@ -162,6 +162,7 @@ async def _search_implementation(
 
             grouped_animes[anime_id] = DandanAnimeInfo(
                 animeId=anime_id,
+                bangumiId=str(anime_id),
                 animeTitle=res['animeTitle'],
                 type=dandan_type,
                 typeDescription=dandan_type_desc,
