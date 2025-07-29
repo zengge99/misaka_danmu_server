@@ -81,8 +81,50 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
 
             # 2. Fallback to LIKE search
             logging.info(f"FULLTEXT search for '{clean_title}' yielded no results, falling back to LIKE search.")
-            query_like = query_template.format(title_condition="a.title LIKE %s")
-            await cursor.execute(query_like, tuple([f"%{clean_title}%"] + params_episode))
+            # 为了处理全角/半角冒号不一致的问题，我们在查询时进行归一化
+            # 1. 将搜索词中的冒号统一为半角
+            normalized_like_title = clean_title.replace("：", ":")
+            # 2. 在SQL查询中，也对数据库字段进行替换，确保两侧格式一致
+            query_like = query_template.format(title_condition="REPLACE(a.title, '：', ':') LIKE %s")
+            await cursor.execute(query_like, tuple([f"%{normalized_like_title}%"] + params_episode))
+            return await cursor.fetchall()
+
+async def search_animes_for_dandan(pool: aiomysql.Pool, keyword: str) -> List[Dict[str, Any]]:
+    """
+    在本地库中通过番剧标题搜索匹配的番剧，用于 /search/anime 接口。
+    """
+    clean_title = keyword.strip()
+    if not clean_title:
+        return []
+
+    query_template = """
+        SELECT
+            a.id AS animeId,
+            a.title AS animeTitle,
+            a.type,
+            a.image_url AS imageUrl,
+            a.created_at AS startDate,
+            (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as episodeCount,
+            m.bangumi_id AS bangumiId
+        FROM anime a
+        LEFT JOIN anime_metadata m ON a.id = m.anime_id
+        WHERE {title_condition}
+        ORDER BY a.id
+    """
+
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            # 1. Try FULLTEXT search
+            query_ft = query_template.format(title_condition="MATCH(a.title) AGAINST(%s IN BOOLEAN MODE)")
+            await cursor.execute(query_ft, (clean_title + '*',))
+            results = await cursor.fetchall()
+            if results:
+                return results
+
+            # 2. Fallback to LIKE search
+            normalized_like_title = clean_title.replace("：", ":")
+            query_like = query_template.format(title_condition="REPLACE(a.title, '：', ':') LIKE %s")
+            await cursor.execute(query_like, (f"%{normalized_like_title}%",))
             return await cursor.fetchall()
 
 async def get_anime_details_for_dandan(pool: aiomysql.Pool, anime_id: int) -> Optional[Dict[str, Any]]:

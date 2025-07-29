@@ -50,6 +50,24 @@ class DandanSearchEpisodesResponse(DandanResponseBase):
     animes: List[DandanAnimeInfo]
 
 
+# --- Models for /search/anime ---
+class DandanSearchAnimeItem(BaseModel):
+    animeId: int
+    bangumiId: Optional[str] = ""
+    animeTitle: str
+    type: str
+    typeDescription: str
+    imageUrl: Optional[str] = None
+    startDate: Optional[datetime] = None
+    episodeCount: int
+    rating: float = 0.0
+    isFavorited: bool = False
+
+class DandanSearchAnimeResponse(DandanResponseBase):
+    hasMore: bool = False
+    animes: List[DandanSearchAnimeItem]
+
+
 # --- Models for /bangumi/{anime_id} ---
 
 class BangumiTitle(BaseModel):
@@ -284,18 +302,19 @@ async def search_episodes_for_dandan(
 
 @implementation_router.get(
     "/search/anime",
-    response_model=DandanSearchEpisodesResponse,
-    summary="[dandanplay兼容] 搜索节目和分集 (兼容路径)"
+    response_model=DandanSearchAnimeResponse,
+    summary="[dandanplay兼容] 搜索作品"
 )
 async def search_anime_for_dandan(
     keyword: Optional[str] = Query(None, description="节目名称 (兼容 keyword)"),
     anime: Optional[str] = Query(None, description="节目名称 (兼容 anime)"),
-    episode: Optional[str] = Query(None, description="分集标题 (通常是数字)"),
+    episode: Optional[str] = Query(None, description="分集标题 (此接口中未使用)"),
     token: str = Depends(get_token_from_path),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
     """
-    模拟 dandanplay 的搜索接口，兼容 /search/anime 路径。
+    模拟 dandanplay 的 /api/v2/search/anime 接口。
+    它会搜索 **本地弹幕库** 中的番剧信息，不包含分集列表。
     """
     search_term = keyword or anime
     if not search_term:
@@ -303,7 +322,32 @@ async def search_anime_for_dandan(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Missing required query parameter: 'keyword' or 'anime'"
         )
-    return await _search_implementation(search_term, episode, pool)
+
+    db_results = await crud.search_animes_for_dandan(pool, search_term)
+    
+    animes = []
+    for res in db_results:
+        type_mapping = {
+            "tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"
+        }
+        type_desc_mapping = {
+            "tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"
+        }
+        dandan_type = type_mapping.get(res.get('type'), "other")
+        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+
+        animes.append(DandanSearchAnimeItem(
+            animeId=res['animeId'],
+            bangumiId=res.get('bangumiId') or f"A{res['animeId']}",
+            animeTitle=res['animeTitle'],
+            type=dandan_type,
+            typeDescription=dandan_type_desc,
+            imageUrl=res.get('imageUrl'),
+            startDate=res.get('startDate'),
+            episodeCount=res.get('episodeCount', 0),
+        ))
+    
+    return DandanSearchAnimeResponse(animes=animes)
 
 @implementation_router.get(
     "/bangumi/{anime_id}",
