@@ -223,13 +223,14 @@ def _parse_filename_for_match(filename: str) -> Optional[Dict[str, Any]]:
     # 常见的番剧命名格式: [字幕组] 番剧名 - 01 [分辨率].mkv
     PATTERNS = [
         # 匹配 [xxx] xxx - 01, [xxx] xxx - 01 (xxx)
-        re.compile(r"\[.*?\]\s*(?P<title>.+?)\s*[-_]\s*(?P<episode>\d{1,4})", re.IGNORECASE),
+        # 使用 \b 确保集数是独立的数字
+        re.compile(r"\[.*?\]\s*(?P<title>.+?)\s*[-_]\s*\b(?P<episode>\d{1,4})\b", re.IGNORECASE),
         # 匹配 xxx - 01
-        re.compile(r"^(?P<title>.+?)\s*[-_]\s*(?P<episode>\d{1,4})", re.IGNORECASE),
+        re.compile(r"^(?P<title>.+?)\s*[-_]\s*\b(?P<episode>\d{1,4})\b", re.IGNORECASE),
         # 匹配 [xxx] xxx 01
-        re.compile(r"\[.*?\]\s*(?P<title>.+?)\s+(?P<episode>\d{1,4})", re.IGNORECASE),
+        re.compile(r"\[.*?\]\s*(?P<title>.+?)\s+\b(?P<episode>\d{1,4})\b", re.IGNORECASE),
         # 匹配 xxx 01
-        re.compile(r"^(?P<title>.+?)\s+(?P<episode>\d{1,4})", re.IGNORECASE),
+        re.compile(r"^(?P<title>.+?)\s+\b(?P<episode>\d{1,4})\b", re.IGNORECASE),
     ]
     for pattern in PATTERNS:
         match = pattern.search(filename)
@@ -461,7 +462,7 @@ async def match_single_file(
     logger.info(f"文件名解析结果: {parsed_info}")
     if not parsed_info:
         response = DandanMatchResponse(isMatched=False)
-        logger.info(f"发送 /match 响应 (解析失败): {response.model_dump_json(indent=2, ensure_ascii=False)}")
+        logger.info(f"发送 /match 响应 (解析失败): {response.model_dump_json(indent=2)}")
         return response
 
     results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"])
@@ -469,7 +470,7 @@ async def match_single_file(
     
     if not results:
         response = DandanMatchResponse(isMatched=False, matches=[])
-        logger.info(f"发送 /match 响应 (无匹配): {response.model_dump_json(indent=2, ensure_ascii=False)}")
+        logger.info(f"发送 /match 响应 (无匹配): {response.model_dump_json(indent=2)}")
         return response
 
     # 检查所有匹配项是否都指向同一个番剧ID
@@ -495,7 +496,7 @@ async def match_single_file(
             typeDescription=dandan_type_desc,
         )
         response = DandanMatchResponse(isMatched=True, matches=[match])
-        logger.info(f"发送 /match 响应 (精确匹配): {response.model_dump_json(indent=2, ensure_ascii=False)}")
+        logger.info(f"发送 /match 响应 (精确匹配): {response.model_dump_json(indent=2)}")
         return response
 
     # 如果匹配到了多个不同的番剧，则返回所有结果让用户选择
@@ -516,7 +517,7 @@ async def match_single_file(
         ))
 
     response = DandanMatchResponse(isMatched=False, matches=matches)
-    logger.info(f"发送 /match 响应 (多个匹配): {response.model_dump_json(indent=2, ensure_ascii=False)}")
+    logger.info(f"发送 /match 响应 (多个匹配): {response.model_dump_json(indent=2)}")
     return response
 
 
