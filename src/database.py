@@ -99,6 +99,7 @@ async def init_db_tables(app: FastAPI):
               `image_url` VARCHAR(512) NULL,
               `season` INT NOT NULL DEFAULT 1,
               `source_url` VARCHAR(512) NULL,
+              `is_favorited` BOOLEAN NOT NULL DEFAULT FALSE,
               `created_at` TIMESTAMP NULL,
               PRIMARY KEY (`id`),
               FULLTEXT INDEX `idx_title_fulltext` (`title`)
@@ -290,6 +291,16 @@ async def init_db_tables(app: FastAPI):
             try:
                 await cursor.execute("ALTER TABLE `anime_metadata` ADD COLUMN `imdb_id` VARCHAR(50) NULL AFTER `tvdb_id`;")
                 print("'anime_metadata' 表 'imdb_id' 字段添加完成。")
+            except aiomysql.OperationalError as e:
+                if e.args[0] == 1060: # Duplicate column name
+                    pass
+                else:
+                    raise
+
+            # 迁移检查：anime 表的 is_favorited
+            try:
+                await cursor.execute("ALTER TABLE `anime` ADD COLUMN `is_favorited` BOOLEAN NOT NULL DEFAULT FALSE AFTER `source_url`;")
+                print("'anime' 表 'is_favorited' 字段添加完成。")
             except aiomysql.OperationalError as e:
                 if e.args[0] == 1060: # Duplicate column name
                     pass

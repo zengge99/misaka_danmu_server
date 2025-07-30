@@ -343,6 +343,7 @@ async def search_anime_for_dandan(
             type=dandan_type,
             typeDescription=dandan_type_desc,
             imageUrl=res.get('imageUrl'),
+            isFavorited=res.get('isFavorited', False),
             startDate=res.get('startDate'),
             episodeCount=res.get('episodeCount', 0),
         ))
@@ -405,6 +406,7 @@ async def get_bangumi_details(
         bangumiId=bangumi_id_str,
         animeTitle=anime_data['animeTitle'],
         imageUrl=anime_data.get('imageUrl'),
+        isFavorited=anime_data.get('isFavorited', False),
         searchKeyword=anime_data['animeTitle'],
         type=dandan_type,
         typeDescription=dandan_type_desc,

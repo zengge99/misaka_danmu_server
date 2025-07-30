@@ -165,6 +165,18 @@ async def edit_anime_info(
     logger.info(f"用户 '{current_user.username}' 更新了番剧 ID: {anime_id} 的信息。")
     return
 
+@router.put("/library/anime/{anime_id}/favorite", status_code=status.HTTP_204_NO_CONTENT, summary="切换影视的收藏状态")
+async def toggle_anime_favorite(
+    anime_id: int,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """切换指定番剧的收藏状态。"""
+    toggled = await crud.toggle_anime_favorite_status(pool, anime_id)
+    if not toggled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anime not found")
+    return
+
 @router.get("/library/anime/{anime_id}/sources", response_model=List[Dict[str, Any]], summary="获取作品的所有数据源")
 async def get_anime_sources_for_anime(
     anime_id: int,

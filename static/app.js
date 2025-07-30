@@ -722,6 +722,7 @@ document.addEventListener('DOMContentLoaded', () => {
             actionsCell.className = 'actions-cell';
             actionsCell.innerHTML = `
                 <div class="action-buttons-wrapper">
+                    <button class="action-btn" title="收藏" onclick="handleAction('favorite', ${anime.animeId})">${anime.isFavorited ? '🌟' : '⭐'}</button>
                     <button class="action-btn" title="编辑" onclick="handleAction('edit', ${anime.animeId})">✏️</button>
                     <button class="action-btn" title="查看数据源" onclick="handleAction('view', ${anime.animeId})">📖</button>
                     <button class="action-btn" title="删除" onclick="handleAction('delete', ${anime.animeId})">🗑️</button>
