@@ -99,8 +99,37 @@
                                 <input type="text" id="edit-anime-title" required>
                             </div>
                             <div class="form-row">
-                                <label for="edit-anime-season">季</label>
+                                <label for="edit-anime-season">季度</label>
                                 <input type="number" id="edit-anime-season" min="1" required>
+                            </div>
+                            
+                            <div class="form-row-with-icon">
+                                <label for="edit-anime-tmdbid">TMDB ID</label>
+                                <input type="text" id="edit-anime-tmdbid" placeholder="例如: 1396">
+                                <button type="button" class="icon-btn" title="查找">🔍</button>
+                            </div>
+                            <div class="form-row-with-icon">
+                                <label for="edit-anime-egid">剧集组ID</label>
+                                <input type="text" id="edit-anime-egid" placeholder="TMDB Episode Group ID">
+                                <button type="button" class="icon-btn" title="选择">🔽</button>
+                            </div>
+                            <div class="form-row-with-icon">
+                                <label for="edit-anime-bgmid">BGM ID</label>
+                                <input type="text" id="edit-anime-bgmid" placeholder="例如: 296100">
+                                <button type="button" class="icon-btn" title="查找">🔍</button>
+                            </div>
+                            <div class="form-row">
+                                <label for="edit-anime-tvdbid">TVDB ID</label>
+                                <input type="text" id="edit-anime-tvdbid" placeholder="例如: 364093">
+                            </div>
+                            <div class="form-row-with-icon">
+                                <label for="edit-anime-doubanid">豆瓣ID</label>
+                                <input type="text" id="edit-anime-doubanid" placeholder="例如: 35297708">
+                                <button type="button" class="icon-btn" title="查找">🔍</button>
+                            </div>
+                            <div class="form-row">
+                                <label for="edit-anime-imdbid">IMDB ID</label>
+                                <input type="text" id="edit-anime-imdbid" placeholder="例如: tt9140554">
                             </div>
                             <div class="form-actions">
                                 <button type="submit">保存更改</button>
@@ -152,7 +181,7 @@
                             <h2>弹幕Token管理</h2>
                             <button id="add-token-btn">添加Token</button>
                         </div>
-                        <p>本项目仿造了<a href="https://api.dandanplay.net/swagger/index.html" target="_blank">dandanplayapi</a>，同时增加了使用访问令牌管理弹幕api,支持<a href="https://t.me/yamby_release" target="_blank">yamby</a>、<a href="https://play.google.com/store/search?q=hills&c=apps" target="_blank">hills</a>、<a href="https://apps.microsoft.com/detail/9NB0H051M4V4" target="_blank">小幻影视</a>。</p>
+                        <p>本项目参考了<a href="https://api.dandanplay.net/swagger/index.html" target="_blank">dandanplayapi</a>，同时增加了使用访问令牌管理弹幕api,支持<a href="https://t.me/yamby_release" target="_blank">yamby</a>、<a href="https://play.google.com/store/search?q=hills&c=apps" target="_blank">hills</a>、<a href="https://apps.microsoft.com/detail/9NB0H051M4V4" target="_blank">小幻影视</a>。</p>
                         <div class="domain-config-section">
                             <h3>自定义域名设置</h3>
                             <p>设置后，复制按钮将自动拼接 "http(s)://域名(ip):端口(port)/api/Token值" 格式的完整URL。</p>

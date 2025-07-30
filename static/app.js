@@ -403,13 +403,23 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleEditAnimeSave(e) {
         e.preventDefault();
         const animeId = document.getElementById('edit-anime-id').value;
-        const newTitle = document.getElementById('edit-anime-title').value;
         const newSeason = parseInt(document.getElementById('edit-anime-season').value, 10);
 
         if (isNaN(newSeason) || newSeason < 1) {
-            alert("季数必须是一个大于0的数字。");
+            alert("季度数必须是一个大于0的数字。");
             return;
         }
+
+        const payload = {
+            title: document.getElementById('edit-anime-title').value,
+            season: newSeason,
+            tmdb_id: document.getElementById('edit-anime-tmdbid').value || null,
+            tmdb_episode_group_id: document.getElementById('edit-anime-egid').value || null,
+            bangumi_id: document.getElementById('edit-anime-bgmid').value || null,
+            tvdb_id: document.getElementById('edit-anime-tvdbid').value || null,
+            douban_id: document.getElementById('edit-anime-doubanid').value || null,
+            imdb_id: document.getElementById('edit-anime-imdbid').value || null,
+        };
 
         const saveButton = editAnimeForm.querySelector('button[type="submit"]');
         saveButton.disabled = true;
@@ -418,7 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             await apiFetch(`/api/ui/library/anime/${animeId}`, {
                 method: 'PUT',
-                body: JSON.stringify({ title: newTitle, season: newSeason }),
+                body: JSON.stringify(payload),
             });
             alert("信息更新成功！");
             document.getElementById('back-to-library-from-edit-btn').click();
@@ -872,15 +882,36 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function showEditAnimeView(animeId, currentTitle, currentSeason) {
+    async function showEditAnimeView(animeId) {
         libraryView.classList.add('hidden');
         animeDetailView.classList.add('hidden');
         episodeListView.classList.add('hidden');
         editAnimeView.classList.remove('hidden');
+        
+        // Clear form and show loading state
+        editAnimeForm.reset();
+        editAnimeForm.querySelector('button[type="submit"]').disabled = true;
 
-        document.getElementById('edit-anime-id').value = animeId;
-        document.getElementById('edit-anime-title').value = currentTitle;
-        document.getElementById('edit-anime-season').value = currentSeason;
+        try {
+            const details = await apiFetch(`/api/ui/library/anime/${animeId}/details`);
+            
+            // Populate form
+            document.getElementById('edit-anime-id').value = details.anime_id;
+            document.getElementById('edit-anime-title').value = details.title;
+            document.getElementById('edit-anime-season').value = details.season;
+            document.getElementById('edit-anime-tmdbid').value = details.tmdb_id || '';
+            document.getElementById('edit-anime-egid').value = details.tmdb_episode_group_id || '';
+            document.getElementById('edit-anime-bgmid').value = details.bangumi_id || '';
+            document.getElementById('edit-anime-tvdbid').value = details.tvdb_id || '';
+            document.getElementById('edit-anime-doubanid').value = details.douban_id || '';
+            document.getElementById('edit-anime-imdbid').value = details.imdb_id || '';
+
+        } catch (error) {
+            alert(`加载编辑信息失败: ${error.message}`);
+            document.getElementById('back-to-library-from-edit-btn').click();
+        } finally {
+            editAnimeForm.querySelector('button[type="submit"]').disabled = false;
+        }
     }
 
     // --- Episode List View ---
@@ -1103,8 +1134,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         } else if (action === 'edit') {
-            const currentSeason = row ? parseInt(row.cells[2].textContent, 10) : 1;
-            showEditAnimeView(animeId, title, currentSeason);
+            showEditAnimeView(animeId);
         } else if (action === 'view') {
             showAnimeDetailView(animeId);
         } else {

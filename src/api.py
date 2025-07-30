@@ -151,18 +151,30 @@ async def get_library(
     animes = [models.LibraryAnimeInfo.model_validate(item) for item in db_results]
     return models.LibraryResponse(animes=animes)
 
-@router.put("/library/anime/{anime_id}", status_code=status.HTTP_204_NO_CONTENT, summary="编辑影视信息")
-async def edit_anime_info(
+@router.get("/library/anime/{anime_id}/details", response_model=models.AnimeFullDetails, summary="获取影视完整详情")
+async def get_anime_full_details(
     anime_id: int,
-    update_data: models.AnimeInfoUpdate,
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
-    """更新指定番剧的标题和季数。"""
-    updated = await crud.update_anime_info(pool, anime_id, update_data.title, update_data.season)
-    if not updated:
+    """获取指定番剧的完整信息，包括所有元数据ID。"""
+    details = await crud.get_anime_full_details(pool, anime_id)
+    if not details:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anime not found")
-    logger.info(f"用户 '{current_user.username}' 更新了番剧 ID: {anime_id} 的信息。")
+    return models.AnimeFullDetails.model_validate(details)
+
+@router.put("/library/anime/{anime_id}", status_code=status.HTTP_204_NO_CONTENT, summary="编辑影视信息")
+async def edit_anime_info(
+    anime_id: int,
+    update_data: models.AnimeDetailUpdate,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """更新指定番剧的标题、季度和元数据。"""
+    updated = await crud.update_anime_details(pool, anime_id, update_data)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anime not found or update failed")
+    logger.info(f"用户 '{current_user.username}' 更新了番剧 ID: {anime_id} 的详细信息。")
     return
 
 @router.put("/library/source/{source_id}/favorite", status_code=status.HTTP_204_NO_CONTENT, summary="切换数据源的精确标记状态")

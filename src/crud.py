@@ -416,13 +416,58 @@ async def clear_episode_comments(pool: aiomysql.Pool, episode_id: int):
             # 在只清空弹幕（用于刷新单个分集）的场景下，必须重置计数器
             await cursor.execute("UPDATE episode SET comment_count = 0 WHERE id = %s", (episode_id,))
 
-async def update_anime_info(pool: aiomysql.Pool, anime_id: int, title: str, season: int) -> bool:
-    """更新番剧信息"""
+async def get_anime_full_details(pool: aiomysql.Pool, anime_id: int) -> Optional[Dict[str, Any]]:
+    """获取番剧的完整详细信息，包括元数据。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            query = """
+                SELECT
+                    a.id as anime_id,
+                    a.title,
+                    a.season,
+                    a.image_url,
+                    m.tmdb_id,
+                    m.tmdb_episode_group_id,
+                    m.bangumi_id,
+                    m.tvdb_id,
+                    m.douban_id,
+                    m.imdb_id
+                FROM anime a
+                LEFT JOIN anime_metadata m ON a.id = m.anime_id
+                WHERE a.id = %s
+            """
+            await cursor.execute(query, (anime_id,))
+            return await cursor.fetchone()
+
+async def update_anime_details(pool: aiomysql.Pool, anime_id: int, update_data: models.AnimeDetailUpdate) -> bool:
+    """在事务中更新番剧的核心信息和元数据。"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
-            query = "UPDATE anime SET title = %s, season = %s WHERE id = %s"
-            affected_rows = await cursor.execute(query, (title, season, anime_id))
-            return affected_rows > 0
+            try:
+                await conn.begin()
+
+                # 1. 更新 anime 表
+                await cursor.execute(
+                    "UPDATE anime SET title = %s, season = %s WHERE id = %s",
+                    (update_data.title, update_data.season, anime_id)
+                )
+                
+                # 2. 更新 anime_metadata 表 (使用 INSERT ... ON DUPLICATE KEY UPDATE)
+                await cursor.execute("""
+                    INSERT INTO anime_metadata (anime_id, tmdb_id, tmdb_episode_group_id, bangumi_id, tvdb_id, douban_id, imdb_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        tmdb_id = VALUES(tmdb_id), tmdb_episode_group_id = VALUES(tmdb_episode_group_id),
+                        bangumi_id = VALUES(bangumi_id), tvdb_id = VALUES(tvdb_id),
+                        douban_id = VALUES(douban_id), imdb_id = VALUES(imdb_id)
+                """, (anime_id, update_data.tmdb_id, update_data.tmdb_episode_group_id, update_data.bangumi_id, update_data.tvdb_id, update_data.douban_id, update_data.imdb_id))
+
+                await conn.commit()
+                return True
+            except Exception as e:
+                await conn.rollback()
+                logging.getLogger(__name__).error(f"更新番剧详情 (ID: {anime_id}) 时出错: {e}", exc_info=True)
+                return False
 
 async def update_episode_info(pool: aiomysql.Pool, episode_id: int, title: str, episode_index: int, source_url: Optional[str]) -> bool:
     """更新分集信息"""

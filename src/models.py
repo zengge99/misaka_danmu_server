@@ -78,16 +78,35 @@ class ImportRequest(BaseModel):
     image_url: Optional[str] = Field(None, description="封面图片URL")
     current_episode_index: Optional[int] = Field(None, description="如果搜索时指定了集数，则只导入此分集")
 
-class AnimeInfoUpdate(BaseModel):
-    """用于更新番剧信息的模型"""
+class AnimeDetailUpdate(BaseModel):
+    """用于更新番剧详细信息的模型"""
     title: str = Field(..., min_length=1, description="新的影视名称")
-    season: int = Field(..., ge=1, description="新的季数")
+    season: int = Field(..., ge=1, description="新的季度")
+    tmdb_id: Optional[str] = None
+    tmdb_episode_group_id: Optional[str] = None
+    bangumi_id: Optional[str] = None
+    tvdb_id: Optional[str] = None
+    douban_id: Optional[str] = None
+    imdb_id: Optional[str] = None
 
 class EpisodeInfoUpdate(BaseModel):
     """用于更新分集信息的模型"""
     title: str = Field(..., min_length=1, description="新的分集标题")
     episode_index: int = Field(..., ge=1, description="新的集数")
     source_url: Optional[str] = Field(None, description="新的官方链接")
+
+class AnimeFullDetails(BaseModel):
+    """用于返回番剧完整信息的模型"""
+    anime_id: int
+    title: str
+    season: int
+    image_url: Optional[str] = None
+    tmdb_id: Optional[str] = None
+    tmdb_episode_group_id: Optional[str] = None
+    bangumi_id: Optional[str] = None
+    tvdb_id: Optional[str] = None
+    douban_id: Optional[str] = None
+    imdb_id: Optional[str] = None
 
 # --- 爬虫源管理模型 ---
 class ScraperSetting(BaseModel):
