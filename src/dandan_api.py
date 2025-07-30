@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from typing import List, Optional, Dict, Any
@@ -96,7 +97,6 @@ class BangumiIntro(BaseModel):
     searchKeyword: Optional[str] = None
     isOnAir: bool = False
     airDay: int = 0
-    isFavorited: bool = False
     isRestricted: bool = False
     rating: float = 0.0
 
@@ -220,49 +220,63 @@ def _parse_filename_for_match(filename: str) -> Optional[Dict[str, Any]]:
     使用正则表达式从文件名中解析出番剧标题和集数。
     这是一个简化的实现，用于 dandanplay 兼容接口。
     """
-    # 常见的番剧命名格式: [字幕组] 番剧名 - 01 [分辨率].mkv
-    PATTERNS = [
-        # 匹配 [xxx] xxx - 01, [xxx] xxx - 01 (xxx)
-        # 使用 \b 确保集数是独立的数字
-        re.compile(r"\[.*?\]\s*(?P<title>.+?)\s*[-_]\s*\b(?P<episode>\d{1,4})\b", re.IGNORECASE),
-        # 匹配 xxx - 01
+    # 移除文件扩展名
+    name_without_ext = filename.rsplit('.', 1)[0] if '.' in filename else filename
+
+    # 模式1: SXXEXX 格式 (e.g., "Some.Anime.S01E02.1080p.mkv")
+    s_e_pattern = re.compile(
+        r"^(?P<title>.+?)"
+        r"[\s._-]*"
+        r"[Ss](?P<season>\d{1,2})"
+        r"[Ee](?P<episode>\d{1,4})"
+        r"\b",
+        re.IGNORECASE
+    )
+    match = s_e_pattern.search(name_without_ext)
+    if match:
+        data = match.groupdict()
+        title = data["title"].replace(".", " ").replace("_", " ").strip()
+        title = re.sub(r'\[.*?\]', '', title).strip() # 移除字幕组标签
+        return {
+            "title": title,
+            "season": int(data["season"]),
+            "episode": int(data["episode"])
+        }
+
+    # 模式2: 只有集数 (e.g., "[Subs] Some Anime - 02 [1080p].mkv")
+    ep_only_patterns = [
         re.compile(r"^(?P<title>.+?)\s*[-_]\s*\b(?P<episode>\d{1,4})\b", re.IGNORECASE),
-        # 匹配 [xxx] xxx 01
-        re.compile(r"\[.*?\]\s*(?P<title>.+?)\s+\b(?P<episode>\d{1,4})\b", re.IGNORECASE),
-        # 匹配 xxx 01
         re.compile(r"^(?P<title>.+?)\s+\b(?P<episode>\d{1,4})\b", re.IGNORECASE),
     ]
-    for pattern in PATTERNS:
-        match = pattern.search(filename)
+    for pattern in ep_only_patterns:
+        match = pattern.search(name_without_ext)
         if match:
             data = match.groupdict()
-            # 移除标题中的常见干扰词
-            title = re.sub(r'\[.*?\]|\(.*?\)|\d{1,4}話|第\d{1,4}話', '', data["title"]).strip()
-            title = title.replace("_", " ")
+            title = data["title"]
+            # 清理标题中的元数据
+            title = re.sub(r'\[.*?\]|\(.*?\)|\【.*?\】', '', title).strip()
+            title = re.sub(r'1080p|720p|4k|bluray|x264|h\s*\.?\s*264|hevc|x265|h\s*\.?\s*265|aac|flac|web-dl|BDRip|WEBRip|TVRip|DVDrip|AVC|CHT|CHS|BIG5|GB', '', title, flags=re.IGNORECASE).strip()
+            title = title.replace("_", " ").replace(".", " ").strip()
+            title = title.strip(' -')
             return {
                 "title": title,
+                "season": None, # 此模式无法识别季度
                 "episode": int(data["episode"]),
             }
     
-    # 如果以上模式都未匹配，则假定为电影或单文件视频
-    # 1. 移除文件扩展名
-    title_part = filename
-    if '.' in filename:
-        title_part = filename.rsplit('.', 1)[0]
+    # 模式3: 电影或单文件视频 (没有集数)
+    title = name_without_ext
+    title = re.sub(r'\[.*?\]|\(.*?\)|\【.*?\】', '', title).strip()
+    title = re.sub(r'1080p|720p|4k|bluray|x264|h\s*\.?\s*264|hevc|x265|h\s*\.?\s*265|aac|flac|web-dl|BDRip|WEBRip|TVRip|DVDrip|AVC|CHT|CHS|BIG5|GB', '', title, flags=re.IGNORECASE).strip()
+    title = title.replace("_", " ").replace(".", " ").strip()
+    title = re.sub(r'\(\d{4}\)', '', title).strip() # 移除年份
+    title = title.strip(' -')
     
-    # 2. 移除括号内的常见标签
-    cleaned_title = re.sub(r'\[.*?\]|\(.*?\)|\【.*?\】', '', title_part).strip()
-    
-    # 3. 移除常见质量和编码标签
-    cleaned_title = re.sub(r'1080p|720p|4k|bluray|x264|x265|aac|flac|web-dl', '', cleaned_title, flags=re.IGNORECASE).strip()
-    
-    # 4. 将分隔符替换为空格并清理
-    cleaned_title = cleaned_title.replace("_", " ").replace(".", " ").strip()
-    
-    if cleaned_title:
+    if title:
         return {
-            "title": cleaned_title,
-            "episode": 1, # 对电影或单文件，默认匹配第1集
+            "title": title,
+            "season": 1, # 对电影，默认匹配第1季
+            "episode": 1, # 和第1集
         }
 
     return None
@@ -343,7 +357,6 @@ async def search_anime_for_dandan(
             type=dandan_type,
             typeDescription=dandan_type_desc,
             imageUrl=res.get('imageUrl'),
-            isFavorited=res.get('isFavorited', False),
             startDate=res.get('startDate'),
             episodeCount=res.get('episodeCount', 0),
         ))
@@ -406,7 +419,6 @@ async def get_bangumi_details(
         bangumiId=bangumi_id_str,
         animeTitle=anime_data['animeTitle'],
         imageUrl=anime_data.get('imageUrl'),
-        isFavorited=anime_data.get('isFavorited', False),
         searchKeyword=anime_data['animeTitle'],
         type=dandan_type,
         typeDescription=dandan_type_desc,
@@ -423,8 +435,28 @@ async def _process_single_batch_match(item: DandanBatchMatchRequestItem, pool: a
     if not parsed_info:
         return DandanMatchResponse(success=False, isMatched=False)
 
-    results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"])
+    results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"], parsed_info.get("season"))
 
+    # 优先处理被精确标记的源
+    favorited_results = [r for r in results if r.get('isFavorited')]
+    if favorited_results:
+        res = favorited_results[0]
+        type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
+        type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
+        dandan_type = type_mapping.get(res.get('type'), "other")
+        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+
+        match = DandanMatchInfo(
+            episodeId=res['episodeId'],
+            animeId=res['animeId'],
+            animeTitle=res['animeTitle'],
+            episodeTitle=res['episodeTitle'],
+            type=dandan_type,
+            typeDescription=dandan_type_desc,
+        )
+        return DandanMatchResponse(success=True, isMatched=True, matches=[match])
+
+    # 如果没有精确标记，则只有当结果唯一时才算成功
     if len(results) == 1:
         res = results[0]
         type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
@@ -465,21 +497,39 @@ async def match_single_file(
         logger.info(f"发送 /match 响应 (解析失败): {response.model_dump_json(indent=2)}")
         return response
 
-    results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"])
-    logger.info(f"数据库为 '{parsed_info['title']}' (集数: {parsed_info['episode']}) 搜索到 {len(results)} 条记录")
+    results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"], parsed_info.get("season"))
+    logger.info(f"数据库为 '{parsed_info['title']}' (季:{parsed_info.get('season')} 集:{parsed_info['episode']}) 搜索到 {len(results)} 条记录")
     
     if not results:
         response = DandanMatchResponse(isMatched=False, matches=[])
         logger.info(f"发送 /match 响应 (无匹配): {response.model_dump_json(indent=2)}")
         return response
 
-    # 检查所有匹配项是否都指向同一个番剧ID
-    # 这对于处理拥有多个数据源的电影或剧集非常重要
+    # 优先处理被精确标记的源
+    favorited_results = [r for r in results if r.get('isFavorited')]
+    if favorited_results:
+        res = favorited_results[0]
+        type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
+        type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
+        dandan_type = type_mapping.get(res.get('type'), "other")
+        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+
+        match = DandanMatchInfo(
+            episodeId=res['episodeId'],
+            animeId=res['animeId'],
+            animeTitle=res['animeTitle'],
+            episodeTitle=res['episodeTitle'],
+            type=dandan_type,
+            typeDescription=dandan_type_desc,
+        )
+        response = DandanMatchResponse(isMatched=True, matches=[match])
+        logger.info(f"发送 /match 响应 (精确标记匹配): {response.model_dump_json(indent=2)}")
+        return response
+
+    # 如果没有精确标记，检查所有匹配项是否都指向同一个番剧ID
     first_anime_id = results[0]['animeId']
     all_from_same_anime = all(res['animeId'] == first_anime_id for res in results)
 
-    # 如果所有匹配项都属于同一个番剧（例如，一个电影有多个源），
-    # 我们就认为这是一个精确匹配，并只返回第一个源作为代表。
     if all_from_same_anime:
         res = results[0]
         type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
@@ -496,7 +546,7 @@ async def match_single_file(
             typeDescription=dandan_type_desc,
         )
         response = DandanMatchResponse(isMatched=True, matches=[match])
-        logger.info(f"发送 /match 响应 (精确匹配): {response.model_dump_json(indent=2)}")
+        logger.info(f"发送 /match 响应 (单一作品匹配): {response.model_dump_json(indent=2)}")
         return response
 
     # 如果匹配到了多个不同的番剧，则返回所有结果让用户选择

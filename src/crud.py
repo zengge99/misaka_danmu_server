@@ -19,7 +19,6 @@ async def get_library_anime(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
                     a.title,
                     a.season,
                     a.created_at as createdAt,
-                    a.is_favorited as isFavorited,
                     (SELECT COUNT(DISTINCT e.id) FROM anime_sources s JOIN episode e ON s.id = e.source_id WHERE s.anime_id = a.id) as episodeCount,
                     (SELECT COUNT(*) FROM anime_sources WHERE anime_id = a.id) as sourceCount
                 FROM anime a
@@ -39,7 +38,7 @@ async def search_anime(pool: aiomysql.Pool, keyword: str) -> List[Dict[str, Any]
             await cursor.execute(query, (keyword + '*',))
             return await cursor.fetchall()
 
-async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, episode_number: Optional[int]) -> List[Dict[str, Any]]:
+async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, episode_number: Optional[int], season_number: Optional[int] = None) -> List[Dict[str, Any]]:
     """
     在本地库中通过番剧标题和可选的集数搜索匹配的分集。
     返回一个扁平化的列表，包含番剧和分集信息。
@@ -51,6 +50,8 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
     # Build WHERE clauses
     episode_condition = "AND e.episode_index = %s" if episode_number is not None else ""
     params_episode = [episode_number] if episode_number is not None else []
+    season_condition = "AND a.season = %s" if season_number is not None else ""
+    params_season = [season_number] if season_number is not None else []
 
     query_template = f"""
         SELECT
@@ -61,13 +62,14 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
             a.created_at AS startDate,
             e.id AS episodeId,
             e.title AS episodeTitle,
+            s.is_favorited AS isFavorited,
             (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as totalEpisodeCount,
             m.bangumi_id AS bangumiId
         FROM episode e
         JOIN anime_sources s ON e.source_id = s.id
         JOIN anime a ON s.anime_id = a.id
         LEFT JOIN anime_metadata m ON a.id = m.anime_id
-        WHERE {{title_condition}} {episode_condition}
+        WHERE {{title_condition}} {episode_condition} {season_condition}
         ORDER BY a.id, e.episode_index
     """
 
@@ -75,7 +77,7 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             # 1. Try FULLTEXT search
             query_ft = query_template.format(title_condition="MATCH(a.title) AGAINST(%s IN BOOLEAN MODE)")
-            await cursor.execute(query_ft, tuple([clean_title + '*'] + params_episode))
+            await cursor.execute(query_ft, tuple([clean_title + '*'] + params_episode + params_season))
             results = await cursor.fetchall()
             if results:
                 return results
@@ -87,7 +89,7 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
             normalized_like_title = clean_title.replace("：", ":").replace(" ", "")
             # 2. 在SQL查询中，也对数据库字段进行替换，确保两侧格式一致
             query_like = query_template.format(title_condition="REPLACE(REPLACE(a.title, '：', ':'), ' ', '') LIKE %s")
-            await cursor.execute(query_like, tuple([f"%{normalized_like_title}%"] + params_episode))
+            await cursor.execute(query_like, tuple([f"%{normalized_like_title}%"] + params_episode + params_season))
             return await cursor.fetchall()
 
 async def search_animes_for_dandan(pool: aiomysql.Pool, keyword: str) -> List[Dict[str, Any]]:
@@ -104,7 +106,6 @@ async def search_animes_for_dandan(pool: aiomysql.Pool, keyword: str) -> List[Di
             a.title AS animeTitle,
             a.type,
             a.image_url AS imageUrl,
-            a.is_favorited AS isFavorited,
             a.created_at AS startDate,
             (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as episodeCount,
             m.bangumi_id AS bangumiId
@@ -142,7 +143,6 @@ async def get_anime_details_for_dandan(pool: aiomysql.Pool, anime_id: int) -> Op
                     a.image_url AS imageUrl,
                     a.created_at AS startDate,
                     a.source_url AS bangumiUrl,
-                    a.is_favorited AS isFavorited,
                     (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as episodeCount,
                     m.bangumi_id AS bangumiId
                 FROM anime a
@@ -356,7 +356,7 @@ async def get_anime_sources(pool: aiomysql.Pool, anime_id: int) -> List[Dict[str
     """获取指定作品的所有关联数据源。"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            query = "SELECT id as source_id, provider_name, media_id, created_at FROM anime_sources WHERE anime_id = %s ORDER BY created_at ASC"
+            query = "SELECT id as source_id, provider_name, media_id, is_favorited, created_at FROM anime_sources WHERE anime_id = %s ORDER BY created_at ASC"
             await cursor.execute(query, (anime_id,))
             return await cursor.fetchall()
 
@@ -630,9 +630,26 @@ async def validate_api_token(pool: aiomysql.Pool, token: str) -> bool:
             await cursor.execute("SELECT 1 FROM api_tokens WHERE token = %s AND is_enabled = TRUE", (token,))
             return await cursor.fetchone() is not None
 
-async def toggle_anime_favorite_status(pool: aiomysql.Pool, anime_id: int) -> bool:
-    """切换一个番剧的收藏状态。"""
+async def toggle_source_favorite_status(pool: aiomysql.Pool, source_id: int) -> bool:
+    """切换一个数据源的精确标记状态。一个作品只能有一个精确标记的源。"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
-            affected_rows = await cursor.execute("UPDATE anime SET is_favorited = NOT is_favorited WHERE id = %s", (anime_id,))
-            return affected_rows > 0
+            # 首先，获取此源关联的 anime_id
+            await cursor.execute("SELECT anime_id FROM anime_sources WHERE id = %s", (source_id,))
+            result = await cursor.fetchone()
+            if not result:
+                return False
+            anime_id = result[0]
+
+            try:
+                await conn.begin()
+                # 将此作品下的所有其他源都设为非精确
+                await cursor.execute("UPDATE anime_sources SET is_favorited = FALSE WHERE anime_id = %s AND id != %s", (anime_id, source_id))
+                # 切换目标源的精确标记状态
+                await cursor.execute("UPDATE anime_sources SET is_favorited = NOT is_favorited WHERE id = %s", (source_id,))
+                await conn.commit()
+                return True
+            except Exception as e:
+                await conn.rollback()
+                logging.error(f"切换源收藏状态时出错: {e}", exc_info=True)
+                return False

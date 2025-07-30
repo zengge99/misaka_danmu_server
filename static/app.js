@@ -722,7 +722,6 @@ document.addEventListener('DOMContentLoaded', () => {
             actionsCell.className = 'actions-cell';
             actionsCell.innerHTML = `
                 <div class="action-buttons-wrapper">
-                    <button class="action-btn" title="收藏" onclick="handleAction('favorite', ${anime.animeId})">${anime.isFavorited ? '🌟' : '⭐'}</button>
                     <button class="action-btn" title="编辑" onclick="handleAction('edit', ${anime.animeId})">✏️</button>
                     <button class="action-btn" title="查看数据源" onclick="handleAction('view', ${anime.animeId})">📖</button>
                     <button class="action-btn" title="删除" onclick="handleAction('delete', ${anime.animeId})">🗑️</button>
@@ -824,6 +823,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 actionsCell.className = 'actions-cell';
                 actionsCell.innerHTML = `
                     <div class="action-buttons-wrapper">
+                        <button class="action-btn" title="精确标记" onclick="handleSourceAction('favorite', ${source.source_id}, '${anime.title.replace(/'/g, "\\'")}', ${anime.animeId})">${source.is_favorited ? '🌟' : '⭐'}</button>
                         <button class="action-btn" title="查看/编辑分集" onclick="handleSourceAction('view_episodes', ${source.source_id}, '${anime.title.replace(/'/g, "\\'")}', ${anime.animeId})">📖</button>
                         <button class="action-btn" title="刷新此源" onclick="handleSourceAction('refresh', ${source.source_id}, '${anime.title}')">🔄</button>
                         <button class="action-btn" title="删除此源" onclick="handleSourceAction('delete', ${source.source_id}, '${anime.title}')">🗑️</button>
@@ -1141,6 +1141,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (action === 'delete') {
             // Placeholder for deleting a source
             alert(`功能 '删除源' (ID: ${sourceId}) 尚未实现。`);
+        } else if (action === 'favorite') {
+            apiFetch(`/api/ui/library/source/${sourceId}/favorite`, {
+                method: 'PUT',
+            }).then(() => {
+                showAnimeDetailView(animeId); // 刷新视图以显示更新后的状态
+            }).catch(error => {
+                alert(`操作失败: ${error.message}`);
+            });
         }
     };
 

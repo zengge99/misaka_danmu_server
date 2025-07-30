@@ -99,7 +99,6 @@ async def init_db_tables(app: FastAPI):
               `image_url` VARCHAR(512) NULL,
               `season` INT NOT NULL DEFAULT 1,
               `source_url` VARCHAR(512) NULL,
-              `is_favorited` BOOLEAN NOT NULL DEFAULT FALSE,
               `created_at` TIMESTAMP NULL,
               PRIMARY KEY (`id`),
               FULLTEXT INDEX `idx_title_fulltext` (`title`)
@@ -158,6 +157,7 @@ async def init_db_tables(app: FastAPI):
               `anime_id` BIGINT NOT NULL,
               `provider_name` VARCHAR(50) NOT NULL,
               `media_id` VARCHAR(255) NOT NULL,
+              `is_favorited` BOOLEAN NOT NULL DEFAULT FALSE,
               `created_at` TIMESTAMP NULL,
               PRIMARY KEY (`id`),
               UNIQUE INDEX `idx_anime_provider_media_unique` (`anime_id` ASC, `provider_name` ASC, `media_id` ASC)
@@ -297,10 +297,20 @@ async def init_db_tables(app: FastAPI):
                 else:
                     raise
 
-            # 迁移检查：anime 表的 is_favorited
+            # 迁移检查：移除 anime 表的 is_favorited
             try:
-                await cursor.execute("ALTER TABLE `anime` ADD COLUMN `is_favorited` BOOLEAN NOT NULL DEFAULT FALSE AFTER `source_url`;")
-                print("'anime' 表 'is_favorited' 字段添加完成。")
+                await cursor.execute("ALTER TABLE `anime` DROP COLUMN `is_favorited`;")
+                print("'anime' 表的 'is_favorited' 字段已移除。")
+            except aiomysql.OperationalError as e:
+                if e.args[0] == 1091: # Can't DROP '...'; check that column/key exists
+                    pass # 字段不存在，是正常情况
+                else:
+                    raise
+
+            # 迁移检查：为 anime_sources 表添加 is_favorited
+            try:
+                await cursor.execute("ALTER TABLE `anime_sources` ADD COLUMN `is_favorited` BOOLEAN NOT NULL DEFAULT FALSE AFTER `media_id`;")
+                print("'anime_sources' 表 'is_favorited' 字段添加完成。")
             except aiomysql.OperationalError as e:
                 if e.args[0] == 1060: # Duplicate column name
                     pass
