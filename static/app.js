@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsList = document.getElementById('results-list');
     const clearCacheBtn = document.getElementById('clear-cache-btn');
     const bulkImportBtn = document.getElementById('bulk-import-btn');
+    const selectAllBtn = document.getElementById('select-all-btn');
     const resultsFilterControls = document.getElementById('results-filter-controls');
     const filterBtnMovie = document.getElementById('filter-btn-movie');
     const filterBtnTvSeries = document.getElementById('filter-btn-tv_series');
@@ -189,6 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logoutBtn.addEventListener('click', logout);
         clearCacheBtn.addEventListener('click', handleClearCache);
         bulkImportBtn.addEventListener('click', handleBulkImport);
+        selectAllBtn.addEventListener('click', handleSelectAll);
         // Filter controls
         filterBtnMovie.addEventListener('click', handleTypeFilterClick);
         filterBtnTvSeries.addEventListener('click', handleTypeFilterClick);
@@ -587,6 +589,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function handleSelectAll() {
+        const checkboxes = resultsList.querySelectorAll('input[type="checkbox"]');
+        if (checkboxes.length === 0) return;
+        // 如果有任何一个没被选中，则全部选中；否则全部不选。
+        const shouldCheckAll = Array.from(checkboxes).some(cb => !cb.checked);
+        checkboxes.forEach(cb => {
+            cb.checked = shouldCheckAll;
+        });
+    }
+
     function handleTypeFilterClick(e) {
         const btn = e.currentTarget;
         btn.classList.toggle('active');
@@ -710,17 +722,17 @@ document.addEventListener('DOMContentLoaded', () => {
         results.forEach(item => {
             const li = document.createElement('li');
 
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = item.mediaId;
-            li.appendChild(checkbox);
-
             const posterImg = document.createElement('img');
             posterImg.className = 'poster';
             posterImg.src = item.imageUrl || '/static/placeholder.png';
             posterImg.referrerPolicy = 'no-referrer';
             posterImg.alt = item.title;
             li.appendChild(posterImg);
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = item.mediaId;
+            li.appendChild(checkbox);
 
             const infoDiv = document.createElement('div');
             infoDiv.className = 'info';
@@ -779,10 +791,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayResults(results) {
         originalSearchResults = results;
-        bulkImportBtn.classList.toggle('hidden', results.length === 0);
+        resultsFilterControls.classList.toggle('hidden', results.length === 0);
 
         if (results.length > 0) {
-            resultsFilterControls.classList.remove('hidden');
             // Reset filters to default state
             filterBtnMovie.classList.add('active');
             filterBtnMovie.querySelector('.status-icon').textContent = '✅';
@@ -791,7 +802,6 @@ document.addEventListener('DOMContentLoaded', () => {
             resultsFilterInput.value = '';
             applyFiltersAndRender();
         } else {
-            resultsFilterControls.classList.add('hidden');
             resultsList.innerHTML = '<li>未找到结果。</li>';
         }
     }

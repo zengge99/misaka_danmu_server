@@ -487,6 +487,8 @@ header {
 #results-list li input[type="checkbox"] {
     width: 20px;
     height: 20px;
+    margin-left: 15px; /* 与海报的间距 */
+    flex-shrink: 0; /* 防止复选框被压缩 */
 }
 
 #results-list li .info {
@@ -689,6 +691,12 @@ header {
     margin-bottom: 10px;
 }
 
+.filter-group-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
 .filter-buttons {
     display: flex;
     gap: 10px;
@@ -711,6 +719,19 @@ header {
     background-color: var(--primary-color);
     color: white;
     border-color: var(--primary-color);
+}
+
+#select-all-btn, #bulk-import-btn {
+    padding: 8px 12px;
+    font-size: 14px;
+}
+
+#select-all-btn {
+    background-color: #6c757d;
+}
+
+#bulk-import-btn {
+    background-color: var(--success-color);
 }
 
 /* New style for section headers with an action button */
