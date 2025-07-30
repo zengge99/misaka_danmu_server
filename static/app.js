@@ -23,6 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsFilterInput = document.getElementById('results-filter-input');
     const logOutput = document.getElementById('log-output');
     const loader = document.getElementById('loader');
+    const testMatchForm = document.getElementById('test-match-form');
+    const testFilenameInput = document.getElementById('test-filename-input');
+    const testMatchResults = document.getElementById('test-match-results');
     
     const changePasswordForm = document.getElementById('change-password-form');
     const passwordChangeMessage = document.getElementById('password-change-message');
@@ -183,6 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Forms
         loginForm.addEventListener('submit', handleLogin);
         searchForm.addEventListener('submit', handleSearch);
+        testMatchForm.addEventListener('submit', handleTestMatch);
         changePasswordForm.addEventListener('submit', handleChangePassword);
         editAnimeForm.addEventListener('submit', handleEditAnimeSave);
         editEpisodeForm.addEventListener('submit', handleEditEpisodeSave);
@@ -323,6 +327,25 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(`搜索失败: ${(error.message || error)}`);
         } finally {
             toggleLoader(false);
+        }
+    }
+
+    async function handleTestMatch(e) {
+        e.preventDefault();
+        const filename = testFilenameInput.value.trim();
+        if (!filename) return;
+
+        testMatchResults.textContent = '正在测试...';
+        const testButton = testMatchForm.querySelector('button');
+        testButton.disabled = true;
+
+        try {
+            const data = await apiFetch(`/api/ui/match?fileName=${encodeURIComponent(filename)}`);
+            testMatchResults.textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+            testMatchResults.textContent = `测试失败: ${(error.message || error)}`;
+        } finally {
+            testButton.disabled = false;
         }
     }
 

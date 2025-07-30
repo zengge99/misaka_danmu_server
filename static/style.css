@@ -789,3 +789,28 @@ header {
     color: var(--primary-color);
     border-color: var(--border-color);
 }
+
+/* Test Match Section Styles */
+#test-match-section form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+#test-match-section input[type="text"] {
+    flex-grow: 1;
+}
+
+#test-match-results {
+    background-color: #f8f9fa;
+    border: 1px solid var(--border-color);
+    padding: 15px;
+    border-radius: 4px;
+    min-height: 50px;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-color);
+    font-family: 'Courier New', Courier, monospace;
+}
