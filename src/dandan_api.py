@@ -21,35 +21,38 @@ implementation_router = APIRouter()
 # 这是将包含在 main.py 中的主路由。
 dandan_router = APIRouter()
 
-@dandan_router.exception_handler(HTTPException)
-async def dandan_exception_handler(request: Request, exc: HTTPException):
+@dandan_router.middleware("http")
+async def dandan_exception_middleware(request: Request, call_next):
     """
-    为 dandanplay 兼容接口定制的异常处理器。
+    为 dandanplay 兼容接口定制的异常处理中间件。
     捕获 HTTPException，并以 dandanplay API v2 的格式返回错误信息。
     """
-    # 简单的 HTTP 状态码到 dandanplay 错误码的映射
-    # 1001: 无效的参数
-    # 1003: 未授权
-    # 404: 未找到
-    # 500: 服务器内部错误
-    error_code_map = {
-        status.HTTP_400_BAD_REQUEST: 1001,
-        status.HTTP_404_NOT_FOUND: 404,
-        status.HTTP_422_UNPROCESSABLE_ENTITY: 1001,
-        status.HTTP_403_FORBIDDEN: 1003,
-        status.HTTP_500_INTERNAL_SERVER_ERROR: 500,
-    }
-    error_code = error_code_map.get(exc.status_code, 500)
+    try:
+        return await call_next(request)
+    except HTTPException as exc:
+        # 简单的 HTTP 状态码到 dandanplay 错误码的映射
+        # 1001: 无效的参数
+        # 1003: 未授权
+        # 404: 未找到
+        # 500: 服务器内部错误
+        error_code_map = {
+            status.HTTP_400_BAD_REQUEST: 1001,
+            status.HTTP_404_NOT_FOUND: 404,
+            status.HTTP_422_UNPROCESSABLE_ENTITY: 1001,
+            status.HTTP_403_FORBIDDEN: 1003,
+            status.HTTP_500_INTERNAL_SERVER_ERROR: 500,
+        }
+        error_code = error_code_map.get(exc.status_code, 500)
 
-    # 始终返回 200 OK，错误信息在 JSON body 中体现
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={
-            "success": False,
-            "errorCode": error_code,
-            "errorMessage": exc.detail,
-        },
-    )
+        # 始终返回 200 OK，错误信息在 JSON body 中体现
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "success": False,
+                "errorCode": error_code,
+                "errorMessage": exc.detail,
+            },
+        )
 
 class DandanResponseBase(BaseModel):
     """模仿 dandanplay API v2 的基础响应模型"""
