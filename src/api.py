@@ -459,13 +459,27 @@ async def generic_import_task(
             # 3.1 在数据库中创建或获取分集ID
             episode_db_id = await crud.get_or_create_episode(pool, source_id, episode.episodeIndex, episode.title, episode.url, episode.episodeId)
 
+            # 为弹幕获取创建一个子进度回调
+            base_progress = (i / len(episodes)) * 100
+            progress_range = (1 / len(episodes)) * 100
+
+            def sub_progress_callback(danmaku_progress: int, danmaku_description: str):
+                # danmaku_progress is 0-100
+                # Map it to the current episode's progress slice
+                current_total_progress = base_progress + (danmaku_progress / 100) * progress_range
+                progress_callback(
+                    progress=current_total_progress,
+                    description=f"处理: {episode.title} - {danmaku_description}"
+                )
+
             # 3.2 获取弹幕
-            comments = await scraper.get_comments(episode.episodeId)
+            comments = await scraper.get_comments(episode.episodeId, progress_callback=sub_progress_callback)
             if not comments:
                 logger.info(f"分集 '{episode.title}' 未找到弹幕，跳过。")
                 continue
 
             # 3.3 批量插入弹幕 (get_comments 已按要求格式化)
+            progress_callback(base_progress + progress_range * 0.98, f"处理: {episode.title} - 正在写入数据库")
             added_count = await crud.bulk_insert_comments(pool, episode_db_id, comments)
             total_comments_added += added_count
             logger.info(f"分集 '{episode.title}' (DB ID: {episode_db_id}) 新增 {added_count} 条弹幕。")
@@ -516,9 +530,16 @@ async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: Sc
         logger.info(f"已清空分集 ID: {episode_id} 的旧弹幕。")
 
         # 3. 获取新弹幕并插入
-        progress_callback(50, "正在从源获取新弹幕...")
-        comments = await scraper.get_comments(provider_episode_id)
-        progress_callback(75, f"正在写入 {len(comments)} 条新弹幕...")
+        progress_callback(30, "正在从源获取新弹幕...")
+        
+        def sub_progress_callback(danmaku_progress: int, danmaku_description: str):
+            # 30% for setup, 65% for download, 5% for db write
+            current_total_progress = 30 + (danmaku_progress / 100) * 65
+            progress_callback(current_total_progress, danmaku_description)
+
+        comments = await scraper.get_comments(provider_episode_id, progress_callback=sub_progress_callback)
+
+        progress_callback(96, f"正在写入 {len(comments)} 条新弹幕...")
         added_count = await crud.bulk_insert_comments(pool, episode_id, comments)
         await crud.update_episode_fetch_time(pool, episode_id)
         logger.info(f"分集 ID: {episode_id} 刷新完成，新增 {added_count} 条弹幕。")

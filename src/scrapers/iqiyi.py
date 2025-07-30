@@ -23,11 +23,11 @@ class IqiyiSearchVideoInfo(BaseModel):
 class IqiyiSearchAlbumInfo(BaseModel):
     album_id: Optional[int] = Field(None, alias="albumId")
     item_total_number: Optional[int] = Field(None, alias="itemTotalNumber")
-    site_id: str = Field(alias="siteId")
-    album_link: str = Field(alias="albumLink")
+    site_id: Optional[str] = Field(None, alias="siteId")
+    album_link: Optional[str] = Field(None, alias="albumLink")
     video_doc_type: int = Field(alias="videoDocType")
-    album_title: str = Field(alias="albumTitle")
-    channel: str
+    album_title: Optional[str] = Field(None, alias="albumTitle")
+    channel: Optional[str] = None
     release_date: Optional[str] = Field(None, alias="releaseDate")
     album_img: Optional[str] = Field(None, alias="albumImg")
     videoinfos: Optional[List[IqiyiSearchVideoInfo]] = None
@@ -35,7 +35,7 @@ class IqiyiSearchAlbumInfo(BaseModel):
     @property
     def link_id(self) -> Optional[str]:
         link_to_parse = self.album_link
-        if self.videoinfos and self.videoinfos[0].item_link:
+        if self.videoinfos and self.videoinfos[0].item_link and self.album_link:
             link_to_parse = self.videoinfos[0].item_link
 
         match = re.search(r"v_(\w+?)\.html", link_to_parse)
@@ -129,6 +129,8 @@ class IqiyiScraper(BaseScraper):
             self.logger.info(f"爱奇艺: 从缓存中命中搜索结果 '{keyword}'")
             return [models.ProviderSearchInfo.model_validate(r) for r in cached_results]
 
+        self.logger.info(f"爱奇艺: 正在搜索 '{keyword}'...")
+
         url = f"https://search.video.iqiyi.com/o?if=html5&key={keyword}&pageNum=1&pageSize=20"
         results = []
         try:
@@ -143,7 +145,7 @@ class IqiyiScraper(BaseScraper):
                 if doc.score < 0.7: continue
                 
                 album = doc.album_doc_info
-                if not ("iqiyi.com" in album.album_link and album.site_id == "iqiyi" and album.video_doc_type == 1):
+                if not (album.album_link and "iqiyi.com" in album.album_link and album.site_id == "iqiyi" and album.video_doc_type == 1):
                     continue
                 if "原创" in album.channel or "教育" in album.channel:
                     continue
@@ -155,6 +157,7 @@ class IqiyiScraper(BaseScraper):
                 channel_name = album.channel.split(',')[0]
                 media_type = "movie" if channel_name == "电影" else "tv_series"
 
+                current_episode = episode_info.get("episode") if episode_info else None
                 results.append(models.ProviderSearchInfo(
                     provider=self.provider_name,
                     mediaId=link_id,
@@ -163,6 +166,7 @@ class IqiyiScraper(BaseScraper):
                     year=album.year,
                     imageUrl=album.album_img,
                     episodeCount=album.item_total_number,
+                    currentEpisodeIndex=current_episode,
                 ))
 
         except Exception as e:
@@ -267,10 +271,19 @@ class IqiyiScraper(BaseScraper):
 
         elif base_info.channel_name == "电视剧" or base_info.channel_name == "动漫":
             episodes = await self._get_tv_episodes(base_info.album_id, base_info.video_count)
+
+            # 优化：如果指定了目标分集，则只处理目标分集，避免不必要的网络请求
+            if target_episode_index:
+                target_episode_from_list = next((ep for ep in episodes if ep.order == target_episode_index), None)
+                if target_episode_from_list:
+                    episodes = [target_episode_from_list]
+                else:
+                    self.logger.warning(f"爱奇艺: 目标分集 {target_episode_index} 在获取的列表中未找到 (album_id={base_info.album_id})")
+                    return []
             
             # 为了获取更准确的分集标题（如“林朝夕平行世界变孤儿”），
             # 我们需要并发地访问每个分集的页面。
-            self.logger.info(f"爱奇艺: 正在为 {len(episodes)} 个分集并发获取真实标题...")
+            self.logger.debug(f"爱奇艺: 正在为 {len(episodes)} 个分集并发获取真实标题...")
             tasks = [self._get_video_base_info(ep.link_id) for ep in episodes if ep.link_id]
             detailed_infos = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -302,14 +315,10 @@ class IqiyiScraper(BaseScraper):
             ) for ep in episodes if ep.link_id
         ]
 
-        if target_episode_index is None:
+        # 仅当获取完整列表时才进行缓存
+        if target_episode_index is None and provider_episodes:
             episodes_to_cache = [e.model_dump() for e in provider_episodes]
             await self._set_to_cache(cache_key, episodes_to_cache, 'episodes_ttl_seconds', 1800)
-
-        if target_episode_index:
-            target = next((ep for ep in provider_episodes if ep.episodeIndex == target_episode_index), None)
-            return [target] if target else []
-
         return provider_episodes
 
     async def _get_danmu_content_by_mat(self, tv_id: str, mat: int) -> List[IqiyiComment]:
@@ -366,18 +375,27 @@ class IqiyiScraper(BaseScraper):
         
         return []
 
-    async def get_comments(self, episode_id: str) -> List[dict]:
+    async def get_comments(self, episode_id: str, progress_callback: Optional[Callable] = None) -> List[dict]:
         tv_id = episode_id # For iqiyi, episodeId is tvId
         all_comments = []
         
         # iqiyi danmaku is fetched in 300-second segments (5 minutes)
         # We loop through segments until we get an empty response or a 404
         for mat in range(1, 100): # Limit to 500 minutes to prevent infinite loops
+            if progress_callback:
+                # 爱奇艺没有总分段数，因此我们只能显示当前正在获取哪个分段
+                # 进度条可以模拟一个递增的值
+                progress = min(95, mat * 5) # 假设大部分视频不会超过20个分段 (100分钟)
+                progress_callback(progress, f"正在获取第 {mat} 分段")
+
             comments_in_mat = await self._get_danmu_content_by_mat(tv_id, mat)
             if not comments_in_mat:
                 break
             all_comments.extend(comments_in_mat)
             await asyncio.sleep(0.1) # Be nice to the server
+
+        if progress_callback:
+            progress_callback(100, "弹幕整合完成")
 
         return self._format_comments(all_comments)
 

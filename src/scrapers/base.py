@@ -56,7 +56,7 @@ class BaseScraper(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_comments(self, episode_id: str) -> List[dict]:
+    async def get_comments(self, episode_id: str, progress_callback: Optional[Callable] = None) -> List[dict]:
         """
         获取给定分集ID的所有弹幕。
         返回的字典列表应与 crud.bulk_insert_comments 的期望格式兼容。

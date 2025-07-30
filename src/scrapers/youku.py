@@ -115,6 +115,8 @@ class YoukuScraper(BaseScraper):
             self.logger.info(f"Youku: 从缓存中命中搜索结果 '{keyword}'")
             return [models.ProviderSearchInfo.model_validate(r) for r in cached_results]
 
+        self.logger.info(f"Youku: 正在搜索 '{keyword}'...")
+
         ua_encoded = urlencode({"userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"})
         keyword_encoded = urlencode({"keyword": keyword})
         url = f"https://search.youku.com/api/search?{keyword_encoded}&{ua_encoded}&site=1&categories=0&ftype=0&ob=0&pg=1"
@@ -228,7 +230,7 @@ class YoukuScraper(BaseScraper):
         response.raise_for_status()
         return YoukuVideoResult.model_validate(response.json())
 
-    async def get_comments(self, episode_id: str) -> List[dict]:
+    async def get_comments(self, episode_id: str, progress_callback: Optional[Callable] = None) -> List[dict]:
         vid = episode_id.replace("_", "=")
         
         try:
@@ -246,10 +248,17 @@ class YoukuScraper(BaseScraper):
 
             all_comments = []
             for mat in range(total_mat):
+                if progress_callback:
+                    progress = int((mat + 1) / total_mat * 100) if total_mat > 0 else 100
+                    progress_callback(progress, f"正在获取分段 {mat + 1}/{total_mat}")
+
                 comments_in_mat = await self._get_danmu_content_by_mat(vid, mat)
                 if comments_in_mat:
                     all_comments.extend(comments_in_mat)
                 await asyncio.sleep(0.2)
+
+            if progress_callback:
+                progress_callback(100, "弹幕整合完成")
 
             return self._format_comments(all_comments)
 
@@ -267,7 +276,7 @@ class YoukuScraper(BaseScraper):
         cna_val = self.client.cookies.get("cna")
         if not cna_val:
             try:
-                self.logger.info("Youku: 'cna' cookie 未找到, 正在访问 youku.com 以获取...")
+                self.logger.debug("Youku: 'cna' cookie 未找到, 正在访问 youku.com 以获取...")
                 await self.client.get("https://www.youku.com/")
                 cna_val = self.client.cookies.get("cna")
             except httpx.ConnectError as e:
@@ -278,7 +287,7 @@ class YoukuScraper(BaseScraper):
         token_val = self.client.cookies.get("_m_h5_tk")
         if not token_val:
             try:
-                self.logger.info("Youku: '_m_h5_tk' cookie 未找到, 正在从 acs.youku.com 请求...")
+                self.logger.debug("Youku: '_m_h5_tk' cookie 未找到, 正在从 acs.youku.com 请求...")
                 await self.client.get("https://acs.youku.com/h5/mtop.com.youku.aplatform.weakget/1.0/?jsv=2.5.1&appKey=24679788")
                 token_val = self.client.cookies.get("_m_h5_tk")
             except httpx.ConnectError as e:

@@ -16,6 +16,15 @@ from .database import get_db_pool
 
 logger = logging.getLogger(__name__)
 
+# --- Module-level Constants for Type Mappings ---
+# To avoid repetition and improve maintainability.
+DANDAN_TYPE_MAPPING = {
+    "tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"
+}
+DANDAN_TYPE_DESC_MAPPING = {
+    "tv_series": "TV动画", "movie": "电影/剧场版", "ova": "OVA", "other": "其他"
+}
+
 # 这个子路由将包含所有接口的实际实现。
 # 它将被挂载到主路由的不同路径上。
 implementation_router = APIRouter()
@@ -229,14 +238,8 @@ async def _search_implementation(
     for res in flat_results:
         anime_id = res['animeId']
         if anime_id not in grouped_animes:
-            type_mapping = {
-                "tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"
-            }
-            type_desc_mapping = {
-                "tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"
-            }
-            dandan_type = type_mapping.get(res.get('type'), "other")
-            dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+            dandan_type = DANDAN_TYPE_MAPPING.get(res.get('type'), "other")
+            dandan_type_desc = DANDAN_TYPE_DESC_MAPPING.get(res.get('type'), "其他")
 
             grouped_animes[anime_id] = DandanAnimeInfo(
                 bangumiId=res.get('bangumiId') or f"A{anime_id}",
@@ -382,14 +385,8 @@ async def search_anime_for_dandan(
     
     animes = []
     for res in db_results:
-        type_mapping = {
-            "tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"
-        }
-        type_desc_mapping = {
-            "tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"
-        }
-        dandan_type = type_mapping.get(res.get('type'), "other")
-        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+        dandan_type = DANDAN_TYPE_MAPPING.get(res.get('type'), "other")
+        dandan_type_desc = DANDAN_TYPE_DESC_MAPPING.get(res.get('type'), "其他")
 
         animes.append(DandanSearchAnimeItem(
             animeId=res['animeId'],
@@ -400,8 +397,9 @@ async def search_anime_for_dandan(
             imageUrl=res.get('imageUrl'),
             startDate=res.get('startDate'),
             episodeCount=res.get('episodeCount', 0),
-            rating=0, 
-            isFavorited=True  
+            # 显式设置默认值以提高代码清晰度
+            rating=0.0,  # 当前系统未实现评级功能
+            isFavorited=False  # 搜索结果默认不标记为收藏
         ))
     
     return DandanSearchAnimeResponse(animes=animes)
@@ -442,10 +440,8 @@ async def get_bangumi_details(
     anime_data = details['anime']
     episodes_data = details['episodes']
 
-    type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
-    type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
-    dandan_type = type_mapping.get(anime_data.get('type'), "other")
-    dandan_type_desc = type_desc_mapping.get(anime_data.get('type'), "其他")
+    dandan_type = DANDAN_TYPE_MAPPING.get(anime_data.get('type'), "other")
+    dandan_type_desc = DANDAN_TYPE_DESC_MAPPING.get(anime_data.get('type'), "其他")
 
     formatted_episodes = [
         BangumiEpisode(
@@ -484,10 +480,8 @@ async def _process_single_batch_match(item: DandanBatchMatchRequestItem, pool: a
     favorited_results = [r for r in results if r.get('isFavorited')]
     if favorited_results:
         res = favorited_results[0]
-        type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
-        type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
-        dandan_type = type_mapping.get(res.get('type'), "other")
-        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+        dandan_type = DANDAN_TYPE_MAPPING.get(res.get('type'), "other")
+        dandan_type_desc = DANDAN_TYPE_DESC_MAPPING.get(res.get('type'), "其他")
 
         match = DandanMatchInfo(
             episodeId=res['episodeId'],
@@ -502,10 +496,8 @@ async def _process_single_batch_match(item: DandanBatchMatchRequestItem, pool: a
     # 如果没有精确标记，则只有当结果唯一时才算成功
     if len(results) == 1:
         res = results[0]
-        type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
-        type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
-        dandan_type = type_mapping.get(res.get('type'), "other")
-        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+        dandan_type = DANDAN_TYPE_MAPPING.get(res.get('type'), "other")
+        dandan_type_desc = DANDAN_TYPE_DESC_MAPPING.get(res.get('type'), "其他")
 
         match = DandanMatchInfo(
             episodeId=res['episodeId'],
@@ -563,10 +555,8 @@ async def match_single_file(
     favorited_results = [r for r in results if r.get('isFavorited')]
     if favorited_results:
         res = favorited_results[0]
-        type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
-        type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
-        dandan_type = type_mapping.get(res.get('type'), "other")
-        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+        dandan_type = DANDAN_TYPE_MAPPING.get(res.get('type'), "other")
+        dandan_type_desc = DANDAN_TYPE_DESC_MAPPING.get(res.get('type'), "其他")
 
         match = DandanMatchInfo(
             episodeId=res['episodeId'],
@@ -587,10 +577,8 @@ async def match_single_file(
     if all_from_same_anime:
         # 结果已由数据库按 标题长度和源顺序 排序，直接取第一个
         res = results[0]
-        type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
-        type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
-        dandan_type = type_mapping.get(res.get('type'), "other")
-        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+        dandan_type = DANDAN_TYPE_MAPPING.get(res.get('type'), "other")
+        dandan_type_desc = DANDAN_TYPE_DESC_MAPPING.get(res.get('type'), "其他")
 
         match = DandanMatchInfo(
             episodeId=res['episodeId'],
@@ -607,10 +595,8 @@ async def match_single_file(
     # 如果匹配到了多个不同的番剧，则返回所有结果让用户选择
     matches = []
     for res in results:
-        type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
-        type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}
-        dandan_type = type_mapping.get(res.get('type'), "other")
-        dandan_type_desc = type_desc_mapping.get(res.get('type'), "其他")
+        dandan_type = DANDAN_TYPE_MAPPING.get(res.get('type'), "other")
+        dandan_type_desc = DANDAN_TYPE_DESC_MAPPING.get(res.get('type'), "其他")
 
         matches.append(DandanMatchInfo(
             episodeId=res['episodeId'],

@@ -146,6 +146,16 @@ class TencentScraper(BaseScraper):
                     # 清理标题中的HTML高亮标签 (如 <em>)，这是模仿C#参考代码中的逻辑
                     cleaned_title = re.sub(r'<.*?>', '', video_info.title)
 
+                    # 3. 相似度检查：确保搜索词与结果标题相关
+                    # 归一化处理：转小写，移除空格
+                    normalized_keyword = keyword.lower().replace(" ", "")
+                    normalized_title = cleaned_title.lower().replace(" ", "")
+
+                    # 核心过滤逻辑：如果归一化后的标题不包含归一化后的关键词，则跳过
+                    if normalized_keyword not in normalized_title:
+                        self.logger.debug(f"Tencent: 过滤掉结果 '{cleaned_title}'，因为它与搜索词 '{keyword}' 不直接相关。")
+                        continue
+
                     # 将腾讯的类型映射到我们内部的类型
                     media_type = "movie" if "电影" in video_info.type_name else "tv_series"
 
@@ -272,7 +282,7 @@ class TencentScraper(BaseScraper):
                     
                     current_page_vids.append(episode.vid)
 
-                self.logger.info(f"cid='{cid}': 当前页获取 {len(item_datas)} 个项目，新增 {new_episodes_found} 个有效分集。当前总数: {len(all_episodes)}")
+                self.logger.debug(f"cid='{cid}': 当前页获取 {len(item_datas)} 个项目，新增 {new_episodes_found} 个有效分集。当前总数: {len(all_episodes)}")
 
                 if found_target:
                     break # 从 while 循环中跳出
@@ -335,7 +345,7 @@ class TencentScraper(BaseScraper):
 
         return all_provider_episodes
 
-    async def _internal_get_comments(self, vid: str) -> List[TencentComment]:
+    async def _internal_get_comments(self, vid: str, progress_callback: Optional[Callable] = None) -> List[TencentComment]:
         """
         获取指定vid的所有弹幕。
         分两步：先获取弹幕分段索引，再逐个获取分段内容。
@@ -349,23 +359,32 @@ class TencentScraper(BaseScraper):
             index_data = response.json()
             segment_index = index_data.get("segment_index", {})
             if not segment_index: # 如果视频没有弹幕，这里会是空的
-                self.logger.warning(f"vid='{vid}' 没有找到弹幕分段索引。")
+                self.logger.info(f"vid='{vid}' 没有找到弹幕分段索引。")
                 return []
         except Exception as e:
             self.logger.error(f"获取弹幕索引失败 (vid={vid}): {e}", exc_info=True)
             return []
 
         # 2. 遍历分段，获取弹幕内容
-        self.logger.info(f"为 vid='{vid}' 找到 {len(segment_index)} 个弹幕分段，开始获取...")
+        total_segments = len(segment_index)
+        self.logger.debug(f"为 vid='{vid}' 找到 {total_segments} 个弹幕分段，开始获取...")
+        if progress_callback:
+            progress_callback(5, f"找到 {total_segments} 个弹幕分段")
+
         # 与C#代码不同，这里我们直接遍历所有分段以获取全部弹幕，而不是抽样
         # 按key（时间戳）排序，确保弹幕顺序正确
         sorted_keys = sorted(segment_index.keys(), key=int)
-        for key in sorted_keys:
+        for i, key in enumerate(sorted_keys):
             segment = segment_index[key]
             segment_name = segment.get("segment_name")
             if not segment_name:
                 continue
             
+            if progress_callback:
+                # 5%用于获取索引，90%用于下载，5%用于格式化
+                progress = 5 + int(((i + 1) / total_segments) * 90)
+                progress_callback(progress, f"正在下载分段 {i+1}/{total_segments}")
+
             segment_url = f"https://dm.video.qq.com/barrage/segment/{vid}/{segment_name}"
             try:
                 response = await self.client.get(segment_url)
@@ -387,16 +406,19 @@ class TencentScraper(BaseScraper):
                 self.logger.error(f"获取分段 {segment_name} 失败 (vid={vid}): {e}", exc_info=True)
                 continue
         
+        if progress_callback:
+            progress_callback(100, "弹幕整合完成")
+
         self.logger.info(f"vid='{vid}' 弹幕获取完成，共 {len(all_comments)} 条。")
         return all_comments
 
-    async def get_comments(self, episode_id: str) -> List[dict]:
+    async def get_comments(self, episode_id: str, progress_callback: Optional[Callable] = None) -> List[dict]:
         """
         获取指定vid的所有弹幕。
         episode_id 对于腾讯来说就是 vid。
         返回一个字典列表，可直接用于批量插入数据库。
         """
-        tencent_comments = await self._internal_get_comments(episode_id)
+        tencent_comments = await self._internal_get_comments(episode_id, progress_callback)
 
         formatted_comments = []
         for c in tencent_comments:
