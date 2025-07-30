@@ -722,18 +722,17 @@ document.addEventListener('DOMContentLoaded', () => {
         results.forEach(item => {
             const li = document.createElement('li');
 
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = item.mediaId;
+            li.appendChild(checkbox);
+
             const posterImg = document.createElement('img');
             posterImg.className = 'poster';
             posterImg.src = item.imageUrl || '/static/placeholder.png';
             posterImg.referrerPolicy = 'no-referrer';
             posterImg.alt = item.title;
             li.appendChild(posterImg);
-
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = item.mediaId;
-            li.appendChild(checkbox);
-
             const infoDiv = document.createElement('div');
             infoDiv.className = 'info';
 

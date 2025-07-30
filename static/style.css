@@ -487,7 +487,7 @@ header {
 #results-list li input[type="checkbox"] {
     width: 20px;
     height: 20px;
-    margin-left: 15px; /* 与海报的间距 */
+    margin-right: 15px; /* 与海报的间距 */
     flex-shrink: 0; /* 防止复选框被压缩 */
 }
 
