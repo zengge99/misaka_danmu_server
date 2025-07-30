@@ -64,7 +64,6 @@ class DandanSearchAnimeItem(BaseModel):
     isFavorited: bool = False
 
 class DandanSearchAnimeResponse(DandanResponseBase):
-    hasMore: bool = False
     animes: List[DandanSearchAnimeItem]
 
 

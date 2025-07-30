@@ -82,11 +82,11 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
 
             # 2. Fallback to LIKE search
             logging.info(f"FULLTEXT search for '{clean_title}' yielded no results, falling back to LIKE search.")
-            # 为了处理全角/半角冒号不一致的问题，我们在查询时进行归一化
-            # 1. 将搜索词中的冒号统一为半角
-            normalized_like_title = clean_title.replace("：", ":")
+            # 为了处理全角/半角冒号和空格不一致的问题，我们在查询时进行归一化
+            # 1. 将搜索词中的冒号统一为半角，并移除所有空格
+            normalized_like_title = clean_title.replace("：", ":").replace(" ", "")
             # 2. 在SQL查询中，也对数据库字段进行替换，确保两侧格式一致
-            query_like = query_template.format(title_condition="REPLACE(a.title, '：', ':') LIKE %s")
+            query_like = query_template.format(title_condition="REPLACE(REPLACE(a.title, '：', ':'), ' ', '') LIKE %s")
             await cursor.execute(query_like, tuple([f"%{normalized_like_title}%"] + params_episode))
             return await cursor.fetchall()
 
@@ -124,8 +124,8 @@ async def search_animes_for_dandan(pool: aiomysql.Pool, keyword: str) -> List[Di
                 return results
 
             # 2. Fallback to LIKE search
-            normalized_like_title = clean_title.replace("：", ":")
-            query_like = query_template.format(title_condition="REPLACE(a.title, '：', ':') LIKE %s")
+            normalized_like_title = clean_title.replace("：", ":").replace(" ", "")
+            query_like = query_template.format(title_condition="REPLACE(REPLACE(a.title, '：', ':'), ' ', '') LIKE %s")
             await cursor.execute(query_like, (f"%{normalized_like_title}%",))
             return await cursor.fetchall()
 
