@@ -299,41 +299,37 @@ header {
 
 /* New styles for input with icon button */
 .input-with-icon {
-    position: relative;
     flex-grow: 1;
     display: flex;
-    align-items: center;
+    align-items: stretch; /* Stretch children to fill height */
     /* The container now holds the border and background, acting as the visual input box */
     border: 1px solid var(--border-color);
     border-radius: 4px;
     background-color: var(--bg-color);
+    overflow: hidden; /* To enforce the border-radius on children */
 }
 
 .input-with-icon input {
-    /* The actual input element is now transparent and borderless */
+    /* The input is now part of the flex layout, without its own border */
     flex-grow: 1;
     border: none;
     outline: none;
     background: transparent;
-    padding: 10px; /* Keep original padding for height and text position */
-    padding-right: 40px; /* Override right padding for icon space */
+    padding: 10px;
+    font-size: 16px; /* Ensure font size is consistent */
 }
 
 .input-with-icon .icon-btn {
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
+    /* The button is also a flex item */
+    flex-shrink: 0;
     width: 38px;
     border: none;
+    border-left: 1px solid var(--border-color);
     background-color: var(--secondary-color);
     cursor: pointer;
-    border-radius: 0 3px 3px 0;
     font-size: 16px;
-    line-height: 1;
     padding: 0;
     transition: background-color 0.2s;
-    border-left: 1px solid var(--border-color);
 }
 
 .input-with-icon .icon-btn:hover {
