@@ -585,6 +585,16 @@ async def clear_expired_cache(pool: aiomysql.Pool):
             if deleted_rows > 0:
                 logging.getLogger(__name__).info(f"清除了 {deleted_rows} 条过期的数据库缓存。")
 
+async def clear_all_cache(pool: aiomysql.Pool) -> int:
+    """从数据库中清除所有缓存条目。返回删除的行数。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            # 使用 DELETE 并返回受影响的行数
+            deleted_rows = await cursor.execute("DELETE FROM cache_data")
+            if deleted_rows > 0:
+                logging.getLogger(__name__).info(f"清除了所有 ({deleted_rows} 条) 数据库缓存。")
+            return deleted_rows
+
 async def update_episode_fetch_time(pool: aiomysql.Pool, episode_id: int):
     """更新分集的采集时间"""
     async with pool.acquire() as conn:

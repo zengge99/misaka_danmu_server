@@ -51,7 +51,10 @@
                 <main id="main-content">
                     <div id="home-view" class="content-view">
                         <div class="search-section">
-                            <h2>搜索与导入</h2>
+                            <div class="section-header-with-action">
+                                <h2>搜索与导入</h2>
+                                <button id="clear-cache-btn" title="清除所有搜索和分集列表的临时缓存">清除所有缓存</button>
+                            </div>
                             <form id="search-form">
                                 <input type="text" id="search-keyword" placeholder="输入番剧名称..." required>
                                 <button type="submit">搜索</button>
@@ -149,10 +152,10 @@
                             <h2>弹幕Token管理</h2>
                             <button id="add-token-btn">添加Token</button>
                         </div>
-                        <p>在这里管理用于第三方播放器（如dandanplay）的API访问令牌。</p>
+                        <p>本项目仿造了<a href="https://api.dandanplay.net/swagger/index.html" target="_blank">dandanplayapi</a>，同时增加了使用访问令牌管理弹幕api,支持<a href="https://t.me/yamby_release" target="_blank">yamby</a>、<a href="https://play.google.com/store/search?q=hills&c=apps" target="_blank">hills</a>、<a href="https://apps.microsoft.com/detail/9NB0H051M4V4" target="_blank">小幻影视</a>。</p>
                         <div class="domain-config-section">
                             <h3>自定义域名设置</h3>
-                            <p>设置后，复制按钮将自动拼接 "域名/api/Token值" 格式的完整URL。</p>
+                            <p>设置后，复制按钮将自动拼接 "http(s)://域名(ip):端口(port)/api/Token值" 格式的完整URL。</p>
                             <div class="form-row">
                                 <label for="custom-domain-input">自定义域名</label>
                                 <input type="text" id="custom-domain-input" placeholder="例如: https://danmu.example.com">

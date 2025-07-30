@@ -17,6 +17,12 @@ class DequeHandler(logging.Handler):
         # 我们只存储格式化后的消息字符串
         self.deque.appendleft(self.format(record))
 
+# 新增：一个过滤器，用于从UI日志中排除 httpx 的日志
+class NoHttpxLogFilter(logging.Filter):
+    def filter(self, record):
+        # 不记录来自 'httpx' logger 的日志
+        return not record.name.startswith('httpx')
+
 def setup_logging():
     """
     配置根日志记录器，使其能够将日志输出到控制台、一个可轮转的文件，
@@ -44,7 +50,11 @@ def setup_logging():
 
     logger.addHandler(logging.StreamHandler()) # 控制台处理器
     logger.addHandler(logging.handlers.RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=5, encoding='utf-8')) # 文件处理器
-    logger.addHandler(DequeHandler(_logs_deque)) # Web界面日志处理器
+
+    # 创建并配置 DequeHandler，以过滤掉 httpx 的日志
+    deque_handler = DequeHandler(_logs_deque)
+    deque_handler.addFilter(NoHttpxLogFilter())
+    logger.addHandler(deque_handler)
 
     # 为所有处理器设置格式
     for handler in logger.handlers:

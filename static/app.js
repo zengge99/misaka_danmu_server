@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchForm = document.getElementById('search-form');
     const searchKeywordInput = document.getElementById('search-keyword');
     const resultsList = document.getElementById('results-list');
+    const clearCacheBtn = document.getElementById('clear-cache-btn');
     const logOutput = document.getElementById('log-output');
     const loader = document.getElementById('loader');
     
@@ -182,6 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Buttons
         logoutBtn.addEventListener('click', logout);
+        clearCacheBtn.addEventListener('click', handleClearCache);
         saveSourcesBtn.addEventListener('click', handleSaveSources);
         saveDomainBtn.addEventListener('click', handleSaveDomain);
         toggleSourceBtn.addEventListener('click', handleToggleSource);
@@ -517,6 +519,19 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             saveDomainBtn.disabled = false;
             saveDomainBtn.textContent = '保存域名';
+        }
+    }
+
+    async function handleClearCache() {
+        if (confirm("您确定要清除所有缓存吗？\n这将清除所有搜索结果和分集列表的临时缓存，下次访问时需要重新从网络获取。")) {
+            try {
+                const response = await apiFetch('/api/ui/cache/clear', {
+                    method: 'POST'
+                });
+                alert(response.message || "缓存已成功清除！");
+            } catch (error) {
+                alert(`清除缓存失败: ${(error.message || error)}`);
+            }
         }
     }
     // --- Task Manager View (Optimized Rendering) ---

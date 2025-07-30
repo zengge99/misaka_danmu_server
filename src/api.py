@@ -313,6 +313,16 @@ async def get_server_logs(current_user: models.User = Depends(security.get_curre
     """获取存储在内存中的最新日志条目。"""
     return get_logs()
 
+@router.post("/cache/clear", status_code=status.HTTP_200_OK, summary="清除所有缓存")
+async def clear_all_caches(
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """清除数据库中存储的所有缓存数据（如搜索结果、分集列表）。"""
+    deleted_count = await crud.clear_all_cache(pool)
+    logger.info(f"用户 '{current_user.username}' 清除了所有缓存，共 {deleted_count} 条。")
+    return {"message": f"成功清除了 {deleted_count} 条缓存记录。"}
+
 @router.get("/tasks", response_model=List[models.TaskInfo], summary="获取所有后台任务的状态")
 async def get_all_tasks(
     current_user: models.User = Depends(security.get_current_user),

@@ -610,3 +610,19 @@ header {
     border-radius: 4px;
     transition: width 0.3s ease-in-out;
 }
+
+/* New style for section headers with an action button */
+.section-header-with-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.section-header-with-action h2 {
+    border: none;
+    padding: 0;
+    margin: 0;
+}
