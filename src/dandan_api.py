@@ -456,14 +456,21 @@ async def match_single_file(
     """
     通过文件名匹配弹幕库。此接口不使用文件Hash。
     """
+    logger.info(f"收到 /match 请求, 文件名: '{request.fileName}'")
     parsed_info = _parse_filename_for_match(request.fileName)
+    logger.info(f"文件名解析结果: {parsed_info}")
     if not parsed_info:
-        return DandanMatchResponse(isMatched=False)
+        response = DandanMatchResponse(isMatched=False)
+        logger.info(f"发送 /match 响应 (解析失败): {response.model_dump_json(indent=2, ensure_ascii=False)}")
+        return response
 
     results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"])
+    logger.info(f"数据库为 '{parsed_info['title']}' (集数: {parsed_info['episode']}) 搜索到 {len(results)} 条记录")
     
     if not results:
-        return DandanMatchResponse(isMatched=False, matches=[])
+        response = DandanMatchResponse(isMatched=False, matches=[])
+        logger.info(f"发送 /match 响应 (无匹配): {response.model_dump_json(indent=2, ensure_ascii=False)}")
+        return response
 
     # 检查所有匹配项是否都指向同一个番剧ID
     # 这对于处理拥有多个数据源的电影或剧集非常重要
@@ -487,7 +494,9 @@ async def match_single_file(
             type=dandan_type,
             typeDescription=dandan_type_desc,
         )
-        return DandanMatchResponse(isMatched=True, matches=[match])
+        response = DandanMatchResponse(isMatched=True, matches=[match])
+        logger.info(f"发送 /match 响应 (精确匹配): {response.model_dump_json(indent=2, ensure_ascii=False)}")
+        return response
 
     # 如果匹配到了多个不同的番剧，则返回所有结果让用户选择
     matches = []
@@ -506,7 +515,9 @@ async def match_single_file(
             typeDescription=dandan_type_desc,
         ))
 
-    return DandanMatchResponse(isMatched=False, matches=matches)
+    response = DandanMatchResponse(isMatched=False, matches=matches)
+    logger.info(f"发送 /match 响应 (多个匹配): {response.model_dump_json(indent=2, ensure_ascii=False)}")
+    return response
 
 
 @implementation_router.post(
