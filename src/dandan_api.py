@@ -359,6 +359,8 @@ async def search_anime_for_dandan(
             imageUrl=res.get('imageUrl'),
             startDate=res.get('startDate'),
             episodeCount=res.get('episodeCount', 0),
+            rating=0, 
+            isFavorited=True  
         ))
     
     return DandanSearchAnimeResponse(animes=animes)
@@ -628,5 +630,3 @@ async def get_comments_for_dandan(
 dandan_router.include_router(implementation_router, prefix="/api/v2")
 # 1. 挂载以支持直接路径: /api/{token}/bangumi/{anime_id}
 dandan_router.include_router(implementation_router)
-
-
