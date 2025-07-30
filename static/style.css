@@ -302,18 +302,28 @@ header {
     position: relative;
     flex-grow: 1;
     display: flex;
+    align-items: center;
+    /* The container now holds the border and background, acting as the visual input box */
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-color);
 }
 
-/* The global input style is fine, we just need to add padding for the icon */
 .input-with-icon input {
-    padding-right: 40px !important;
+    /* The actual input element is now transparent and borderless */
+    flex-grow: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    padding: 10px; /* Keep original padding for height and text position */
+    padding-right: 40px; /* Override right padding for icon space */
 }
 
 .input-with-icon .icon-btn {
     position: absolute;
-    right: 1px;
-    top: 1px;
-    bottom: 1px;
+    right: 0;
+    top: 0;
+    bottom: 0;
     width: 38px;
     border: none;
     background-color: var(--secondary-color);
@@ -323,6 +333,7 @@ header {
     line-height: 1;
     padding: 0;
     transition: background-color 0.2s;
+    border-left: 1px solid var(--border-color);
 }
 
 .input-with-icon .icon-btn:hover {
