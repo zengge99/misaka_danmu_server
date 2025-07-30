@@ -220,16 +220,6 @@ header {
     margin: 0;
 }
 
-/* Section for account management view */
-.account-management-section form {
-    width: auto;
-    max-width: 450px;
-    margin: 0 auto;
-    border: none;
-    box-shadow: none;
-    padding: 0;
-}
-
 /* Edit Forms: Remove card styles from the form itself */
 #edit-anime-form, #edit-episode-form {
     /* The form is no longer the card, so remove/reset styles that conflict with the generic 'form' rule */
@@ -239,6 +229,22 @@ header {
     padding: 0;
     background-color: transparent;
     margin-top: 20px; /* Add some space below the h2 */
+}
+
+/* Refactor change-password-form to be consistent with other forms inside a card */
+#change-password-form {
+    width: auto;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    background-color: transparent;
+}
+
+/* Align the paragraph inside the form with the inputs */
+#change-password-form p:first-of-type {
+    padding-left: 135px; /* Align with inputs based on label width (120px) + gap (15px) */
+    color: #666;
+    font-size: 0.9em;
 }
 
 /* New style for the wrapper card around forms */
@@ -252,7 +258,7 @@ header {
 }
 
 /* Adjust the h2 inside the new card */
-.form-card h2 {
+.form-card h2, .form-card h3 {
     border-bottom: none;
     padding-bottom: 0;
     margin: 0 0 10px 0;
@@ -748,4 +754,38 @@ header {
     border: none;
     padding: 0;
     margin: 0;
+}
+
+/* Settings Page Sub-navigation */
+.settings-sub-nav {
+    display: flex;
+    gap: 5px; /* Reduced gap for a tighter tab look */
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sub-nav-btn {
+    padding: 10px 20px;
+    border: 1px solid transparent;
+    border-bottom: none; /* Remove bottom border to merge with content area */
+    background-color: transparent;
+    color: #666;
+    cursor: pointer;
+    border-radius: 4px 4px 0 0; /* Top corners rounded */
+    font-size: 15px;
+    font-weight: 500;
+    position: relative;
+    top: 1px; /* Align with the main border-bottom */
+    transition: all 0.2s ease;
+}
+
+.sub-nav-btn:hover {
+    background-color: var(--secondary-color);
+    color: var(--primary-color);
+}
+
+.sub-nav-btn.active {
+    background-color: var(--bg-color); /* Match main content background */
+    color: var(--primary-color);
+    border-color: var(--border-color);
 }

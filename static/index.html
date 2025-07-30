@@ -45,7 +45,7 @@
                         <li><a href="#" class="nav-link" data-view="task-manager-view">任务管理器</a></li>
                         <li><a href="#" class="nav-link" data-view="token-manager-view">弹幕Token</a></li>
                         <li><a href="#" class="nav-link" data-view="sources-view">搜索源</a></li>
-                        <li><a href="#" class="nav-link" data-view="account-view">账户设置</a></li>
+                        <li><a href="#" class="nav-link" data-view="settings-view">设置</a></li>
                     </ul>
                 </nav>
                 <main id="main-content">
@@ -257,18 +257,51 @@
                             <!-- 爬虫源将在这里动态生成 -->
                         </ul>
                     </div>
-                    <div id="account-view" class="content-view hidden">
-                        <div class="account-management-section">
-                            <h2>账户管理</h2>
-                            <form id="change-password-form">
+                    <div id="settings-view" class="content-view hidden">
+                        <h2>设置</h2>
+                        <div class="settings-sub-nav">
+                            <button class="sub-nav-btn active" data-subview="account-settings-subview">账户安全</button>
+                            <button class="sub-nav-btn" data-subview="bangumi-settings-subview">Bangumi配置</button>
+                            <button class="sub-nav-btn" data-subview="api-settings-subview">API配置</button>
+                        </div>
+
+                        <div id="account-settings-subview" class="settings-subview">
+                            <div class="form-card">
                                 <h3>修改密码</h3>
-                                <p>如果您是使用初始随机密码登录的，建议您在此修改为自己的密码。</p>
-                                <input type="password" id="old-password" placeholder="当前密码" required>
-                                <input type="password" id="new-password" placeholder="新密码 (至少8位)" required>
-                                <input type="password" id="confirm-password" placeholder="确认新密码" required>
-                                <button type="submit">确认修改</button>
-                                <p id="password-change-message" class="message"></p>
-                            </form>
+                                <form id="change-password-form">
+                                    <p>如果您是使用初始随机密码登录的，建议您在此修改为自己的密码。</p>
+                                    <div class="form-row">
+                                        <label for="old-password">当前密码</label>
+                                        <input type="password" id="old-password" required>
+                                    </div>
+                                    <div class="form-row">
+                                        <label for="new-password">新密码</label>
+                                        <input type="password" id="new-password" placeholder="至少8位" required>
+                                    </div>
+                                    <div class="form-row">
+                                        <label for="confirm-password">确认新密码</label>
+                                        <input type="password" id="confirm-password" required>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit">确认修改</button>
+                                    </div>
+                                    <p id="password-change-message" class="message"></p>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div id="bangumi-settings-subview" class="settings-subview hidden">
+                            <div class="form-card">
+                                <h3>Bangumi配置</h3>
+                                <p>此功能正在开发中。</p>
+                            </div>
+                        </div>
+
+                        <div id="api-settings-subview" class="settings-subview hidden">
+                            <div class="form-card">
+                                <h3>API配置</h3>
+                                <p>此功能正在开发中。</p>
+                            </div>
                         </div>
                     </div>
                 </main>

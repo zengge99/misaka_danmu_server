@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const libraryView = document.getElementById('library-view');
     const animeDetailView = document.getElementById('anime-detail-view');
     const editAnimeView = document.getElementById('edit-anime-view');
+    const settingsView = document.getElementById('settings-view');
     const episodeListView = document.getElementById('episode-list-view');
     const danmakuListView = document.getElementById('danmaku-list-view');
     const editEpisodeView = document.getElementById('edit-episode-view');
@@ -56,6 +57,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const customDomainInput = document.getElementById('custom-domain-input');
     const saveDomainBtn = document.getElementById('save-domain-btn');
     const domainSaveMessage = document.getElementById('domain-save-message');
+
+    const settingsSubNav = document.querySelector('.settings-sub-nav');
+    const settingsSubViews = document.querySelectorAll('.settings-subview');
 
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
@@ -225,6 +229,10 @@ document.addEventListener('DOMContentLoaded', () => {
         addTokenForm.addEventListener('submit', handleAddTokenSave);
         // Inputs
         librarySearchInput.addEventListener('input', handleLibrarySearch);
+
+        if (settingsSubNav) {
+            settingsSubNav.addEventListener('click', handleSettingsSubNav);
+        }
     }
 
     // --- Event Handlers ---
@@ -290,6 +298,12 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (viewId === 'token-manager-view') {
                 loadAndRenderTokens();
                 loadCustomDomain();
+            } else if (viewId === 'settings-view') {
+                // When switching to settings, activate the first sub-navigation tab by default
+                const firstSubNavBtn = settingsSubNav.querySelector('.sub-nav-btn');
+                if (firstSubNavBtn) {
+                    firstSubNavBtn.click();
+                }
             }
         }
     }
@@ -1369,6 +1383,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
+
+    function handleSettingsSubNav(e) {
+        const subNavBtn = e.target.closest('.sub-nav-btn');
+        if (!subNavBtn) return;
+
+        const subViewId = subNavBtn.getAttribute('data-subview');
+        if (!subViewId) return;
+
+        // Update button active state
+        settingsSubNav.querySelectorAll('.sub-nav-btn').forEach(btn => btn.classList.remove('active'));
+        subNavBtn.classList.add('active');
+
+        // Update view visibility
+        settingsSubViews.forEach(view => view.classList.add('hidden'));
+        const targetSubView = document.getElementById(subViewId);
+        if (targetSubView) {
+            targetSubView.classList.remove('hidden');
+        }
+    }
 
     // --- Initial Load ---
     setupEventListeners();
