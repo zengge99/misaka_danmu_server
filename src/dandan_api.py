@@ -498,7 +498,7 @@ async def match_single_file(
         return response
 
     results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"], parsed_info.get("season"))
-    logger.info(f"数据库为 '{parsed_info['title']}' (季:{parsed_info.get('season')} 集:{parsed_info['episode']}) 搜索到 {len(results)} 条记录")
+    logger.info(f"数据库为 '{parsed_info['title']}' (季:{parsed_info.get('season')} 集:{parsed_info.get('episode')}) 搜索到 {len(results)} 条记录")
     
     if not results:
         response = DandanMatchResponse(isMatched=False, matches=[])
@@ -531,6 +531,7 @@ async def match_single_file(
     all_from_same_anime = all(res['animeId'] == first_anime_id for res in results)
 
     if all_from_same_anime:
+        # 结果已由数据库按 display_order 排序，直接取第一个
         res = results[0]
         type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
         type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}

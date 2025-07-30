@@ -802,6 +802,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <tr>
                         <th>源提供方</th>
                         <th>源媒体ID</th>
+                        <th>状态</th>
                         <th>收录时间</th>
                         <th>操作</th>
                     </tr>
@@ -818,6 +819,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const row = sourceTableBody.insertRow();
                 row.insertCell().textContent = source.provider_name;
                 row.insertCell().textContent = source.media_id;
+                const statusCell = row.insertCell();
+                statusCell.textContent = source.is_favorited ? '🌟' : '';
                 row.insertCell().textContent = new Date(source.created_at).toLocaleString();
                 const actionsCell = row.insertCell();
                 actionsCell.className = 'actions-cell';
@@ -831,7 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             });
         } else {
-            sourceTableBody.innerHTML = `<tr><td colspan="4">未关联任何数据源。</td></tr>`;
+            sourceTableBody.innerHTML = `<tr><td colspan="5">未关联任何数据源。</td></tr>`;
         }
 
         // 重新绑定事件监听器
