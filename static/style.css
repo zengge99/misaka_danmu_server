@@ -258,9 +258,9 @@ header {
     margin: 0 0 10px 0;
 }
 
-/* 新增：使编辑表单中的占位符文本右对齐，并调暗颜色以作区分 */
+/* 编辑表单中的占位符文本样式 */
 #edit-anime-form input::placeholder {
-    text-align: right;
+    text-align: left;
     color: #aaa;
 }
 
