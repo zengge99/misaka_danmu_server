@@ -15,6 +15,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchKeywordInput = document.getElementById('search-keyword');
     const resultsList = document.getElementById('results-list');
     const clearCacheBtn = document.getElementById('clear-cache-btn');
+    const bulkImportBtn = document.getElementById('bulk-import-btn');
+    const resultsFilterControls = document.getElementById('results-filter-controls');
+    const filterBtnMovie = document.getElementById('filter-btn-movie');
+    const filterBtnTvSeries = document.getElementById('filter-btn-tv_series');
+    const resultsFilterInput = document.getElementById('results-filter-input');
     const logOutput = document.getElementById('log-output');
     const loader = document.getElementById('loader');
     
@@ -54,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
     let logRefreshInterval = null;
+    let originalSearchResults = []; // 用于存储原始搜索结果以进行前端过滤
     let clearedTaskIds = new Set(); // 新增：用于存储已从视图中清除的任务ID
 
     // --- Core Functions ---
@@ -169,8 +175,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners Setup ---
     function setupEventListeners() {
-        // ... (其他监听器保持不变)
-
         // Forms
         loginForm.addEventListener('submit', handleLogin);
         searchForm.addEventListener('submit', handleSearch);
@@ -184,6 +188,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Buttons
         logoutBtn.addEventListener('click', logout);
         clearCacheBtn.addEventListener('click', handleClearCache);
+        bulkImportBtn.addEventListener('click', handleBulkImport);
+        // Filter controls
+        filterBtnMovie.addEventListener('click', handleTypeFilterClick);
+        filterBtnTvSeries.addEventListener('click', handleTypeFilterClick);
+        resultsFilterInput.addEventListener('input', applyFiltersAndRender);
         saveSourcesBtn.addEventListener('click', handleSaveSources);
         saveDomainBtn.addEventListener('click', handleSaveDomain);
         toggleSourceBtn.addEventListener('click', handleToggleSource);
@@ -532,6 +541,59 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function handleBulkImport() {
+        const selectedCheckboxes = resultsList.querySelectorAll('input[type="checkbox"]:checked');
+        const selectedMediaIds = new Set(Array.from(selectedCheckboxes).map(checkbox => checkbox.value));
+
+        if (selectedMediaIds.size === 0) {
+            alert("请选择要导入的媒体。");
+            return;
+        }
+
+        if (!confirm(`确定要批量导入 ${selectedMediaIds.size} 个媒体吗？`)) {
+            return;
+        }
+
+        bulkImportBtn.disabled = true;
+        bulkImportBtn.textContent = '批量导入中...';
+
+        const itemsToImport = originalSearchResults.filter(item => selectedMediaIds.has(item.mediaId));
+
+        try {
+            for (const item of itemsToImport) {
+                try {
+                    const data = await apiFetch('/api/ui/import', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            provider: item.provider,
+                            media_id: item.mediaId,
+                            anime_title: item.title,
+                            type: item.type,
+                            image_url: item.imageUrl,
+                            current_episode_index: item.currentEpisodeIndex,
+                        }),
+                    });
+                    console.log(`提交导入任务 ${item.title} 成功: ${data.message}`);
+                } catch (error) {
+                    console.error(`提交导入任务 ${item.title} 失败: ${error.message || error}`);
+                }
+                // A small delay to prevent overwhelming the server
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            alert("批量导入任务已提交，请在任务管理器中查看进度。");
+        } finally {
+            bulkImportBtn.disabled = false;
+            bulkImportBtn.textContent = '批量导入';
+        }
+    }
+
+    function handleTypeFilterClick(e) {
+        const btn = e.currentTarget;
+        btn.classList.toggle('active');
+        const icon = btn.querySelector('.status-icon');
+        icon.textContent = btn.classList.contains('active') ? '✅' : '❌';
+        applyFiltersAndRender();
+    }
     async function handleClearCache() {
         if (confirm("您确定要清除所有缓存吗？\n这将清除所有搜索结果和分集列表的临时缓存，下次访问时需要重新从网络获取。")) {
             try {
@@ -639,29 +701,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Rendering Functions ---
 
-    function displayResults(results) {
+    function renderSearchResults(results) {
         resultsList.innerHTML = '';
         if (results.length === 0) {
-            resultsList.innerHTML = '<li>未找到结果。</li>';
+            resultsList.innerHTML = '<li>没有符合筛选条件的结果。</li>';
             return;
         }
         results.forEach(item => {
             const li = document.createElement('li');
 
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = item.mediaId;
+            li.appendChild(checkbox);
+
             const posterImg = document.createElement('img');
             posterImg.className = 'poster';
             posterImg.src = item.imageUrl || '/static/placeholder.png';
-            posterImg.referrerPolicy = 'no-referrer'; // 关键修复：禁止发送Referer头
+            posterImg.referrerPolicy = 'no-referrer';
             posterImg.alt = item.title;
             li.appendChild(posterImg);
 
             const infoDiv = document.createElement('div');
             infoDiv.className = 'info';
-            
+
             const titleP = document.createElement('p');
             titleP.className = 'title';
             titleP.textContent = item.title;
-            
+
             const metaP = document.createElement('p');
             metaP.className = 'meta';
             let metaText = `源: ${item.provider} | 类型: ${item.type} | 年份: ${item.year || 'N/A'}`;
@@ -672,40 +739,85 @@ document.addEventListener('DOMContentLoaded', () => {
                 metaText += ` | 当前集: ${item.currentEpisodeIndex}`;
             }
             metaP.textContent = metaText;
-            
+
             infoDiv.appendChild(titleP);
             infoDiv.appendChild(metaP);
 
             const importBtn = document.createElement('button');
             importBtn.textContent = '导入弹幕';
-            importBtn.addEventListener('click', async () => {
-                importBtn.disabled = true;
-                importBtn.textContent = '导入中...';
-                try {
-                    const data = await apiFetch('/api/ui/import', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            provider: item.provider,
-                            media_id: item.mediaId,
-                            anime_title: item.title,
-                            type: item.type,
-                            image_url: item.imageUrl,
-                            current_episode_index: item.currentEpisodeIndex,
-                        }),
-                    });
-                    alert(data.message);
-                } catch (error) {
-                    alert(`提交导入任务失败: ${(error.message || error)}`);
-                } finally {
-                    importBtn.disabled = false;
-                    importBtn.textContent = '导入弹幕';
-                }
-            });
+            importBtn.addEventListener('click', () => handleImportClick(importBtn, item));
 
             li.appendChild(infoDiv);
             li.appendChild(importBtn);
             resultsList.appendChild(li);
         });
+    }
+
+    function applyFiltersAndRender() {
+        if (!originalSearchResults) return;
+
+        // 1. Type filtering (higher priority)
+        const activeTypes = new Set();
+        if (filterBtnMovie.classList.contains('active')) {
+            activeTypes.add('movie');
+        }
+        if (filterBtnTvSeries.classList.contains('active')) {
+            activeTypes.add('tv_series');
+        }
+
+        let filteredResults = originalSearchResults.filter(item => activeTypes.has(item.type));
+
+        // 2. Text filtering
+        const filterText = resultsFilterInput.value.toLowerCase();
+        if (filterText) {
+            filteredResults = filteredResults.filter(item => item.title.toLowerCase().includes(filterText));
+        }
+
+        // 3. Render
+        renderSearchResults(filteredResults);
+    }
+
+    function displayResults(results) {
+        originalSearchResults = results;
+        bulkImportBtn.classList.toggle('hidden', results.length === 0);
+
+        if (results.length > 0) {
+            resultsFilterControls.classList.remove('hidden');
+            // Reset filters to default state
+            filterBtnMovie.classList.add('active');
+            filterBtnMovie.querySelector('.status-icon').textContent = '✅';
+            filterBtnTvSeries.classList.add('active');
+            filterBtnTvSeries.querySelector('.status-icon').textContent = '✅';
+            resultsFilterInput.value = '';
+            applyFiltersAndRender();
+        } else {
+            resultsFilterControls.classList.add('hidden');
+            resultsList.innerHTML = '<li>未找到结果。</li>';
+        }
+    }
+
+    async function handleImportClick(button, item) {
+        button.disabled = true;
+        button.textContent = '导入中...';
+        try {
+            const data = await apiFetch('/api/ui/import', {
+                method: 'POST',
+                body: JSON.stringify({
+                    provider: item.provider,
+                    media_id: item.mediaId,
+                    anime_title: item.title,
+                    type: item.type,
+                    image_url: item.imageUrl,
+                    current_episode_index: item.currentEpisodeIndex,
+                }),
+            });
+            alert(data.message);
+        } catch (error) {
+            alert(`提交导入任务失败: ${(error.message || error)}`);
+        } finally {
+            button.disabled = false;
+            button.textContent = '导入弹幕';
+        }
     }
 
     async function loadLibrary() {

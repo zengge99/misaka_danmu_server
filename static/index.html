@@ -62,6 +62,18 @@
                         </div>
                         <div id="results-section">
                             <h2>搜索结果</h2>
+                            <div id="results-filter-controls" class="hidden">
+                                <button id="bulk-import-btn" class="hidden">批量导入</button>
+                                <div class="filter-buttons">
+                                    <button id="filter-btn-movie" class="filter-btn active" data-type="movie">
+                                        <span class="status-icon">✅</span> movie
+                                    </button>
+                                    <button id="filter-btn-tv_series" class="filter-btn active" data-type="tv_series">
+                                        <span class="status-icon">✅</span> tv_series
+                                    </button>
+                                </div>
+                                <input type="text" id="results-filter-input" placeholder="在结果中过滤标题...">
+                            </div>
                             <div id="loader" class="hidden"></div>
                             <ul id="results-list"></ul>
                         </div>
