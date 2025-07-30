@@ -91,59 +91,61 @@
                         </table>
                     </div>
                     <div id="edit-anime-view" class="content-view hidden">
-                        <h2>编辑影视信息</h2>
-                        <form id="edit-anime-form">
-                            <input type="hidden" id="edit-anime-id">
-                            <div class="form-row">
-                                <label for="edit-anime-title">影视名称</label>
-                                <input type="text" id="edit-anime-title" required>
-                            </div>
-                            <div class="form-row">
-                                <label for="edit-anime-season">季度</label>
-                                <input type="number" id="edit-anime-season" min="1" required>
-                            </div>
-                            
-                            <div class="form-row">
-                                <label for="edit-anime-tmdbid">TMDB ID</label>
-                                <div class="input-with-icon">
-                                    <input type="text" id="edit-anime-tmdbid" placeholder="例如: 1396">
-                                    <button type="button" class="icon-btn" title="查找">🔍</button>
+                        <div class="form-card">
+                            <h2>编辑影视信息</h2>
+                            <form id="edit-anime-form">
+                                <input type="hidden" id="edit-anime-id">
+                                <div class="form-row">
+                                    <label for="edit-anime-title">影视名称</label>
+                                    <input type="text" id="edit-anime-title" required>
                                 </div>
-                            </div>
-                            <div class="form-row">
-                                <label for="edit-anime-egid">剧集组ID</label>
-                                <div class="input-with-icon">
-                                    <input type="text" id="edit-anime-egid" placeholder="TMDB Episode Group ID">
-                                    <button type="button" class="icon-btn" title="选择">🔽</button>
+                                <div class="form-row">
+                                    <label for="edit-anime-season">季度</label>
+                                    <input type="number" id="edit-anime-season" min="1" required>
                                 </div>
-                            </div>
-                            <div class="form-row">
-                                <label for="edit-anime-bgmid">BGM ID</label>
-                                <div class="input-with-icon">
-                                    <input type="text" id="edit-anime-bgmid" placeholder="例如: 296100">
-                                    <button type="button" class="icon-btn" title="查找">🔍</button>
+                                
+                                <div class="form-row">
+                                    <label for="edit-anime-tmdbid">TMDB ID</label>
+                                    <div class="input-with-icon">
+                                        <input type="text" id="edit-anime-tmdbid" placeholder="例如: 1396">
+                                        <button type="button" class="icon-btn" title="查找">🔍</button>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="form-row">
-                                <label for="edit-anime-tvdbid">TVDB ID</label>
-                                <input type="text" id="edit-anime-tvdbid" placeholder="例如: 364093">
-                            </div>
-                            <div class="form-row">
-                                <label for="edit-anime-doubanid">豆瓣ID</label>
-                                <div class="input-with-icon">
-                                    <input type="text" id="edit-anime-doubanid" placeholder="例如: 35297708">
-                                    <button type="button" class="icon-btn" title="查找">🔍</button>
+                                <div class="form-row">
+                                    <label for="edit-anime-egid">剧集组ID</label>
+                                    <div class="input-with-icon">
+                                        <input type="text" id="edit-anime-egid" placeholder="TMDB Episode Group ID">
+                                        <button type="button" class="icon-btn" title="选择">🔽</button>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="form-row">
-                                <label for="edit-anime-imdbid">IMDB ID</label>
-                                <input type="text" id="edit-anime-imdbid" placeholder="例如: tt9140554">
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit">保存更改</button>
-                                <button type="button" id="back-to-library-from-edit-btn">返回</button>
-                            </div>
-                        </form>
+                                <div class="form-row">
+                                    <label for="edit-anime-bgmid">BGM ID</label>
+                                    <div class="input-with-icon">
+                                        <input type="text" id="edit-anime-bgmid" placeholder="例如: 296100">
+                                        <button type="button" class="icon-btn" title="查找">🔍</button>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <label for="edit-anime-tvdbid">TVDB ID</label>
+                                    <input type="text" id="edit-anime-tvdbid" placeholder="例如: 364093">
+                                </div>
+                                <div class="form-row">
+                                    <label for="edit-anime-doubanid">豆瓣ID</label>
+                                    <div class="input-with-icon">
+                                        <input type="text" id="edit-anime-doubanid" placeholder="例如: 35297708">
+                                        <button type="button" class="icon-btn" title="查找">🔍</button>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <label for="edit-anime-imdbid">IMDB ID</label>
+                                    <input type="text" id="edit-anime-imdbid" placeholder="例如: tt9140554">
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit">保存更改</button>
+                                    <button type="button" id="back-to-library-from-edit-btn">返回</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                     <div id="anime-detail-view" class="content-view hidden">
                         <!-- 详情内容将在这里动态生成 -->
@@ -152,29 +154,31 @@
                         <!-- 分集列表将在这里动态生成 -->
                     </div>
                     <div id="edit-episode-view" class="content-view hidden">
-                        <h2>编辑分集信息</h2>
-                        <form id="edit-episode-form">
-                            <input type="hidden" id="edit-episode-id">
-                            <input type="hidden" id="edit-episode-source-id">
-                            <input type="hidden" id="edit-episode-anime-title">
-                            <input type="hidden" id="edit-episode-anime-id">
-                            <div class="form-row">
-                                <label for="edit-episode-title">分集标题</label>
-                                <input type="text" id="edit-episode-title" required>
-                            </div>
-                            <div class="form-row">
-                                <label for="edit-episode-index">集数</label>
-                                <input type="number" id="edit-episode-index" min="1" required>
-                            </div>
-                            <div class="form-row">
-                                <label for="edit-episode-url">官方链接</label>
-                                <input type="text" id="edit-episode-url">
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit">保存更改</button>
-                                <button type="button" id="back-to-episodes-from-edit-btn">返回</button>
-                            </div>
-                        </form>
+                        <div class="form-card">
+                            <h2>编辑分集信息</h2>
+                            <form id="edit-episode-form">
+                                <input type="hidden" id="edit-episode-id">
+                                <input type="hidden" id="edit-episode-source-id">
+                                <input type="hidden" id="edit-episode-anime-title">
+                                <input type="hidden" id="edit-episode-anime-id">
+                                <div class="form-row">
+                                    <label for="edit-episode-title">分集标题</label>
+                                    <input type="text" id="edit-episode-title" required>
+                                </div>
+                                <div class="form-row">
+                                    <label for="edit-episode-index">集数</label>
+                                    <input type="number" id="edit-episode-index" min="1" required>
+                                </div>
+                                <div class="form-row">
+                                    <label for="edit-episode-url">官方链接</label>
+                                    <input type="text" id="edit-episode-url">
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit">保存更改</button>
+                                    <button type="button" id="back-to-episodes-from-edit-btn">返回</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                     <div id="danmaku-list-view" class="content-view hidden">
                         <!-- 弹幕列表将在这里动态生成 -->
