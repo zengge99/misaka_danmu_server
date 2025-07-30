@@ -500,9 +500,20 @@ async def match_single_file(
     results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"], parsed_info.get("season"))
     logger.info(f"数据库为 '{parsed_info['title']}' (季:{parsed_info.get('season')} 集:{parsed_info.get('episode')}) 搜索到 {len(results)} 条记录")
     
+    # 新增：对结果进行严格的标题过滤，避免模糊匹配带来的问题
+    normalized_search_title = parsed_info["title"].replace("：", ":").replace(" ", "")
+    if normalized_search_title:
+        exact_matches = [
+            r for r in results 
+            if r['animeTitle'].replace("：", ":").replace(" ", "") == normalized_search_title
+        ]
+        if len(exact_matches) < len(results):
+            logger.info(f"过滤掉 {len(results) - len(exact_matches)} 条模糊匹配的结果。")
+            results = exact_matches
+
     if not results:
         response = DandanMatchResponse(isMatched=False, matches=[])
-        logger.info(f"发送 /match 响应 (无匹配): {response.model_dump_json(indent=2)}")
+        logger.info(f"发送 /match 响应 (无精确匹配): {response.model_dump_json(indent=2)}")
         return response
 
     # 优先处理被精确标记的源
@@ -531,7 +542,7 @@ async def match_single_file(
     all_from_same_anime = all(res['animeId'] == first_anime_id for res in results)
 
     if all_from_same_anime:
-        # 结果已由数据库按 display_order 排序，直接取第一个
+        # 结果已由数据库按 标题长度和源顺序 排序，直接取第一个
         res = results[0]
         type_mapping = {"tv_series": "tvseries", "movie": "movie", "ova": "ova", "other": "other"}
         type_desc_mapping = {"tv_series": "TV动画", "movie": "剧场版", "ova": "OVA", "other": "其他"}

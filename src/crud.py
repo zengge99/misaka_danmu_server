@@ -61,7 +61,10 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
             a.image_url AS imageUrl,
             a.created_at AS startDate,
             e.id AS episodeId,
-            e.title AS episodeTitle,
+            CASE
+                WHEN a.type = 'movie' THEN CONCAT(s.provider_name, ' 源')
+                ELSE e.title
+            END AS episodeTitle,
             sc.display_order,
             s.is_favorited AS isFavorited,
             (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as totalEpisodeCount,
@@ -72,7 +75,7 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
         JOIN scrapers sc ON s.provider_name = sc.provider_name
         LEFT JOIN anime_metadata m ON a.id = m.anime_id
         WHERE {{title_condition}} {episode_condition} {season_condition}
-        ORDER BY a.id, e.episode_index
+        ORDER BY LENGTH(a.title) ASC, sc.display_order ASC
     """
 
     async with pool.acquire() as conn:
@@ -90,7 +93,7 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
             # 1. 将搜索词中的冒号统一为半角，并移除所有空格
             normalized_like_title = clean_title.replace("：", ":").replace(" ", "")
             # 2. 在SQL查询中，也对数据库字段进行替换，确保两侧格式一致
-            query_like = query_template.format(title_condition="REPLACE(REPLACE(a.title, '：', ':'), ' ', '') LIKE %s ORDER BY LENGTH(a.title) ASC, sc.display_order ASC")
+            query_like = query_template.format(title_condition="REPLACE(REPLACE(a.title, '：', ':'), ' ', '') LIKE %s")
             await cursor.execute(query_like, tuple([f"%{normalized_like_title}%"] + params_episode + params_season))
             return await cursor.fetchall()
 
