@@ -238,6 +238,12 @@ header {
     box-shadow: var(--shadow);
 }
 
+/* 新增：使编辑表单中的占位符文本右对齐，并调暗颜色以作区分 */
+#edit-anime-form input::placeholder {
+    text-align: right;
+    color: #aaa;
+}
+
 /* New styles for flexible header in detail view */
 .view-header-flexible {
     display: flex;
@@ -291,34 +297,38 @@ header {
     border-top: 1px solid var(--border-color);
 }
 
-/* New styles for form layout with icons */
-.form-row-with-icon {
-    display: flex;
-    align-items: center;
-    gap: 10px; /* Reduced gap for tighter layout */
-}
-
-.form-row-with-icon label {
-    width: 80px;
-    text-align: right;
-    flex-shrink: 0;
-    font-weight: 500;
-    color: #606266;
-}
-
-.form-row-with-icon input {
+/* New styles for input with icon button */
+.input-with-icon {
+    position: relative;
     flex-grow: 1;
+    display: flex;
 }
 
-.icon-btn {
-    background: none;
-    border: 1px solid var(--border-color);
-    padding: 8px;
-    line-height: 1;
-    border-radius: 4px;
-    cursor: pointer;
-    flex-shrink: 0;
+/* The global input style is fine, we just need to add padding for the icon */
+.input-with-icon input {
+    padding-right: 40px !important;
 }
+
+.input-with-icon .icon-btn {
+    position: absolute;
+    right: 1px;
+    top: 1px;
+    bottom: 1px;
+    width: 38px;
+    border: none;
+    background-color: var(--secondary-color);
+    cursor: pointer;
+    border-radius: 0 3px 3px 0;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0;
+    transition: background-color 0.2s;
+}
+
+.input-with-icon .icon-btn:hover {
+    background-color: #e9ecef;
+}
+
 /* Episode List View Styles */
 .episode-list-header {
     display: flex;
