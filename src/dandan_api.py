@@ -2,12 +2,14 @@ import asyncio
 import logging
 import re
 from typing import List, Optional, Dict, Any
+from typing import Callable
 from datetime import datetime
 
 import aiomysql
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status, Response
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 
 from . import crud, models
 from .database import get_db_pool
@@ -18,41 +20,46 @@ logger = logging.getLogger(__name__)
 # 它将被挂载到主路由的不同路径上。
 implementation_router = APIRouter()
 
-# 这是将包含在 main.py 中的主路由。
-dandan_router = APIRouter()
-
-@dandan_router.middleware("http")
-async def dandan_exception_middleware(request: Request, call_next):
+class DandanApiRoute(APIRoute):
     """
-    为 dandanplay 兼容接口定制的异常处理中间件。
+    自定义的 APIRoute 类，用于为 dandanplay 兼容接口定制异常处理。
     捕获 HTTPException，并以 dandanplay API v2 的格式返回错误信息。
     """
-    try:
-        return await call_next(request)
-    except HTTPException as exc:
-        # 简单的 HTTP 状态码到 dandanplay 错误码的映射
-        # 1001: 无效的参数
-        # 1003: 未授权
-        # 404: 未找到
-        # 500: 服务器内部错误
-        error_code_map = {
-            status.HTTP_400_BAD_REQUEST: 1001,
-            status.HTTP_404_NOT_FOUND: 404,
-            status.HTTP_422_UNPROCESSABLE_ENTITY: 1001,
-            status.HTTP_403_FORBIDDEN: 1003,
-            status.HTTP_500_INTERNAL_SERVER_ERROR: 500,
-        }
-        error_code = error_code_map.get(exc.status_code, 500)
+    def get_route_handler(self) -> Callable:
+        original_route_handler = super().get_route_handler()
 
-        # 始终返回 200 OK，错误信息在 JSON body 中体现
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={
-                "success": False,
-                "errorCode": error_code,
-                "errorMessage": exc.detail,
-            },
-        )
+        async def custom_route_handler(request: Request) -> Response:
+            try:
+                return await original_route_handler(request)
+            except HTTPException as exc:
+                # 简单的 HTTP 状态码到 dandanplay 错误码的映射
+                # 1001: 无效的参数
+                # 1003: 未授权
+                # 404: 未找到
+                # 500: 服务器内部错误
+                error_code_map = {
+                    status.HTTP_400_BAD_REQUEST: 1001,
+                    status.HTTP_404_NOT_FOUND: 404,
+                    status.HTTP_422_UNPROCESSABLE_ENTITY: 1001,
+                    status.HTTP_403_FORBIDDEN: 1003,
+                    status.HTTP_500_INTERNAL_SERVER_ERROR: 500,
+                }
+                error_code = error_code_map.get(exc.status_code, 500)
+
+                # 始终返回 200 OK，错误信息在 JSON body 中体现
+                return JSONResponse(
+                    status_code=status.HTTP_200_OK,
+                    content={
+                        "success": False,
+                        "errorCode": error_code,
+                        "errorMessage": exc.detail,
+                    },
+                )
+        return custom_route_handler
+
+# 这是将包含在 main.py 中的主路由。
+# 使用自定义的 Route 类来应用特殊的异常处理。
+dandan_router = APIRouter(route_class=DandanApiRoute)
 
 class DandanResponseBase(BaseModel):
     """模仿 dandanplay API v2 的基础响应模型"""
