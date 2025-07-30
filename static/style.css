@@ -232,7 +232,7 @@ header {
 
 /* Edit Anime Form */
 #edit-anime-form, #edit-episode-form {
-    max-width: 700px; /* 增加卡片的最大宽度 */
+    max-width: 1000px; /* 增加卡片的最大宽度 */
     margin: 20px auto;
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow);
