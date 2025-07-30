@@ -624,7 +624,9 @@ async def get_comments_for_dandan(
 # --- 路由挂载 ---
 # 将实现路由挂载到主路由上，以支持两种URL结构。
 
-# 1. 挂载以支持直接路径: /api/{token}/bangumi/{anime_id}
-dandan_router.include_router(implementation_router)
 # 2. 挂载以支持兼容路径: /api/{token}/api/v2/bangumi/{anime_id}
 dandan_router.include_router(implementation_router, prefix="/api/v2")
+# 1. 挂载以支持直接路径: /api/{token}/bangumi/{anime_id}
+dandan_router.include_router(implementation_router)
+
+

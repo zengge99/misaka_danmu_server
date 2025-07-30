@@ -21,7 +21,7 @@ class IqiyiSearchVideoInfo(BaseModel):
     item_link: str = Field(alias="itemLink")
 
 class IqiyiSearchAlbumInfo(BaseModel):
-    album_id: int = Field(alias="albumId")
+    album_id: Optional[int] = Field(None, alias="albumId")
     item_total_number: Optional[int] = Field(None, alias="itemTotalNumber")
     site_id: str = Field(alias="siteId")
     album_link: str = Field(alias="albumLink")
