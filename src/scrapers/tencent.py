@@ -3,7 +3,7 @@ import httpx
 import aiomysql
 import re
 import logging
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Callable
 from pydantic import BaseModel, Field, ValidationError
 from datetime import datetime
 

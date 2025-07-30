@@ -7,7 +7,7 @@ from typing import ClassVar
 import zlib
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 
 import httpx
 from pydantic import BaseModel, Field, ValidationError, model_validator
