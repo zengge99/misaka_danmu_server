@@ -268,6 +268,8 @@ async def get_or_create_anime(pool: aiomysql.Pool, title: str, media_type: str, 
                 anime_id = cursor.lastrowid
                 # 2.2 插入元数据表
                 await cursor.execute("INSERT INTO anime_metadata (anime_id) VALUES (%s)", (anime_id, ))
+                # 2.3 插入别名表
+                await cursor.execute("INSERT INTO anime_aliases (anime_id) VALUES (%s)", (anime_id, ))
                 await conn.commit()
                 return anime_id
             except Exception as e:
@@ -428,7 +430,7 @@ async def clear_episode_comments(pool: aiomysql.Pool, episode_id: int):
             await cursor.execute("UPDATE episode SET comment_count = 0 WHERE id = %s", (episode_id,))
 
 async def get_anime_full_details(pool: aiomysql.Pool, anime_id: int) -> Optional[Dict[str, Any]]:
-    """获取番剧的完整详细信息，包括元数据。"""
+    """获取番剧的完整详细信息，包括元数据和别名。"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             query = """
@@ -443,18 +445,29 @@ async def get_anime_full_details(pool: aiomysql.Pool, anime_id: int) -> Optional
                     m.bangumi_id,
                     m.tvdb_id,
                     m.douban_id,
-                    m.imdb_id
+                    m.imdb_id,
+                    al.name_en,
+                    al.name_jp,
+                    al.name_romaji,
+                    al.alias_cn_1,
+                    al.alias_cn_2,
+                    al.alias_cn_3
                 FROM anime a
                 LEFT JOIN anime_metadata m ON a.id = m.anime_id
+                LEFT JOIN anime_aliases al ON a.id = al.anime_id
                 WHERE a.id = %s
             """
             await cursor.execute(query, (anime_id,))
             return await cursor.fetchone()
 
 async def update_anime_details(pool: aiomysql.Pool, anime_id: int, update_data: models.AnimeDetailUpdate) -> bool:
-    """在事务中更新番剧的核心信息和元数据。"""
+    """在事务中更新番剧的核心信息、元数据和别名。"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
+            # 检查 anime 记录是否存在
+            await cursor.execute("SELECT id FROM anime WHERE id = %s", (anime_id,))
+            if not await cursor.fetchone():
+                return False
             try:
                 await conn.begin()
 
@@ -474,6 +487,20 @@ async def update_anime_details(pool: aiomysql.Pool, anime_id: int, update_data: 
                         bangumi_id = new_values.bangumi_id, tvdb_id = new_values.tvdb_id,
                         douban_id = new_values.douban_id, imdb_id = new_values.imdb_id
                 """, (anime_id, update_data.tmdb_id, update_data.tmdb_episode_group_id, update_data.bangumi_id, update_data.tvdb_id, update_data.douban_id, update_data.imdb_id))
+
+                # 3. 更新 anime_aliases 表
+                await cursor.execute("""
+                    INSERT INTO anime_aliases (anime_id, name_en, name_jp, name_romaji, alias_cn_1, alias_cn_2, alias_cn_3)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    AS new_values
+                    ON DUPLICATE KEY UPDATE
+                        name_en = new_values.name_en, name_jp = new_values.name_jp,
+                        name_romaji = new_values.name_romaji, alias_cn_1 = new_values.alias_cn_1,
+                        alias_cn_2 = new_values.alias_cn_2, alias_cn_3 = new_values.alias_cn_3
+                """, (
+                    anime_id, update_data.name_en, update_data.name_jp, update_data.name_romaji,
+                    update_data.alias_cn_1, update_data.alias_cn_2, update_data.alias_cn_3
+                ))
 
                 await conn.commit()
                 return True

@@ -91,6 +91,12 @@ class AnimeDetailUpdate(BaseModel):
     tvdb_id: Optional[str] = None
     douban_id: Optional[str] = None
     imdb_id: Optional[str] = None
+    name_en: Optional[str] = None
+    name_jp: Optional[str] = None
+    name_romaji: Optional[str] = None
+    alias_cn_1: Optional[str] = None
+    alias_cn_2: Optional[str] = None
+    alias_cn_3: Optional[str] = None
 
 class EpisodeInfoUpdate(BaseModel):
     """用于更新分集信息的模型"""
@@ -111,6 +117,12 @@ class AnimeFullDetails(BaseModel):
     tvdb_id: Optional[str] = None
     douban_id: Optional[str] = None
     imdb_id: Optional[str] = None
+    name_en: Optional[str] = None
+    name_jp: Optional[str] = None
+    name_romaji: Optional[str] = None
+    alias_cn_1: Optional[str] = None
+    alias_cn_2: Optional[str] = None
+    alias_cn_3: Optional[str] = None
 
 # --- 爬虫源管理模型 ---
 class ScraperSetting(BaseModel):

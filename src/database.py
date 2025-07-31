@@ -234,6 +234,22 @@ async def init_db_tables(app: FastAPI):
               INDEX `idx_oauth_expires_at` (`expires_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
+            # 新增：创建别名表
+            await cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `anime_aliases` (
+              `id` BIGINT NOT NULL AUTO_INCREMENT,
+              `anime_id` BIGINT NOT NULL,
+              `name_en` VARCHAR(255) NULL,
+              `name_jp` VARCHAR(255) NULL,
+              `name_romaji` VARCHAR(255) NULL,
+              `alias_cn_1` VARCHAR(255) NULL,
+              `alias_cn_2` VARCHAR(255) NULL,
+              `alias_cn_3` VARCHAR(255) NULL,
+              PRIMARY KEY (`id`),
+              UNIQUE INDEX `idx_anime_id_unique` (`anime_id` ASC),
+              CONSTRAINT `fk_aliases_anime` FOREIGN KEY (`anime_id`) REFERENCES `anime`(`id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
             print("数据表检查完成。")
 
             # --- 步骤 3.2: 为已存在的表运行 schema 迁移检查 ---

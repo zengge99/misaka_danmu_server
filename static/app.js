@@ -549,6 +549,12 @@ document.addEventListener('DOMContentLoaded', () => {
             tvdb_id: document.getElementById('edit-anime-tvdbid').value || null,
             douban_id: document.getElementById('edit-anime-doubanid').value || null,
             imdb_id: document.getElementById('edit-anime-imdbid').value || null,
+            name_en: document.getElementById('edit-anime-name-en').value || null,
+            name_jp: document.getElementById('edit-anime-name-jp').value || null,
+            name_romaji: document.getElementById('edit-anime-name-romaji').value || null,
+            alias_cn_1: document.getElementById('edit-anime-alias-cn-1').value || null,
+            alias_cn_2: document.getElementById('edit-anime-alias-cn-2').value || null,
+            alias_cn_3: document.getElementById('edit-anime-alias-cn-3').value || null,
         };
 
         const saveButton = editAnimeForm.querySelector('button[type="submit"]');
@@ -1242,6 +1248,12 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('edit-anime-tvdbid').value = details.tvdb_id || '';
             document.getElementById('edit-anime-doubanid').value = details.douban_id || '';
             document.getElementById('edit-anime-imdbid').value = details.imdb_id || '';
+            document.getElementById('edit-anime-name-en').value = details.name_en || '';
+            document.getElementById('edit-anime-name-jp').value = details.name_jp || '';
+            document.getElementById('edit-anime-name-romaji').value = details.name_romaji || '';
+            document.getElementById('edit-anime-alias-cn-1').value = details.alias_cn_1 || '';
+            document.getElementById('edit-anime-alias-cn-2').value = details.alias_cn_2 || '';
+            document.getElementById('edit-anime-alias-cn-3').value = details.alias_cn_3 || '';
             // Trigger change handler to set initial state of season input
             handleAnimeTypeChange();
 

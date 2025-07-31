@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 import aiomysql
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -203,16 +203,33 @@ async def search_bangumi_subjects(
     client: httpx.AsyncClient = Depends(get_bangumi_client)
 ):
     async with client:
-        params = {"keyword": keyword, "type": 2} # type=2 for anime
-        response = await client.get("https://api.bgm.tv/v0/search/subjects", params=params)
-        
-        # Handle Bangumi's 404 for "no results" gracefully
+        # 切换到用户提供的文档中描述的旧版 API (POST /search/subject/{keyword})
+        # 这需要将关键词进行 URL 编码并放入路径中
+        encoded_keyword = quote(keyword)
+        url = f"https://api.bgm.tv/search/subject/{encoded_keyword}"
+
+        payload = {
+            "type": 2,  # 2 for anime
+            "responseGroup": "small"
+        }
+
+        # 旧版 API 使用 POST 方法
+        response = await client.post(url, json=payload)
+
+        # 旧版 API 同样可能用 404 表示未找到结果
         if response.status_code == 404:
             return []
-        
-        # For other errors, raise the exception
+
+        # 对于其他错误，抛出异常
         response.raise_for_status()
-        search_result = BangumiSearchResponse.model_validate(response.json())
-        if not search_result.data:
+
+        data = response.json()
+
+        # 旧版 API 的响应结构是 {"results": ..., "list": [...]}
+        search_list = data.get("list")
+        if not search_list:
             return []
-        return [{"id": subject.id, "name": subject.display_name} for subject in search_result.data]
+
+        # 复用现有的 Pydantic 模型来验证和提取数据
+        validated_subjects = [BangumiSearchSubject.model_validate(item) for item in search_list if isinstance(item, dict)]
+        return [{"id": subject.id, "name": subject.display_name} for subject in validated_subjects]
