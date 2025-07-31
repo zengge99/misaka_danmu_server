@@ -122,9 +122,13 @@ async def bangumi_auth_callback(
     # 在回调中，我们不知道是哪个用户发起的，所以不能用 Depends(get_current_user)
     # 但我们可以从会话中获取当前登录的用户
     try:
-        token = request.cookies.get("danmu_api_token")
+        token = request.cookies.get("danmu_api_token") # 从HttpOnly cookie中获取token
+        if not token:
+            logger.warning("Bangumi OAuth回调失败：在请求中未找到 'danmu_api_token' cookie。")
+            raise HTTPException(status_code=401, detail="Auth token cookie not found.")
         user = await security.get_current_user(token, pool)
-    except HTTPException:
+    except HTTPException as e:
+        logger.error(f"Bangumi OAuth回调认证失败: {e.detail}")
         return HTMLResponse("<h1>认证失败：无法识别用户会话，请重新登录后再试。</h1>", status_code=401)
 
     token_data = {

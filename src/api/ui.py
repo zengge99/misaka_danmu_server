@@ -7,7 +7,7 @@ import logging
 
 from datetime import timedelta, datetime, timezone
 import aiomysql
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks, Response
 from fastapi.security import OAuth2PasswordRequestForm
 
 from .. import crud, models, security
@@ -589,6 +589,7 @@ async def import_from_provider(
 
 @auth_router.post("/token", response_model=models.Token, summary="用户登录获取令牌")
 async def login_for_access_token(
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
@@ -599,18 +600,45 @@ async def login_for_access_token(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # 从配置中获取过期时间，以便为cookie设置max_age
+    expire_minutes_str = await crud.get_config_value(pool, 'jwt_expire_minutes', str(settings.jwt.access_token_expire_minutes))
+    expire_minutes = int(expire_minutes_str)
+
     access_token = await security.create_access_token(
         data={"sub": user["username"]}, pool=pool
     )
     # 更新用户的登录信息
     await crud.update_user_login_info(pool, user["username"], access_token)
-    
+
+    # 设置HttpOnly cookie，用于需要浏览器重定向的认证流程（如OAuth）
+    max_age = None
+    if expire_minutes != -1:
+        max_age = expire_minutes * 60
+
+    response.set_cookie(
+        key="danmu_api_token",
+        value=access_token,
+        httponly=True,
+        max_age=max_age,
+        samesite="lax", # 对OAuth重定向友好
+        path="/" # 确保cookie在整个站点都可用
+    )
+
     return {"access_token": access_token, "token_type": "bearer"}
 
 
 @auth_router.get("/users/me", response_model=models.User, summary="获取当前用户信息")
 async def read_users_me(current_user: models.User = Depends(security.get_current_user)):
     return current_user
+
+@auth_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, summary="用户登出")
+async def logout(response: Response):
+    """
+    用户登出，清除认证cookie。
+    """
+    response.delete_cookie(key="danmu_api_token", path="/")
+    return
 
 
 @auth_router.put("/users/me/password", status_code=status.HTTP_204_NO_CONTENT, summary="修改当前用户密码")

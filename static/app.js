@@ -151,11 +151,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function logout() {
-        token = null;
-        localStorage.removeItem('danmu_api_token');
-        showView('auth');
-        stopLogRefresh();
+    async function logout() {
+        try {
+            // 调用登出API以清除服务器端的HttpOnly cookie
+            await apiFetch('/api/ui/auth/logout', { method: 'POST' });
+        } catch (error) {
+            console.error("Logout API call failed:", error.message);
+            // 即使API调用失败，也继续执行客户端的登出流程
+        } finally {
+            token = null;
+            localStorage.removeItem('danmu_api_token');
+            showView('auth');
+            stopLogRefresh();
+        }
     }
 
     // --- Log Polling ---
