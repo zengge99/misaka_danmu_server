@@ -44,13 +44,14 @@ async def log_not_found_requests(request: Request, call_next):
         logging.getLogger(__name__).warning("未处理的请求详情:\n%s", json.dumps(log_details, indent=2, ensure_ascii=False))
     return response
 
-async def cleanup_cache_task(app: FastAPI):
-    """定期清理过期缓存的后台任务。"""
+async def cleanup_task(app: FastAPI):
+    """定期清理过期缓存和OAuth states的后台任务。"""
     pool = app.state.db_pool
     while True:
         try:
             await asyncio.sleep(3600) # 每小时清理一次
             await crud.clear_expired_cache(pool)
+            await crud.clear_expired_oauth_states(app.state.db_pool)
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -74,15 +75,15 @@ async def startup_event():
     # 创建初始管理员用户（如果需要）
     await create_initial_admin_user(app)
     # 启动缓存清理后台任务
-    app.state.cache_cleanup_task = asyncio.create_task(cleanup_cache_task(app))
+    app.state.cleanup_task = asyncio.create_task(cleanup_task(app))
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """应用关闭时，关闭数据库连接池和Scraper"""
-    if hasattr(app.state, "cache_cleanup_task"):
-        app.state.cache_cleanup_task.cancel()
+    if hasattr(app.state, "cleanup_task"):
+        app.state.cleanup_task.cancel()
         try:
-            await app.state.cache_cleanup_task
+            await app.state.cleanup_task
         except asyncio.CancelledError:
             pass
     await close_db_pool(app)

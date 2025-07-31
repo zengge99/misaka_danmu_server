@@ -1,7 +1,8 @@
 import aiomysql
 import json
 import logging
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 
 from . import models, security
@@ -195,6 +196,15 @@ async def get_anime_id_by_bangumi_id(pool: aiomysql.Pool, bangumi_id: str) -> Op
             await cursor.execute("SELECT anime_id FROM anime_metadata WHERE bangumi_id = %s", (bangumi_id,))
             result = await cursor.fetchone()
             return result[0] if result else None
+
+async def get_user_by_id(pool: aiomysql.Pool, user_id: int) -> Optional[Dict[str, Any]]:
+    """通过ID查找用户"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            # 只选择必要的字段，避免暴露密码哈希等
+            query = "SELECT id, username FROM users WHERE id = %s"
+            await cursor.execute(query, (user_id,))
+            return await cursor.fetchone()
 
 async def find_anime_by_title(pool: aiomysql.Pool, title: str) -> Optional[Dict[str, Any]]:
     """通过标题精确查找番剧"""
@@ -657,6 +667,14 @@ async def clear_expired_cache(pool: aiomysql.Pool):
             if deleted_rows > 0:
                 logging.getLogger(__name__).info(f"清除了 {deleted_rows} 条过期的数据库缓存。")
 
+async def clear_expired_oauth_states(pool: aiomysql.Pool):
+    """从数据库中清除过期的OAuth state条目。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            deleted_rows = await cursor.execute("DELETE FROM oauth_states WHERE expires_at <= NOW()")
+            if deleted_rows > 0:
+                logging.getLogger(__name__).info(f"清除了 {deleted_rows} 条过期的OAuth states。")
+
 async def clear_all_cache(pool: aiomysql.Pool) -> int:
     """从数据库中清除所有缓存条目。返回删除的行数。"""
     async with pool.acquire() as conn:
@@ -740,6 +758,37 @@ async def toggle_source_favorite_status(pool: aiomysql.Pool, source_id: int) -> 
                 await conn.rollback()
                 logging.error(f"切换源收藏状态时出错: {e}", exc_info=True)
                 return False
+
+# --- OAuth State Management ---
+
+async def create_oauth_state(pool: aiomysql.Pool, user_id: int) -> str:
+    """为OAuth流程创建一个唯一的、有有效期的state，并与用户ID关联。"""
+    state = secrets.token_urlsafe(32)
+    # 10分钟有效期
+    expires_at = datetime.now() + timedelta(minutes=10)
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "INSERT INTO oauth_states (state_key, user_id, expires_at) VALUES (%s, %s, %s)",
+                (state, user_id, expires_at)
+            )
+    return state
+
+async def consume_oauth_state(pool: aiomysql.Pool, state: str) -> Optional[int]:
+    """验证并消费一个OAuth state。如果state有效且未过期，则返回关联的用户ID并删除该state。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await conn.begin()
+            try:
+                await cursor.execute("SELECT user_id FROM oauth_states WHERE state_key = %s AND expires_at > NOW() FOR UPDATE", (state,))
+                result = await cursor.fetchone()
+                if result:
+                    await cursor.execute("DELETE FROM oauth_states WHERE state_key = %s", (state,))
+                await conn.commit()
+                return result[0] if result else None
+            except Exception:
+                await conn.rollback()
+                raise
 
 # --- Bangumi 授权服务 ---
 

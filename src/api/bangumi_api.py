@@ -98,15 +98,20 @@ async def get_bangumi_client(
 @router.get("/auth/url", response_model=Dict[str, str], summary="获取 Bangumi OAuth 授权链接")
 async def get_bangumi_auth_url(
     request: Request,
-    current_user: models.User = Depends(security.get_current_user)
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
 ):
     """生成用于 Bangumi OAuth 流程的重定向 URL。"""
+    # 1. 创建并存储一个唯一的、有有效期的 state
+    state = await crud.create_oauth_state(pool, current_user.id)
+
     # 构建回调 URL，它将指向我们的 /auth/callback 端点
     redirect_uri = request.url_for('bangumi_auth_callback')
     params = {
         "client_id": settings.bangumi.client_id,
         "response_type": "code",
         "redirect_uri": str(redirect_uri),
+        "state": state, # 2. 将 state 添加到授权 URL
     }
     query_string = urlencode(params)
     auth_url = f"https://bgm.tv/oauth/authorize?{query_string}"
@@ -115,21 +120,23 @@ async def get_bangumi_auth_url(
 @router.get("/auth/callback", response_class=HTMLResponse, summary="Bangumi OAuth 回调", name="bangumi_auth_callback")
 async def bangumi_auth_callback(
     code: str = Query(...),
+    state: str = Query(...),
     pool: aiomysql.Pool = Depends(get_db_pool),
     request: Request = None
 ):
     """处理来自 Bangumi 的 OAuth 回调，用 code 交换 token。"""
-    # 在回调中，我们不知道是哪个用户发起的，所以不能用 Depends(get_current_user)
-    # 但我们可以从会话中获取当前登录的用户
-    try:
-        token = request.cookies.get("danmu_api_token") # 从HttpOnly cookie中获取token
-        if not token:
-            logger.warning("Bangumi OAuth回调失败：在请求中未找到 'danmu_api_token' cookie。")
-            raise HTTPException(status_code=401, detail="Auth token cookie not found.")
-        user = await security._get_user_from_token(token, pool)
-    except HTTPException as e:
-        logger.error(f"Bangumi OAuth回调认证失败: {e.detail}")
-        return HTMLResponse(f"<h1>认证失败：{e.detail}</h1><p>请确保您已在本站登录，然后重试。</p>", status_code=e.status_code)
+    # 1. 验证并消费 state，获取发起授权的用户ID
+    user_id = await crud.consume_oauth_state(pool, state)
+    if user_id is None:
+        logger.error(f"Bangumi OAuth回调失败：无效或已过期的 state '{state}'")
+        return HTMLResponse("<h1>认证失败：无效的请求状态，请重新发起授权。</h1>", status_code=400)
+
+    # 2. 从数据库获取用户信息
+    user_dict = await crud.get_user_by_id(pool, user_id)
+    if not user_dict:
+        logger.error(f"Bangumi OAuth回调失败：找不到与 state 关联的用户 ID '{user_id}'")
+        return HTMLResponse("<h1>认证失败：找不到与此授权请求关联的用户。</h1>", status_code=404)
+    user = models.User.model_validate(user_dict)
 
     token_data = {
         "grant_type": "authorization_code",

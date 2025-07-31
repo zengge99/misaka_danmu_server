@@ -223,6 +223,16 @@ async def init_db_tables(app: FastAPI):
               PRIMARY KEY (`user_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
+            # 新增：创建 OAuth state 表
+            await cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `oauth_states` (
+              `state_key` VARCHAR(100) NOT NULL,
+              `user_id` BIGINT NOT NULL,
+              `expires_at` TIMESTAMP NOT NULL,
+              PRIMARY KEY (`state_key`),
+              INDEX `idx_oauth_expires_at` (`expires_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
             print("数据表检查完成。")
 
             # --- 步骤 3.2: 为已存在的表运行 schema 迁移检查 ---
