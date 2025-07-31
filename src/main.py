@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 import json
 from .database import create_db_pool, close_db_pool, init_db_tables, create_initial_admin_user
 from .api.ui import router as ui_router, auth_router
-from .api.bangumi import router as bangumi_router
+from .api.bangumi_api import router as bangumi_router
 from .dandan_api import dandan_router
 from .task_manager import TaskManager
 from .scraper_manager import ScraperManager
