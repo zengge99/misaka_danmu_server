@@ -23,16 +23,19 @@ async def get_tmdb_client(
     # Fetch all configs in parallel
     keys = ["tmdb_api_key", "tmdb_api_base_url"]
     tasks = [crud.get_config_value(pool, key, "") for key in keys]
-    api_key, base_url = await asyncio.gather(*tasks)
+    api_key, domain = await asyncio.gather(*tasks)
 
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="TMDB API Key not configured. Please set it in the settings page."
         )
-    if not base_url:
-        base_url = "https://api.themoviedb.org/3" # Fallback to default
-        logger.warning("TMDB API Base URL not configured, using default.")
+    if not domain:
+        domain = "https://api.themoviedb.org" # Fallback to default domain
+        logger.warning("TMDB API Domain not configured, using default.")
+
+    # 从域名构建完整的 API 基础 URL
+    base_url = f"{domain.rstrip('/')}/3"
 
     # TMDB v3 API 使用 api_key 查询参数进行身份验证
     params = {"api_key": api_key}
@@ -44,21 +47,23 @@ async def get_tmdb_client(
 
 # --- Pydantic Models for TMDB API ---
 
-
-class TMDBTitle(BaseModel):
-    title: str
-
-
-class TMDBResults(BaseModel):
+class TMDBTVResult(BaseModel):
     id: int
     name: str
     poster_path: Optional[str] = None
 
+class TMDBMovieResult(BaseModel):
+    id: int
+    title: str
+    poster_path: Optional[str] = None
 
-class TMDBsearchresults(BaseModel):
-    results: List[TMDBResults]
+class TMDBTVSearchResults(BaseModel):
+    results: List[TMDBTVResult]
     total_pages: int
 
+class TMDBMovieSearchResults(BaseModel):
+    results: List[TMDBMovieResult]
+    total_pages: int
 
 class TMDBExternalIDs(BaseModel):
     imdb_id: Optional[str] = None
@@ -79,6 +84,13 @@ class TMDBTVDetails(BaseModel):
     id: int
     name: str
     original_name: str
+    alternative_titles: Optional[TMDBAlternativeTitles] = None
+    external_ids: Optional[TMDBExternalIDs] = None
+
+class TMDBMovieDetails(BaseModel):
+    id: int
+    title: str
+    original_title: str
     alternative_titles: Optional[TMDBAlternativeTitles] = None
     external_ids: Optional[TMDBExternalIDs] = None
 
@@ -110,7 +122,7 @@ async def search_tmdb_subjects(
             logger.error(f"TMDB search for TV failed with status {search_response.status_code}: {search_response.text}")
             return []
 
-        search_result = TMDBsearchresults.model_validate(search_response.json())
+        search_result = TMDBTVSearchResults.model_validate(search_response.json())
         if not search_result.results:
             return []
 
@@ -161,7 +173,7 @@ async def search_tmdb_movie_subjects(
             logger.error(f"TMDB search for Movie failed with status {search_response.status_code}: {search_response.text}")
             return []
 
-        search_result = TMDBsearchresults.model_validate(search_response.json())
+        search_result = TMDBMovieSearchResults.model_validate(search_response.json())
         if not search_result.results:
             return []
 
@@ -171,7 +183,7 @@ async def search_tmdb_movie_subjects(
         return [
             {
                 "id": subject.id,
-                "name": subject.name,
+                "name": subject.title,
                 "image_url": f"{image_base_url.rstrip('/')}{subject.poster_path}" if subject.poster_path else None
             }
             for subject in search_result.results
@@ -210,9 +222,8 @@ async def get_tmdb_details(
             name_en = details.original_name
             name_romaji = None # TMDB doesn't provide this directly
         else: # movie
-            # Re-use the TV model, as the relevant fields are the same for our purpose
-            details = TMDBTVDetails.model_validate(details_json)
-            name_en = details.original_name
+            details = TMDBMovieDetails.model_validate(details_json)
+            name_en = details.original_title
             name_romaji = None
 
         aliases_cn = []
