@@ -3,10 +3,11 @@ import asyncio
 from fastapi import FastAPI, Request
 import logging
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 import json
 from .database import create_db_pool, close_db_pool, init_db_tables, create_initial_admin_user
-from .api import router as v2_router, auth_router
+from .api.ui import router as ui_router, auth_router
+from .api.bangumi import router as bangumi_router
 from .dandan_api import dandan_router
 from .task_manager import TaskManager
 from .scraper_manager import ScraperManager
@@ -95,9 +96,10 @@ async def shutdown_event():
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 包含 v2 版本的 API 路由
-app.include_router(v2_router, prefix="/api/ui", tags=["Web UI API"])
+app.include_router(ui_router, prefix="/api/ui", tags=["Web UI API"])
 app.include_router(auth_router, prefix="/api/ui/auth", tags=["Auth"])
 app.include_router(dandan_router, prefix="/api/{token}", tags=["DanDanPlay Compatible"])
+app.include_router(bangumi_router, prefix="/api/ui", dependencies=[Depends(security.get_current_user)])
 
 # 根路径返回前端页面
 @app.get("/", response_class=FileResponse, include_in_schema=False)

@@ -740,3 +740,40 @@ async def toggle_source_favorite_status(pool: aiomysql.Pool, source_id: int) -> 
                 await conn.rollback()
                 logging.error(f"切换源收藏状态时出错: {e}", exc_info=True)
                 return False
+
+# --- Bangumi 授权服务 ---
+
+async def get_bangumi_auth(pool: aiomysql.Pool, user_id: int) -> Optional[Dict[str, Any]]:
+    """获取用户的 Bangumi 授权信息。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("SELECT * FROM bangumi_auth WHERE user_id = %s", (user_id,))
+            return await cursor.fetchone()
+
+async def save_bangumi_auth(pool: aiomysql.Pool, user_id: int, auth_data: Dict[str, Any]):
+    """保存或更新用户的 Bangumi 授权信息。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            query = """
+                INSERT INTO bangumi_auth (user_id, bangumi_user_id, nickname, avatar_url, access_token, refresh_token, expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    bangumi_user_id = VALUES(bangumi_user_id),
+                    nickname = VALUES(nickname),
+                    avatar_url = VALUES(avatar_url),
+                    access_token = VALUES(access_token),
+                    refresh_token = VALUES(refresh_token),
+                    expires_at = VALUES(expires_at)
+            """
+            await cursor.execute(query, (
+                user_id, auth_data.get('bangumi_user_id'), auth_data.get('nickname'),
+                auth_data.get('avatar_url'), auth_data.get('access_token'),
+                auth_data.get('refresh_token'), auth_data.get('expires_at')
+            ))
+
+async def delete_bangumi_auth(pool: aiomysql.Pool, user_id: int) -> bool:
+    """删除用户的 Bangumi 授权信息。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            affected_rows = await cursor.execute("DELETE FROM bangumi_auth WHERE user_id = %s", (user_id,))
+            return affected_rows > 0

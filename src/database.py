@@ -210,6 +210,19 @@ async def init_db_tables(app: FastAPI):
               UNIQUE INDEX `idx_token_unique` (`token` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
+            # 创建 Bangumi 授权信息表
+            await cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `bangumi_auth` (
+              `user_id` BIGINT NOT NULL,
+              `bangumi_user_id` INT NULL,
+              `nickname` VARCHAR(255) NULL,
+              `avatar_url` VARCHAR(512) NULL,
+              `access_token` TEXT NOT NULL,
+              `refresh_token` TEXT NULL,
+              `expires_at` TIMESTAMP NULL,
+              PRIMARY KEY (`user_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
             print("数据表检查完成。")
 
             # --- 步骤 3.2: 为已存在的表运行 schema 迁移检查 ---

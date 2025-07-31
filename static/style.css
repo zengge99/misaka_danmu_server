@@ -831,3 +831,19 @@ header {
     color: var(--text-color);
     font-family: 'Courier New', Courier, monospace;
 }
+
+/* Bangumi Auth State Styles */
+.bangumi-user-profile {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 10px;
+    background-color: var(--secondary-color);
+    border-radius: 8px;
+}
+
+.bangumi-user-profile img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}

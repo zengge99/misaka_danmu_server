@@ -309,8 +309,31 @@
 
                         <div id="bangumi-settings-subview" class="settings-subview hidden">
                             <div class="form-card">
-                                <h3>Bangumi配置</h3>
-                                <p>此功能正在开发中。</p>
+                                <h3>Bangumi 授权</h3>
+                                <div id="bangumi-auth-state">
+                                    <!-- 授权状态将在这里动态生成 -->
+                                    <p>正在加载授权状态...</p>
+                                </div>
+                                <div id="bangumi-auth-actions">
+                                    <div class="form-actions">
+                                        <button id="bangumi-login-btn">通过 Bangumi 登录</button>
+                                        <button id="bangumi-logout-btn" class="hidden" style="background-color: var(--error-color);">注销</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-card">
+                                <h3>或: 直接提供 Access Token</h3>
+                                <p>您可以从 <a href="https://bgm.tv/settings/apps" target="_blank">Bangumi 个人设置</a> 页面获取或生成 Access Token，然后粘贴到下方。</p>
+                                <form id="bangumi-direct-token-form">
+                                    <div class="form-row">
+                                        <label for="bangumi-access-token">Access Token</label>
+                                        <input type="text" id="bangumi-access-token" placeholder="粘贴您的 Personal Access Token" required>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit">保存 Token</button>
+                                    </div>
+                                    <p id="bangumi-token-save-message" class="message"></p>
+                                </form>
                             </div>
                         </div>
 

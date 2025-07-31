@@ -45,6 +45,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const editAnimeForm = document.getElementById('edit-anime-form');
     const librarySearchInput = document.getElementById('library-search-input');
 
+    // Bangumi Settings Elements
+    const bangumiSettingsView = document.getElementById('bangumi-settings-subview');
+    const bangumiAuthStateDiv = document.getElementById('bangumi-auth-state');
+    const bangumiLoginBtn = document.getElementById('bangumi-login-btn');
+    const bangumiLogoutBtn = document.getElementById('bangumi-logout-btn');
+    const bangumiDirectTokenForm = document.getElementById('bangumi-direct-token-form');
+    const bangumiTokenSaveMessage = document.getElementById('bangumi-token-save-message');
+
     // Sources View Elements
     const sourcesList = document.getElementById('sources-list');
     const saveSourcesBtn = document.getElementById('save-sources-btn');
@@ -194,6 +202,8 @@ document.addEventListener('DOMContentLoaded', () => {
         editAnimeForm.addEventListener('submit', handleEditAnimeSave);
         editEpisodeForm.addEventListener('submit', handleEditEpisodeSave);
 
+        bangumiDirectTokenForm.addEventListener('submit', handleSaveBangumiDirectToken);
+
         // Sidebar Navigation
         sidebar.addEventListener('click', handleSidebarNavigation);
 
@@ -203,6 +213,8 @@ document.addEventListener('DOMContentLoaded', () => {
         clearCacheBtn.addEventListener('click', handleClearCache);
         bulkImportBtn.addEventListener('click', handleBulkImport);
         selectAllBtn.addEventListener('click', handleSelectAll);
+        bangumiLoginBtn.addEventListener('click', handleBangumiLogin);
+        bangumiLogoutBtn.addEventListener('click', handleBangumiLogout);
         // Filter controls
         filterBtnMovie.addEventListener('click', handleTypeFilterClick);
         filterBtnTvSeries.addEventListener('click', handleTypeFilterClick);
@@ -237,6 +249,11 @@ document.addEventListener('DOMContentLoaded', () => {
         addTokenForm.addEventListener('submit', handleAddTokenSave);
         // Inputs
         librarySearchInput.addEventListener('input', handleLibrarySearch);
+
+        // Special listener for BGM ID search button
+        document.querySelector('#edit-anime-bgmid + .icon-btn').addEventListener('click', handleSearchBgmId);
+        // Listener for OAuth popup completion
+        window.addEventListener('message', handleOAuthCallbackMessage);
 
         if (settingsSubNav) {
             settingsSubNav.addEventListener('click', handleSettingsSubNav);
@@ -312,6 +329,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (firstSubNavBtn) {
                     firstSubNavBtn.click();
                 }
+            }
+
+            if (viewId === 'settings-view' && bangumiSettingsView.classList.contains('hidden') === false) {
+                loadBangumiAuthState();
             }
         }
     }
@@ -617,6 +638,86 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             saveDomainBtn.disabled = false;
             saveDomainBtn.textContent = '保存域名';
+        }
+    }
+
+    async function handleSearchBgmId() {
+        const title = document.getElementById('edit-anime-title').value;
+        if (!title) {
+            alert("请输入影视名称以进行搜索。");
+            return;
+        }
+
+        const searchButton = this; // The clicked button
+        searchButton.textContent = '...';
+        searchButton.disabled = true;
+
+        try {
+            const results = await apiFetch(`/api/ui/bangumi/search?keyword=${encodeURIComponent(title)}`);
+            if (results.length === 0) {
+                alert(`未找到与 "${title}" 相关的 Bangumi 条目。`);
+                return;
+            }
+
+            // For simplicity, if there's an exact match, use it. Otherwise, use the first result.
+            // A more advanced implementation could show a selection dialog.
+            const exactMatch = results.find(r => r.name.toLowerCase() === title.toLowerCase());
+            const resultToUse = exactMatch || results[0];
+
+            if (confirm(`找到匹配项: "${resultToUse.name}" (ID: ${resultToUse.id})。\n是否要填入BGM ID输入框？`)) {
+                document.getElementById('edit-anime-bgmid').value = resultToUse.id;
+            }
+        } catch (error) {
+            alert(`搜索 Bangumi ID 失败: ${error.message}`);
+        } finally {
+            searchButton.textContent = '🔍';
+            searchButton.disabled = false;
+        }
+    }
+
+    async function handleBangumiLogin() {
+        try {
+            const { url } = await apiFetch('/api/ui/bangumi/auth/url');
+            window.open(url, 'BangumiAuth', 'width=600,height=700');
+        } catch (error) {
+            alert(`启动 Bangumi 授权失败: ${error.message}`);
+        }
+    }
+
+    function handleOAuthCallbackMessage(event) {
+        // We don't check event.origin for simplicity, but in production, you should.
+        // e.g., if (event.origin !== 'https://your-app-domain.com') return;
+        if (event.data === 'BANGUMI-OAUTH-COMPLETE') {
+            console.log("收到 Bangumi OAuth 完成消息，正在刷新状态...");
+            loadBangumiAuthState();
+        }
+    }
+
+    async function handleBangumiLogout() {
+        if (confirm("确定要注销 Bangumi 授权吗？")) {
+            try {
+                await apiFetch('/api/ui/bangumi/auth', { method: 'DELETE' });
+                loadBangumiAuthState();
+            } catch (error) {
+                alert(`注销失败: ${error.message}`);
+            }
+        }
+    }
+
+    async function handleSaveBangumiDirectToken(e) {
+        e.preventDefault();
+        const tokenInput = document.getElementById('bangumi-access-token');
+        const accessToken = tokenInput.value.trim();
+        if (!accessToken) return;
+
+        try {
+            await apiFetch('/api/ui/bangumi/auth/token', { method: 'POST', body: JSON.stringify({ access_token: accessToken }) });
+            bangumiTokenSaveMessage.textContent = 'Token 保存成功！';
+            bangumiTokenSaveMessage.className = 'message success';
+            loadBangumiAuthState();
+        } catch (error) {
+            bangumiTokenSaveMessage.textContent = `保存失败: ${error.message}`;
+            bangumiTokenSaveMessage.className = 'message error';
         }
     }
 
@@ -1477,6 +1578,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetSubView = document.getElementById(subViewId);
         if (targetSubView) {
             targetSubView.classList.remove('hidden');
+        }
+    }
+
+    async function loadBangumiAuthState() {
+        try {
+            const state = await apiFetch('/api/ui/bangumi/auth/state');
+            if (state.is_authenticated) {
+                bangumiAuthStateDiv.innerHTML = `
+                    <div class="bangumi-user-profile">
+                        <img src="${state.avatar_url || '/static/placeholder.png'}" alt="avatar">
+                        <span>已作为 <strong>${state.nickname}</strong> 授权</span>
+                    </div>
+                `;
+                bangumiLoginBtn.classList.add('hidden');
+                bangumiLogoutBtn.classList.remove('hidden');
+            } else {
+                bangumiAuthStateDiv.innerHTML = '<p>当前未授权。授权后可使用更多功能。</p>';
+                bangumiLoginBtn.classList.remove('hidden');
+                bangumiLogoutBtn.classList.add('hidden');
+            }
+        } catch (error) {
+            bangumiAuthStateDiv.innerHTML = `<p class="error">获取授权状态失败: ${error.message}</p>`;
         }
     }
 
