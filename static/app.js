@@ -89,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
     let logRefreshInterval = null;
+    let currentEpisodes = []; // 用于存储当前分集列表的上下文
     let originalSearchResults = []; // 用于存储原始搜索结果以进行前端过滤
 
     // --- Core Functions ---
@@ -349,10 +350,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (firstSubNavBtn) {
                     firstSubNavBtn.click();
                 }
-            }
-
-            if (viewId === 'settings-view' && bangumiSettingsView.classList.contains('hidden') === false) {
-                loadBangumiAuthState();
             }
         }
     }
@@ -1002,13 +999,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const actionsCell = row.insertCell();
             actionsCell.className = 'actions-cell';
-            actionsCell.innerHTML = `
-                <div class="action-buttons-wrapper">
-                    <button class="action-btn" title="编辑" onclick="handleAction('edit', ${anime.animeId})">✏️</button>
-                    <button class="action-btn" title="查看数据源" onclick="handleAction('view', ${anime.animeId})">📖</button>
-                    <button class="action-btn" title="删除" onclick="handleAction('delete', ${anime.animeId})">🗑️</button>
-                </div>
-            `;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'action-buttons-wrapper';
+
+            const editBtn = document.createElement('button');
+            editBtn.className = 'action-btn';
+            editBtn.title = '编辑';
+            editBtn.textContent = '✏️';
+            editBtn.addEventListener('click', () => handleAction('edit', anime.animeId, anime.title));
+            wrapper.appendChild(editBtn);
+
+            const viewBtn = document.createElement('button');
+            viewBtn.className = 'action-btn';
+            viewBtn.title = '查看数据源';
+            viewBtn.textContent = '📖';
+            viewBtn.addEventListener('click', () => handleAction('view', anime.animeId, anime.title));
+            wrapper.appendChild(viewBtn);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'action-btn';
+            deleteBtn.title = '删除';
+            deleteBtn.textContent = '🗑️';
+            deleteBtn.addEventListener('click', () => handleAction('delete', anime.animeId, anime.title));
+            wrapper.appendChild(deleteBtn);
+
+            actionsCell.appendChild(wrapper);
         });
     }
 
@@ -1096,14 +1112,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     row.insertCell().textContent = new Date(source.created_at).toLocaleString();
                     const actionsCell = row.insertCell();
                     actionsCell.className = 'actions-cell';
-                    actionsCell.innerHTML = `
-                        <div class="action-buttons-wrapper">
-                            <button class="action-btn" title="精确标记" onclick="handleSourceAction('favorite', ${source.source_id}, '${anime.title.replace(/'/g, "\\'")}', ${anime.animeId})">${source.is_favorited ? '🌟' : '⭐'}</button>
-                            <button class="action-btn" title="查看/编辑分集" onclick="handleSourceAction('view_episodes', ${source.source_id}, '${anime.title.replace(/'/g, "\\'")}', ${anime.animeId})">📖</button>
-                            <button class="action-btn" title="刷新此源" onclick="handleSourceAction('refresh', ${source.source_id}, '${anime.title}')">🔄</button>
-                            <button class="action-btn" title="删除此源" onclick="handleSourceAction('delete', ${source.source_id}, '${anime.title}')">🗑️</button>
-                        </div>
-                    `;
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'action-buttons-wrapper';
+
+                    const favoriteBtn = document.createElement('button');
+                    favoriteBtn.className = 'action-btn';
+                    favoriteBtn.title = '精确标记';
+                    favoriteBtn.textContent = source.is_favorited ? '🌟' : '⭐';
+                    favoriteBtn.addEventListener('click', () => handleSourceAction('favorite', source.source_id, anime.title, anime.animeId));
+                    wrapper.appendChild(favoriteBtn);
+
+                    const viewEpisodesBtn = document.createElement('button');
+                    viewEpisodesBtn.className = 'action-btn';
+                    viewEpisodesBtn.title = '查看/编辑分集';
+                    viewEpisodesBtn.textContent = '📖';
+                    viewEpisodesBtn.addEventListener('click', () => handleSourceAction('view_episodes', source.source_id, anime.title, anime.animeId));
+                    wrapper.appendChild(viewEpisodesBtn);
+
+                    const refreshBtn = document.createElement('button');
+                    refreshBtn.className = 'action-btn';
+                    refreshBtn.title = '刷新此源';
+                    refreshBtn.textContent = '🔄';
+                    refreshBtn.addEventListener('click', () => handleSourceAction('refresh', source.source_id, anime.title, anime.animeId));
+                    wrapper.appendChild(refreshBtn);
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'action-btn';
+                    deleteBtn.title = '删除此源';
+                    deleteBtn.textContent = '🗑️';
+                    deleteBtn.addEventListener('click', () => handleSourceAction('delete', source.source_id, anime.title, anime.animeId));
+                    wrapper.appendChild(deleteBtn);
+
+                    actionsCell.appendChild(wrapper);
                 });
             } else {
                 sourceDetailTableBody.innerHTML = `<tr><td colspan="5">未关联任何数据源。</td></tr>`;
@@ -1217,6 +1258,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const episodes = await apiFetch(`/api/ui/library/source/${sourceId}/episodes`);
+            currentEpisodes = episodes; // 存储分集列表上下文
             renderEpisodeListView(sourceId, animeTitle, episodes, animeId);
         } catch (error) {
             episodeListView.innerHTML = `<div class="error">加载分集列表失败: ${(error.message || error)}</div>`;
@@ -1275,14 +1317,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const actionsCell = row.insertCell();
                 actionsCell.className = 'actions-cell';
-                actionsCell.innerHTML = `
-                    <div class="action-buttons-wrapper">
-                        <button class="action-btn" title="编辑剧集" onclick="handleEpisodeAction('edit', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">✏️</button>
-                        <button class="action-btn" title="刷新剧集" onclick="handleEpisodeAction('refresh', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">🔄</button>
-                        <button class="action-btn" title="查看具体弹幕" onclick="handleEpisodeAction('view_danmaku', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">💬</button>
-                        <button class="action-btn" title="删除集" onclick="handleEpisodeAction('delete', ${ep.id}, '${ep.title.replace(/'/g, "\\'")}')">🗑️</button>
-                    </div>
-                `;
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'action-buttons-wrapper';
+
+                const editBtn = document.createElement('button');
+                editBtn.className = 'action-btn';
+                editBtn.title = '编辑剧集';
+                editBtn.textContent = '✏️';
+                editBtn.addEventListener('click', () => handleEpisodeAction('edit', ep.id, ep.title));
+                wrapper.appendChild(editBtn);
+
+                const refreshBtn = document.createElement('button');
+                refreshBtn.className = 'action-btn';
+                refreshBtn.title = '刷新剧集';
+                refreshBtn.textContent = '🔄';
+                refreshBtn.addEventListener('click', () => handleEpisodeAction('refresh', ep.id, ep.title));
+                wrapper.appendChild(refreshBtn);
+
+                const viewDanmakuBtn = document.createElement('button');
+                viewDanmakuBtn.className = 'action-btn';
+                viewDanmakuBtn.title = '查看具体弹幕';
+                viewDanmakuBtn.textContent = '💬';
+                viewDanmakuBtn.addEventListener('click', () => handleEpisodeAction('view_danmaku', ep.id, ep.title));
+                wrapper.appendChild(viewDanmakuBtn);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'action-btn';
+                deleteBtn.title = '删除集';
+                deleteBtn.textContent = '🗑️';
+                deleteBtn.addEventListener('click', () => handleEpisodeAction('delete', ep.id, ep.title));
+                wrapper.appendChild(deleteBtn);
+
+                actionsCell.appendChild(wrapper);
             });
         } else {
             episodeTableBody.innerHTML = `<tr><td colspan="7">未找到任何分集数据。</td></tr>`;
@@ -1384,13 +1451,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const actionsCell = row.insertCell();
             actionsCell.className = 'actions-cell';
             const enabledText = token.is_enabled ? '禁用' : '启用';
-            actionsCell.innerHTML = `
-                <div class="action-buttons-wrapper">
-                    <button class="action-btn" title="复制链接" onclick="handleTokenAction('copy', ${token.id}, '${token.token}')">📋</button>
-                    <button class="action-btn" title="${enabledText}" onclick="handleTokenAction('toggle', ${token.id})">${token.is_enabled ? '⏸️' : '▶️'}</button>
-                    <button class="action-btn" title="删除" onclick="handleTokenAction('delete', ${token.id})">🗑️</button>
-                </div>
-            `;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'action-buttons-wrapper';
+
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'action-btn';
+            copyBtn.title = '复制链接';
+            copyBtn.textContent = '📋';
+            copyBtn.addEventListener('click', () => handleTokenAction('copy', token.id, token.token));
+            wrapper.appendChild(copyBtn);
+
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'action-btn';
+            toggleBtn.title = enabledText;
+            toggleBtn.textContent = token.is_enabled ? '⏸️' : '▶️';
+            toggleBtn.addEventListener('click', () => handleTokenAction('toggle', token.id));
+            wrapper.appendChild(toggleBtn);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'action-btn';
+            deleteBtn.title = '删除';
+            deleteBtn.textContent = '🗑️';
+            deleteBtn.addEventListener('click', () => handleTokenAction('delete', token.id));
+            wrapper.appendChild(deleteBtn);
+
+            actionsCell.appendChild(wrapper);
         });
     }
 
@@ -1413,9 +1499,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Global Action Handlers ---
-    window.handleAction = (action, animeId) => {
-        const row = document.querySelector(`#library-table button[onclick*="handleAction('${action}', ${animeId})"]`).closest('tr');
-        const title = row ? row.cells[1].textContent : `ID: ${animeId}`;
+    window.handleAction = (action, animeId, title) => {
 
         if (action === 'delete') {
             if (confirm(`您确定要删除番剧 '${title}' 吗？\n此操作将删除其所有分集和弹幕，且不可恢复。`)) {
@@ -1437,8 +1521,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     window.handleEpisodeAction = (action, episodeId, title) => {
-        const row = document.querySelector(`#episode-list-table button[onclick*="handleEpisodeAction('${action}', ${episodeId},"]`).closest('tr');
-        
         // Retrieve context from the view container's dataset
         const sourceId = parseInt(episodeListView.dataset.sourceId, 10);
         const animeTitle = episodeListView.dataset.animeTitle;
@@ -1460,9 +1542,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         } else if (action === 'edit') {
-            const episodeIndex = row.cells[2].textContent;
-            // 关键修复：弹幕数列(3)和采集时间列(4)被添加后，链接列的索引是 5
-            const sourceUrl = row.cells[5] && row.cells[5].querySelector('a') ? row.cells[5].querySelector('a').href : '';
+            const episode = currentEpisodes.find(ep => ep.id === episodeId);
+            if (!episode) {
+                alert('错误：在当前上下文中找不到该分集的信息。');
+                return;
+            }
+            const episodeIndex = episode.episode_index;
+            const sourceUrl = episode.source_url;
             showEditEpisodeView(episodeId, title, episodeIndex, sourceUrl, sourceId, animeTitle, animeId);
         } else if (action === 'refresh') {
             if (confirm(`您确定要刷新分集 '${title}' 的弹幕吗？\n这将清空现有弹幕并从源重新获取。`)) {
@@ -1475,7 +1561,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.handleSourceAction = (action, sourceId, title, animeId = null) => {
+    window.handleSourceAction = (action, sourceId, title, animeId) => {
         if (action === 'refresh') {
             refreshSource(sourceId, title);
         } else if (action === 'view_episodes' && animeId) {
@@ -1559,6 +1645,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetSubView = document.getElementById(subViewId);
         if (targetSubView) {
             targetSubView.classList.remove('hidden');
+        }
+
+        // 当切换到 Bangumi 配置子视图时，加载其授权状态
+        if (subViewId === 'bangumi-settings-subview') {
+            loadBangumiAuthState();
         }
     }
 

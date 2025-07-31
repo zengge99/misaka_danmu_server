@@ -818,7 +818,8 @@ async def save_bangumi_auth(pool: aiomysql.Pool, user_id: int, auth_data: Dict[s
                     avatar_url = new_values.avatar_url,
                     access_token = new_values.access_token,
                     refresh_token = new_values.refresh_token,
-                    expires_at = new_values.expires_at
+                    expires_at = new_values.expires_at,
+                    authorized_at = IF(bangumi_auth.authorized_at IS NULL, new_values.authorized_at, bangumi_auth.authorized_at)
             """
             await cursor.execute(query, (
                 user_id, auth_data.get('bangumi_user_id'), auth_data.get('nickname'),
