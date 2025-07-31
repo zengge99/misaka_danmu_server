@@ -70,6 +70,11 @@ class TMDBMovieSearchResults(BaseModel):
     results: List[TMDBMovieResult]
     total_pages: int
 
+class TMDBSearchResponseItem(BaseModel):
+    id: int
+    name: str
+    image_url: Optional[str] = None
+
 class TMDBExternalIDs(BaseModel):
     imdb_id: Optional[str] = None
     tvdb_id: Optional[int] = None
@@ -100,7 +105,7 @@ class TMDBMovieDetails(BaseModel):
     external_ids: Optional[TMDBExternalIDs] = None
 
 
-@router.get("/search/tv", response_model=List[Dict[str, str]], summary="搜索 TMDB 电视剧")
+@router.get("/search/tv", response_model=List[TMDBSearchResponseItem], summary="搜索 TMDB 电视剧")
 async def search_tmdb_subjects(
     keyword: str = Query(..., min_length=1),
     client: httpx.AsyncClient = Depends(get_tmdb_client),
@@ -151,7 +156,7 @@ async def search_tmdb_subjects(
 
         return final_results
  
-@router.get("/search/movie", response_model=List[Dict[str, str]], summary="搜索 TMDB 电影作品")
+@router.get("/search/movie", response_model=List[TMDBSearchResponseItem], summary="搜索 TMDB 电影作品")
 async def search_tmdb_movie_subjects(
     keyword: str = Query(..., min_length=1),
     client: httpx.AsyncClient = Depends(get_tmdb_client),
