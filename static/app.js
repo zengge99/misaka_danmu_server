@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logOutput = document.getElementById('log-output');
     const loader = document.getElementById('loader');
     const testMatchForm = document.getElementById('test-match-form');
+    const testTokenInput = document.getElementById('test-token-input');
     const testFilenameInput = document.getElementById('test-filename-input');
     const testMatchResults = document.getElementById('test-match-results');
     
@@ -332,18 +333,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleTestMatch(e) {
         e.preventDefault();
+        const apiToken = testTokenInput.value.trim();
         const filename = testFilenameInput.value.trim();
-        if (!filename) return;
+        if (!apiToken || !filename) {
+            alert('Token和文件名都不能为空。');
+            return;
+        }
 
         testMatchResults.textContent = '正在测试...';
         const testButton = testMatchForm.querySelector('button');
         testButton.disabled = true;
 
         try {
-            const data = await apiFetch(`/api/ui/match?fileName=${encodeURIComponent(filename)}`);
-            testMatchResults.textContent = JSON.stringify(data, null, 2);
+            const data = await apiFetch(`/api/${apiToken}/match`, {
+                method: 'POST',
+                body: JSON.stringify({ fileName: filename })
+            });
+
+            if (data.success === false) { // 来自 DandanApiRoute 的错误
+                 testMatchResults.textContent = `测试失败: [${data.errorCode}] ${data.errorMessage}`;
+                 return;
+            }
+
+            if (data.isMatched) {
+                const match = data.matches[0];
+                testMatchResults.textContent = `[匹配成功]\n` +
+                    `番剧: ${match.animeTitle} (ID: ${match.animeId})\n` +
+                    `分集: ${match.episodeTitle} (ID: ${match.episodeId})\n` +
+                    `类型: ${match.typeDescription}`;
+            } else if (data.matches && data.matches.length > 0) {
+                const formattedResults = data.matches.map(match =>
+                    `- [多个可能] ${match.animeTitle} - ${match.episodeTitle} (ID: ${match.episodeId})`
+                ).join('\n');
+                testMatchResults.textContent = `匹配不唯一，找到 ${data.matches.length} 个可能的结果 (isMatched=false):\n${formattedResults}`;
+            } else {
+                testMatchResults.textContent = '未匹配到任何结果。';
+            }
         } catch (error) {
-            testMatchResults.textContent = `测试失败: ${(error.message || error)}`;
+            testMatchResults.textContent = `请求失败: ${(error.message || error)}`;
         } finally {
             testButton.disabled = false;
         }

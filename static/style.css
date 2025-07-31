@@ -801,6 +801,10 @@ header {
     flex-grow: 1;
 }
 
+.flex-grow-2 {
+    flex-grow: 2; /* 让文件名输入框更宽一些 */
+}
+
 #test-match-results {
     background-color: #f8f9fa;
     border: 1px solid var(--border-color);
