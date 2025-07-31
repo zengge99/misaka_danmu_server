@@ -17,10 +17,17 @@ router = APIRouter()
 
 async def get_tmdb_client(
     current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool),
 ) -> httpx.AsyncClient:
     """依赖项：创建一个带有 TMDB 授权的 httpx 客户端。"""
+    api_key = await crud.get_config_value(pool, "tmdb_api_key", "")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="TMDB API Key not configured. Please set it in the settings page."
+        )
     headers = {
-        "Authorization": f"Bearer {settings.tmdb.api_key}",
+        "Authorization": f"Bearer {api_key}",
         "User-Agent": "l429609201/danmu_api_server(https://github.com/l429609201/danmu_api_server)",
     }
     return httpx.AsyncClient(headers=headers, timeout=20.0)
@@ -51,7 +58,7 @@ class TMDBsearchresults(BaseModel):
     total_pages: int
 
 
-@router.get("/search", response_model=List[Dict[str, str]], summary="搜索 TMDB 作品")
+@router.get("/search/tv", response_model=List[Dict[str, str]], summary="搜索 TMDB 电视剧")
 async def search_tmdb_subjects(
     keyword: str = Query(..., min_length=1),
     client: httpx.AsyncClient = Depends(get_tmdb_client),
@@ -92,7 +99,7 @@ async def search_tmdb_subjects(
         return final_results
 
 
-@router.get("/movie/search", response_model=List[Dict[str, str]], summary="搜索 TMDB 电影作品")
+@router.get("/search/movie", response_model=List[Dict[str, str]], summary="搜索 TMDB 电影作品")
 async def search_tmdb_movie_subjects(
     keyword: str = Query(..., min_length=1),
     client: httpx.AsyncClient = Depends(get_tmdb_client),

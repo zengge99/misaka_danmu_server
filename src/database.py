@@ -423,7 +423,8 @@ async def _init_default_config(cursor: aiomysql.Cursor):
         ('episodes_ttl_seconds', '1800', '分集列表的缓存时间（秒），默认30分钟。'),
         ('base_info_ttl_seconds', '1800', '基础媒体信息（如爱奇艺）的缓存时间（秒），默认30分钟。'),
         ('custom_api_domain', '', '用于拼接弹幕API地址的自定义域名。'),
-        ('jwt_expire_minutes', str(settings.jwt.access_token_expire_minutes), 'JWT令牌的有效期（分钟）。-1 表示永不过期。')
+        ('jwt_expire_minutes', str(settings.jwt.access_token_expire_minutes), 'JWT令牌的有效期（分钟）。-1 表示永不过期。'),
+        ('tmdb_api_key', '', '用于访问 The Movie Database API 的密钥。')
     ]
     # 使用 INSERT IGNORE 来避免因主键冲突而报错
     query = "INSERT IGNORE INTO config (config_key, config_value, description) VALUES (%s, %s, %s)"

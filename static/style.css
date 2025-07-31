@@ -249,6 +249,15 @@ header {
     background-color: transparent;
 }
 
+/* Be consistent for tmdb-settings-form as well */
+#tmdb-settings-form {
+    width: auto;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    background-color: transparent;
+}
+
 /* Align the paragraph inside the form with the inputs */
 #change-password-form p:first-of-type {
     padding-left: 135px; /* Align with inputs based on label width (120px) + gap (15px) */
