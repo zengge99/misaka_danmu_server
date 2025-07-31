@@ -15,6 +15,7 @@ from ..log_manager import get_logs
 from ..task_manager import TaskManager
 from ..scraper_manager import ScraperManager
 from ..config import settings
+from ..config import settings
 from ..database import get_db_pool
 
 router = APIRouter()
@@ -280,6 +281,11 @@ async def update_scraper_settings(
 async def get_server_logs(current_user: models.User = Depends(security.get_current_user)):
     """获取存储在内存中的最新日志条目。"""
     return get_logs()
+
+@router.get("/config/tmdb", response_model=Dict[str, str], summary="获取TMDB Api Key")
+async def get_tmdb_key(current_user: models.User = Depends(security.get_current_user)):
+    """获取TMDB Api Key。"""
+    return {"key": "tmdb_api_key", "value": settings.tmdb.api_key}
 
 @router.post("/cache/clear", status_code=status.HTTP_200_OK, summary="清除所有缓存")
 async def clear_all_caches(

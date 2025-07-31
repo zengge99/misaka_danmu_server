@@ -32,6 +32,9 @@ class BangumiConfig(BaseModel):
     client_id: str = "bgm4222688b7532ef439"
     client_secret: str = "379c426b8f26b561642334445761361f"
 
+class TMDBConfig(BaseModel):
+    api_key: str = ""
+
 # 2. 创建一个自定义的配置源，用于从 YAML 文件加载设置
 class YamlConfigSettingsSource(PydanticBaseSettingsSource):
     def __init__(self, settings_cls: type[BaseSettings]):
@@ -56,7 +59,7 @@ class Settings(BaseSettings):
     jwt: JWTConfig = JWTConfig()
     admin: AdminConfig = AdminConfig()
     bangumi: BangumiConfig = BangumiConfig()
-
+    tmdb: TMDBConfig = TMDBConfig()
     class Config:
         # 为环境变量设置前缀，避免与系统变量冲突
         # 例如，在容器中设置环境变量 DANMUAPI_SERVER__PORT=8080

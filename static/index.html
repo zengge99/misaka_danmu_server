@@ -140,7 +140,7 @@
                                     <label for="edit-anime-tmdbid">TMDB ID</label>
                                     <div class="input-with-icon">
                                         <input type="text" id="edit-anime-tmdbid" placeholder="例如: 1396">
-                                        <button type="button" class="icon-btn" title="查找">🔍</button>
+                                        <button type="button" id="search-tmdbid-btn" class="icon-btn" title="查找">🔍</button>
                                     </div>
                                 </div>
                                 <div class="form-row">
@@ -226,6 +226,18 @@
                         </form>
                         <ul id="bangumi-search-results-list" class="results-list-style">
                             <!-- Search results will be populated here -->
+                        </ul>
+                    </div>
+                    <div id="tmdb-search-view" class="content-view hidden">
+                        <div class="view-header-flexible">
+                            <h2 id="tmdb-search-view-title">搜索 TMDB ID</h2>
+                            <button id="back-to-edit-anime-from-tmdb-search-btn">&lt; 返回编辑</button>
+                        </div>
+                        <form id="tmdb-search-form" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                            <input type="text" id="tmdb-search-keyword" placeholder="输入影视名称..." required style="flex-grow: 1;">
+                            <button type="submit">搜索</button>
+                        </form>
+                        <ul id="tmdb-search-results-list" class="results-list-style">
                         </ul>
                     </div>
                     <div id="anime-detail-view" class="content-view hidden">
@@ -342,7 +354,7 @@
                         <div class="settings-sub-nav">
                             <button class="sub-nav-btn active" data-subview="account-settings-subview">账户安全</button>
                             <button class="sub-nav-btn" data-subview="bangumi-settings-subview">Bangumi配置</button>
-                            <button class="sub-nav-btn" data-subview="api-settings-subview">API配置</button>
+                            <button class="sub-nav-btn" data-subview="tmdb-settings-subview">TMDB配置</button>
                         </div>
 
                         <div id="account-settings-subview" class="settings-subview">
@@ -392,10 +404,20 @@
                             </div>
                         </div>
 
-                        <div id="api-settings-subview" class="settings-subview hidden">
+                        <div id="tmdb-settings-subview" class="settings-subview hidden">
                             <div class="form-card">
-                                <h3>API配置</h3>
-                                <p>此功能正在开发中。</p>
+                                <h3>TMDB API 配置</h3>
+                                <p>请从 <a href="https://www.themoviedb.org/settings/api" target="_blank">TMDB官网</a> 获取您的 API Key (v3 auth)。</p>
+                                <form id="tmdb-settings-form">
+                                    <div class="form-row">
+                                        <label for="tmdb-api-key">API Key</label>
+                                        <input type="password" id="tmdb-api-key" placeholder="在此输入您的 TMDB API Key">
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit">保存</button>
+                                    </div>
+                                    <p id="tmdb-save-message" class="message"></p>
+                                </form>
                             </div>
                         </div>
                     </div>

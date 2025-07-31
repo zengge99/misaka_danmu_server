@@ -90,6 +90,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const bangumiSearchKeywordInput = document.getElementById('bangumi-search-keyword');
     const bangumiSearchResultsList = document.getElementById('bangumi-search-results-list');
     const backToEditAnimeFromBgmSearchBtn = document.getElementById('back-to-edit-anime-from-bgm-search-btn');
+
+    // TMDB Search View Elements
+    const tmdbSearchView = document.getElementById('tmdb-search-view');
+    const tmdbSearchForm = document.getElementById('tmdb-search-form');
+    const tmdbSearchResultsList = document.getElementById('tmdb-search-results-list');
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
     let logRefreshInterval = null;
@@ -278,11 +283,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Special listener for BGM ID search button
         document.getElementById('search-bgmid-btn').addEventListener('click', handleSearchBgmId);
+        // Special listener for TMDB ID search button
+        document.getElementById('search-tmdbid-btn').addEventListener('click', handleSearchTmdbId);
         // Listener for OAuth popup completion
         window.addEventListener('message', handleOAuthCallbackMessage);
         // New listeners for Bangumi Search View
         backToEditAnimeFromBgmSearchBtn.addEventListener('click', handleBackToEditAnime);
         bangumiSearchForm.addEventListener('submit', handleBangumiSearchSubmit);
+        // New listeners for TMDB Search View
+        document.getElementById('back-to-edit-anime-from-tmdb-search-btn').addEventListener('click', handleBackToEditAnime);
+        tmdbSearchForm.addEventListener('submit', handleTmdbSearchSubmit);
+        document.getElementById('tmdb-settings-form').addEventListener('submit', handleSaveTmdbKey);
 
         // Listener for "apply" buttons in edit form (using event delegation)
         editAnimeForm.addEventListener('click', (e) => {
@@ -678,6 +689,32 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             saveDomainBtn.disabled = false;
             saveDomainBtn.textContent = '保存域名';
+        }
+    }
+
+    async function handleSaveTmdbKey(e) {
+        e.preventDefault();
+        const apiKeyInput = document.getElementById('tmdb-api-key');
+        const apiKey = apiKeyInput.value.trim();
+        const saveBtn = e.target.querySelector('button[type="submit"]');
+        const messageEl = document.getElementById('tmdb-save-message');
+
+        saveBtn.disabled = true;
+        messageEl.textContent = '保存中...';
+        messageEl.className = 'message';
+
+        try {
+            await apiFetch('/api/ui/config/tmdb_api_key', {
+                method: 'PUT',
+                body: JSON.stringify({ value: apiKey })
+            });
+            messageEl.textContent = 'TMDB API Key 保存成功！';
+            messageEl.classList.add('success');
+        } catch (error) {
+            messageEl.textContent = `保存失败: ${error.message}`;
+            messageEl.classList.add('error');
+        } finally {
+            saveBtn.disabled = false;
         }
     }
 
@@ -1270,6 +1307,92 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function handleSearchTmdbId() {
+        const title = document.getElementById('edit-anime-title').value;
+        const animeId = document.getElementById('edit-anime-id').value;
+
+        // Store context
+        tmdbSearchView.dataset.returnToAnimeId = animeId;
+
+        // Switch views
+        editAnimeView.classList.add('hidden');
+        tmdbSearchView.classList.remove('hidden');
+
+        // Pre-populate search
+        document.getElementById('tmdb-search-keyword').value = title;
+        document.getElementById('tmdb-search-view-title').textContent = `为 "${title}" 搜索 TMDB ID`;
+        tmdbSearchResultsList.innerHTML = ''; // Clear previous results
+    }
+
+    async function handleTmdbSearchSubmit(e) {
+        e.preventDefault();
+        const keyword = document.getElementById('tmdb-search-keyword').value.trim();
+        if (!keyword) return;
+
+        tmdbSearchResultsList.innerHTML = '<li>正在搜索...</li>';
+        const searchButton = tmdbSearchForm.querySelector('button[type="submit"]');
+        searchButton.disabled = true;
+
+        try {
+            // Determine media type from the edit form
+            const mediaType = document.getElementById('edit-anime-type').value;
+            const searchUrl = mediaType === 'movie' ? '/api/tmdb/search/movie' : '/api/tmdb/search/tv';
+            
+            const results = await apiFetch(`${searchUrl}?keyword=${encodeURIComponent(keyword)}`);
+            renderTmdbSearchResults(results);
+        } catch (error) {
+            tmdbSearchResultsList.innerHTML = `<li class="error">搜索失败: ${error.message}</li>`;
+        } finally {
+            searchButton.disabled = false;
+        }
+    }
+
+    function renderTmdbSearchResults(results) {
+        tmdbSearchResultsList.innerHTML = '';
+        if (results.length === 0) {
+            tmdbSearchResultsList.innerHTML = '<li>未找到匹配项。</li>';
+            return;
+        }
+
+        results.forEach(result => {
+            const li = document.createElement('li');
+            
+            const leftContainer = document.createElement('div');
+            leftContainer.className = 'result-item-left';
+
+            const posterImg = document.createElement('img');
+            posterImg.className = 'poster';
+            posterImg.src = result.image_url || '/static/placeholder.png';
+            posterImg.referrerPolicy = 'no-referrer';
+            posterImg.alt = result.name;
+            leftContainer.appendChild(posterImg);
+
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'info';
+            infoDiv.innerHTML = `<p class="title">${result.name}</p><p class="meta">ID: ${result.id}</p>`;
+            leftContainer.appendChild(infoDiv);
+
+            li.appendChild(leftContainer);
+
+            const selectBtn = document.createElement('button');
+            selectBtn.textContent = '选择';
+            selectBtn.addEventListener('click', async () => {
+                const mediaType = document.getElementById('edit-anime-type').value === 'movie' ? 'movie' : 'tv';
+                try {
+                    const details = await apiFetch(`/api/tmdb/details/${mediaType}/${result.id}`);
+                    _currentSearchSelectionData = details;
+                    handleBackToEditAnime();
+                    setTimeout(applySearchSelectionData, 50);
+                } catch (error) {
+                    alert(`获取TMDB详情失败: ${error.message}`);
+                }
+            });
+            li.appendChild(selectBtn);
+
+            tmdbSearchResultsList.appendChild(li);
+        });
+    }
+
     async function showEditAnimeView(animeId) {
         libraryView.classList.add('hidden');
         animeDetailView.classList.add('hidden');
@@ -1323,18 +1446,28 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!_currentSearchSelectionData) return;
         const data = _currentSearchSelectionData;
 
-        // 直接填充 BGM ID，它没有“应用”逻辑
-        document.getElementById('edit-anime-bgmid').value = data.id || '';
+        // Check if it's a Bangumi or TMDB result by looking for a unique key
+        if ('details' in data) { // Bangumi result
+            document.getElementById('edit-anime-bgmid').value = data.id || '';
+            updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
+            updateFieldWithApplyLogic('edit-anime-name-en', data.name_en);
+            updateFieldWithApplyLogic('edit-anime-name-romaji', data.name_romaji);
 
-        // 对有“应用”逻辑的字段调用辅助函数
-        updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
-        updateFieldWithApplyLogic('edit-anime-name-en', data.name_en);
-        updateFieldWithApplyLogic('edit-anime-name-romaji', data.name_romaji);
-
-        const cnAliases = data.aliases_cn || [];
-        updateFieldWithApplyLogic('edit-anime-alias-cn-1', cnAliases[0]);
-        updateFieldWithApplyLogic('edit-anime-alias-cn-2', cnAliases[1]);
-        updateFieldWithApplyLogic('edit-anime-alias-cn-3', cnAliases[2]);
+            const cnAliases = data.aliases_cn || [];
+            updateFieldWithApplyLogic('edit-anime-alias-cn-1', cnAliases[0]);
+            updateFieldWithApplyLogic('edit-anime-alias-cn-2', cnAliases[1]);
+            updateFieldWithApplyLogic('edit-anime-alias-cn-3', cnAliases[2]);
+        } else { // Assume TMDB result
+            document.getElementById('edit-anime-tmdbid').value = data.id || '';
+            updateFieldWithApplyLogic('edit-anime-name-en', data.name_en);
+            // TMDB doesn't provide JP name directly in this flow, so we don't update it
+            // updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
+            updateFieldWithApplyLogic('edit-anime-name-romaji', data.name_romaji);
+            const cnAliases = data.aliases_cn || [];
+            updateFieldWithApplyLogic('edit-anime-alias-cn-1', cnAliases[0]);
+            updateFieldWithApplyLogic('edit-anime-alias-cn-2', cnAliases[1]);
+            updateFieldWithApplyLogic('edit-anime-alias-cn-3', cnAliases[2]);
+        }
     }
 
     function updateFieldWithApplyLogic(fieldId, newValue) {
@@ -1365,6 +1498,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             applyBtn.dataset.newValue = normalizedNewValue;
         }
+    }
+
+    function handleBackToEditAnime() {
+        bangumiSearchView.classList.add('hidden');
+        tmdbSearchView.classList.add('hidden');
+        editAnimeView.classList.remove('hidden');
     }
 
     // --- Episode List View ---
@@ -1768,6 +1907,21 @@ document.addEventListener('DOMContentLoaded', () => {
         // 当切换到 Bangumi 配置子视图时，加载其授权状态
         if (subViewId === 'bangumi-settings-subview') {
             loadBangumiAuthState();
+        }
+        if (subViewId === 'tmdb-settings-subview') {
+            loadTmdbSettings();
+        }
+    }
+
+    async function loadTmdbSettings() {
+        const apiKeyInput = document.getElementById('tmdb-api-key');
+        const messageEl = document.getElementById('tmdb-save-message');
+        messageEl.textContent = '';
+        try {
+            const data = await apiFetch('/api/ui/config/tmdb_api_key');
+            apiKeyInput.value = data.value || '';
+        } catch (error) {
+            messageEl.textContent = `加载TMDB配置失败: ${error.message}`;
         }
     }
 
