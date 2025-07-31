@@ -35,10 +35,21 @@ class BangumiSearchSubject(BaseModel):
     id: int
     name: str
     name_cn: str
+    images: Optional[Dict[str, str]] = None
 
     @property
     def display_name(self) -> str:
         return self.name_cn or self.name
+
+    @property
+    def image_url(self) -> Optional[str]:
+        """从 images 字典中获取一个合适的图片URL。"""
+        if self.images:
+            # 优先顺序: common > large > medium > small > grid
+            for size in ["common", "large", "medium", "small", "grid"]:
+                if url := self.images.get(size):
+                    return url
+        return None
 
 class BangumiSearchResponse(BaseModel):
     data: Optional[List[BangumiSearchSubject]] = None
@@ -232,4 +243,4 @@ async def search_bangumi_subjects(
             return []
         
         # 返回前端需要的数据格式
-        return [{"id": subject.id, "name": subject.display_name} for subject in search_result.data]
+        return [{"id": subject.id, "name": subject.display_name, "image_url": subject.image_url} for subject in search_result.data]

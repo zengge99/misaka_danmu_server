@@ -1215,11 +1215,30 @@ document.addEventListener('DOMContentLoaded', () => {
     
         results.forEach(result => {
             const li = document.createElement('li');
-            li.innerHTML = `<div class="info"><p class="title">${result.name}</p><p class="meta">ID: ${result.id}</p></div><button>选择</button>`;
-            li.querySelector('button').addEventListener('click', () => {
+
+            // 新增：创建并添加海报图片
+            const posterImg = document.createElement('img');
+            posterImg.className = 'poster';
+            posterImg.src = result.image_url || '/static/placeholder.png';
+            posterImg.referrerPolicy = 'no-referrer';
+            posterImg.alt = result.name;
+            li.appendChild(posterImg);
+
+            // 创建信息div
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'info';
+            infoDiv.innerHTML = `<p class="title">${result.name}</p><p class="meta">ID: ${result.id}</p>`;
+            li.appendChild(infoDiv);
+
+            // 创建选择按钮
+            const selectBtn = document.createElement('button');
+            selectBtn.textContent = '选择';
+            selectBtn.addEventListener('click', () => {
                 document.getElementById('edit-anime-bgmid').value = result.id;
-                handleBackToEditAnime(); // Go back to the edit view
+                handleBackToEditAnime(); // 返回编辑视图
             });
+            li.appendChild(selectBtn);
+
             bangumiSearchResultsList.appendChild(li);
         });
     }
