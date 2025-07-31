@@ -491,6 +491,14 @@ header {
     border-bottom: 1px solid var(--border-color);
 }
 
+.result-item-left {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* 统一处理左侧元素间距 */
+    flex-grow: 1;
+    min-width: 0; /* 防止长文本把按钮挤出去 */
+}
+
 .results-list-style li:last-child {
     border-bottom: none;
 }
@@ -500,27 +508,34 @@ header {
     height: 56px;
     object-fit: cover;
     border-radius: 4px;
-    margin-right: 15px;
     background-color: #eee;
+    flex-shrink: 0; /* 防止海报被压缩 */
 }
 .results-list-style li input[type="checkbox"] {
     width: 20px;
     height: 20px;
-    margin-right: 15px; /* 与海报的间距 */
+    /* margin-right is now handled by 'gap' in .result-item-left */
     flex-shrink: 0; /* 防止复选框被压缩 */
 }
 
 .results-list-style li .info {
     flex-grow: 1;
+    overflow: hidden; /* 处理长文本溢出 */
 }
 
 .results-list-style li .info .title {
     font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .results-list-style li .info .meta {
     font-size: 0.9em;
     color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .results-list-style button {

@@ -854,24 +854,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         results.forEach(item => {
             const li = document.createElement('li');
-
+            
+            const leftContainer = document.createElement('div');
+            leftContainer.className = 'result-item-left';
+            
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.value = item.mediaId;
-            li.appendChild(checkbox);
+            leftContainer.appendChild(checkbox);
 
             const posterImg = document.createElement('img');
             posterImg.className = 'poster';
             posterImg.src = item.imageUrl || '/static/placeholder.png';
             posterImg.referrerPolicy = 'no-referrer';
             posterImg.alt = item.title;
-            li.appendChild(posterImg);
+            leftContainer.appendChild(posterImg);
+
             const infoDiv = document.createElement('div');
             infoDiv.className = 'info';
 
             const titleP = document.createElement('p');
             titleP.className = 'title';
             titleP.textContent = item.title;
+            infoDiv.appendChild(titleP);
 
             const metaP = document.createElement('p');
             metaP.className = 'meta';
@@ -883,15 +888,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 metaText += ` | 当前集: ${item.currentEpisodeIndex}`;
             }
             metaP.textContent = metaText;
-
-            infoDiv.appendChild(titleP);
             infoDiv.appendChild(metaP);
+            leftContainer.appendChild(infoDiv);
+
+            li.appendChild(leftContainer);
 
             const importBtn = document.createElement('button');
             importBtn.textContent = '导入弹幕';
             importBtn.addEventListener('click', () => handleImportClick(importBtn, item));
 
-            li.appendChild(infoDiv);
             li.appendChild(importBtn);
             resultsList.appendChild(li);
         });
@@ -1215,21 +1220,27 @@ document.addEventListener('DOMContentLoaded', () => {
     
         results.forEach(result => {
             const li = document.createElement('li');
+            
+            // 创建左侧容器 (海报 + 信息)
+            const leftContainer = document.createElement('div');
+            leftContainer.className = 'result-item-left';
 
-            // 新增：创建并添加海报图片
+            // 创建并添加海报图片
             const posterImg = document.createElement('img');
             posterImg.className = 'poster';
             posterImg.src = result.image_url || '/static/placeholder.png';
             posterImg.referrerPolicy = 'no-referrer';
             posterImg.alt = result.name;
-            li.appendChild(posterImg);
+            leftContainer.appendChild(posterImg);
 
             // 创建信息div
             const infoDiv = document.createElement('div');
             infoDiv.className = 'info';
             const detailsText = result.details ? `${result.details} / ID: ${result.id}` : `ID: ${result.id}`;
             infoDiv.innerHTML = `<p class="title">${result.name}</p><p class="meta">${detailsText}</p>`;
-            li.appendChild(infoDiv);
+            leftContainer.appendChild(infoDiv);
+
+            li.appendChild(leftContainer);
 
             // 创建选择按钮
             const selectBtn = document.createElement('button');
