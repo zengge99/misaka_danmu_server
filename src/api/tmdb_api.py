@@ -35,7 +35,12 @@ async def get_tmdb_client(
         logger.warning("TMDB API Domain not configured, using default.")
 
     # 从域名构建完整的 API 基础 URL
-    base_url = f"{domain.rstrip('/')}/3"
+    # 增加健壮性：如果用户输入的域名已经包含了 /3，则不再重复添加
+    cleaned_domain = domain.rstrip('/')
+    if cleaned_domain.endswith('/3'):
+        base_url = cleaned_domain
+    else:
+        base_url = f"{cleaned_domain}/3"
 
     # TMDB v3 API 使用 api_key 查询参数进行身份验证
     params = {"api_key": api_key}
