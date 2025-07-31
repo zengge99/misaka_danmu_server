@@ -10,6 +10,7 @@ import aiomysql
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 
+from . import crud, models, security
 from .log_manager import get_logs
 from .task_manager import TaskManager
 from .scraper_manager import ScraperManager
