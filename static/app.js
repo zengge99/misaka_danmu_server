@@ -34,7 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const libraryTableBody = document.querySelector('#library-table tbody');
     const libraryView = document.getElementById('library-view');
     const animeDetailView = document.getElementById('anime-detail-view');
+    const detailViewImg = document.getElementById('detail-view-img');
+    const detailViewTitle = document.getElementById('detail-view-title');
+    const detailViewMeta = document.getElementById('detail-view-meta');
     const sourceDetailTableBody = document.getElementById('source-detail-table-body');
+
     const editAnimeView = document.getElementById('edit-anime-view');
     const settingsView = document.getElementById('settings-view');
     const episodeListView = document.getElementById('episode-list-view');
@@ -1536,7 +1540,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 apiFetch(`/api/ui/library/episode/${episodeId}`, {
                     method: 'DELETE',
                 }).then(() => {
-                    if (row) row.remove();
+                    showEpisodeListView(sourceId, animeTitle, animeId);
                 }).catch(error => {
                     alert(`删除失败: ${(error.message || error)}`);
                 });
