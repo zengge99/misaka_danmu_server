@@ -126,10 +126,10 @@ async def bangumi_auth_callback(
         if not token:
             logger.warning("Bangumi OAuth回调失败：在请求中未找到 'danmu_api_token' cookie。")
             raise HTTPException(status_code=401, detail="Auth token cookie not found.")
-        user = await security.get_current_user(token, pool)
+        user = await security._get_user_from_token(token, pool)
     except HTTPException as e:
         logger.error(f"Bangumi OAuth回调认证失败: {e.detail}")
-        return HTMLResponse("<h1>认证失败：无法识别用户会话，请重新登录后再试。</h1>", status_code=401)
+        return HTMLResponse(f"<h1>认证失败：{e.detail}</h1><p>请确保您已在本站登录，然后重试。</p>", status_code=e.status_code)
 
     token_data = {
         "grant_type": "authorization_code",
