@@ -1,6 +1,6 @@
 import uvicorn
 import asyncio
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 import logging
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
@@ -12,7 +12,7 @@ from .dandan_api import dandan_router
 from .task_manager import TaskManager
 from .scraper_manager import ScraperManager
 from .config import settings
-from . import crud
+from . import crud, security
 from .log_manager import setup_logging
 
 app = FastAPI(
