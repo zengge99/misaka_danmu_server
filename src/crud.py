@@ -577,6 +577,16 @@ async def update_episode_fetch_time(pool: aiomysql.Pool, episode_id: int):
 
 # --- 数据库缓存服务 ---
 
+async def check_source_exists_by_media_id(pool: aiomysql.Pool, provider: str, media_id: str) -> bool:
+    """通过 provider 和 media_id 检查数据源是否已存在于任何番剧下。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "SELECT 1 FROM anime_sources WHERE provider_name = %s AND media_id = %s LIMIT 1",
+                (provider, media_id)
+            )
+            return await cursor.fetchone() is not None
+
 async def get_config_value(pool: aiomysql.Pool, key: str, default: str) -> str:
     """从数据库获取配置值。"""
     async with pool.acquire() as conn:
