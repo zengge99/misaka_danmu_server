@@ -46,8 +46,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const librarySearchInput = document.getElementById('library-search-input');
 
     // Bangumi Settings Elements
-    const bangumiSettingsView = document.getElementById('bangumi-settings-subview');
-    const bangumiAuthStateDiv = document.getElementById('bangumi-auth-state');
+    const bangumiAuthStateUnauthenticated = document.getElementById('bangumi-auth-state-unauthenticated');
+    const bangumiAuthStateAuthenticated = document.getElementById('bangumi-auth-state-authenticated');
+    const bangumiUserNickname = document.getElementById('bangumi-user-nickname');
+    const bangumiUserId = document.getElementById('bangumi-user-id');
+    const bangumiAuthorizedAt = document.getElementById('bangumi-authorized-at');
+    const bangumiExpiresAt = document.getElementById('bangumi-expires-at');
+    const bangumiUserAvatar = document.getElementById('bangumi-user-avatar');
     const bangumiLoginBtn = document.getElementById('bangumi-login-btn');
     const bangumiLogoutBtn = document.getElementById('bangumi-logout-btn');
 
@@ -244,6 +249,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('back-to-tokens-from-add-btn').addEventListener('click', () => {
             addTokenView.classList.add('hidden');
             tokenManagerView.classList.remove('hidden');
+        });
+        document.getElementById('back-to-library-from-detail-btn').addEventListener('click', () => {
+            animeDetailView.classList.add('hidden');
+            libraryView.classList.remove('hidden');
         });
         document.getElementById('back-to-episodes-from-edit-btn').addEventListener('click', () => {
             editEpisodeView.classList.add('hidden');
@@ -1081,89 +1090,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function showAnimeDetailView(animeId) {
-        libraryView.classList.add('hidden');
-        editAnimeView.classList.add('hidden');
-        episodeListView.classList.add('hidden');
-        danmakuListView.classList.add('hidden');
-        animeDetailView.classList.remove('hidden');
-        animeDetailView.innerHTML = '<div>加载中...</div>';
-
-        try {
-            const fullLibrary = await apiFetch('/api/ui/library');
-            const anime = fullLibrary.animes.find(a => a.animeId === animeId);
-            if (!anime) throw new Error("找不到该作品的信息。");
-
-            const sources = await apiFetch(`/api/ui/library/anime/${animeId}/sources`);
-            
-            renderAnimeDetailView(anime, sources);
-
-        } catch (error) {
-            animeDetailView.innerHTML = `<div class="error">加载详情失败: ${(error.message || error)}</div>`;
-        }
-    }
-
-    function renderAnimeDetailView(anime, sources) {
-        let html = `
-            <div class="view-header-flexible">
-                <div class="anime-detail-header-main">
-                    <img src="${anime.imageUrl || '/static/placeholder.png'}" alt="${anime.title}" referrerpolicy="no-referrer">
-                    <div>
-                        <h2>${anime.title}</h2>
-                        <p>季: ${anime.season} | 总集数: ${anime.episodeCount || 0} | 已关联 ${sources.length} 个源</p>
-                    </div>
-                </div>
-                <button id="back-to-library-btn"> &lt; 返回弹幕库</button>
-            </div>
-            <h3>关联的数据源</h3>
-            <table id="source-detail-table">
-                <thead>
-                    <tr>
-                        <th>源提供方</th>
-                        <th>源媒体ID</th>
-                        <th>状态</th>
-                        <th>收录时间</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                </tbody>
-            </table>
-        `;
-        animeDetailView.innerHTML = html;
-
-        const sourceTableBody = animeDetailView.querySelector('#source-detail-table tbody');
-        if (sources.length > 0) {
-            sources.forEach(source => {
-                const row = sourceTableBody.insertRow();
-                row.insertCell().textContent = source.provider_name;
-                row.insertCell().textContent = source.media_id;
-                const statusCell = row.insertCell();
-                statusCell.textContent = source.is_favorited ? '🌟' : '';
-                row.insertCell().textContent = new Date(source.created_at).toLocaleString();
-                const actionsCell = row.insertCell();
-                actionsCell.className = 'actions-cell';
-                actionsCell.innerHTML = `
-                    <div class="action-buttons-wrapper">
-                        <button class="action-btn" title="精确标记" onclick="handleSourceAction('favorite', ${source.source_id}, '${anime.title.replace(/'/g, "\\'")}', ${anime.animeId})">${source.is_favorited ? '🌟' : '⭐'}</button>
-                        <button class="action-btn" title="查看/编辑分集" onclick="handleSourceAction('view_episodes', ${source.source_id}, '${anime.title.replace(/'/g, "\\'")}', ${anime.animeId})">📖</button>
-                        <button class="action-btn" title="刷新此源" onclick="handleSourceAction('refresh', ${source.source_id}, '${anime.title}')">🔄</button>
-                        <button class="action-btn" title="删除此源" onclick="handleSourceAction('delete', ${source.source_id}, '${anime.title}')">🗑️</button>
-                    </div>
-                `;
-            });
-        } else {
-            sourceTableBody.innerHTML = `<tr><td colspan="5">未关联任何数据源。</td></tr>`;
-        }
-
-        // 重新绑定事件监听器
-        document.getElementById('back-to-library-btn').addEventListener('click', () => {
-            animeDetailView.classList.add('hidden');
-            libraryView.classList.remove('hidden');
-        });
-
-    }
-
     function refreshSource(sourceId, title) {
         if (confirm(`您确定要为 '${title}' 的这个数据源执行全量刷新吗？`)) {
             apiFetch(`/api/ui/library/source/${sourceId}/refresh`, {
@@ -1173,6 +1099,64 @@ document.addEventListener('DOMContentLoaded', () => {
             }).catch(error => {
                 alert(`启动刷新任务失败: ${(error.message || error)}`);
             });
+        }
+    }
+
+    async function showAnimeDetailView(animeId) {
+        // 1. Switch views and show loading state
+        libraryView.classList.add('hidden');
+        editAnimeView.classList.add('hidden');
+        episodeListView.classList.add('hidden');
+        danmakuListView.classList.add('hidden');
+        animeDetailView.classList.remove('hidden');
+        
+        // Clear previous content
+        detailViewTitle.textContent = '加载中...';
+        detailViewMeta.textContent = '';
+        detailViewImg.src = '/static/placeholder.png';
+        sourceDetailTableBody.innerHTML = '';
+    
+        try {
+            // 2. Fetch data
+            const [fullLibrary, sources] = await Promise.all([
+                apiFetch('/api/ui/library'),
+                apiFetch(`/api/ui/library/anime/${animeId}/sources`)
+            ]);
+    
+            const anime = fullLibrary.animes.find(a => a.animeId === animeId);
+            if (!anime) throw new Error("找不到该作品的信息。");
+    
+            // 3. Populate the static template in index.html
+            detailViewImg.src = anime.imageUrl || '/static/placeholder.png';
+            detailViewImg.alt = anime.title;
+            detailViewTitle.textContent = anime.title;
+            detailViewMeta.textContent = `季: ${anime.season} | 总集数: ${anime.episodeCount || 0} | 已关联 ${sources.length} 个源`;
+    
+            if (sources.length > 0) {
+                sources.forEach(source => {
+                    const row = sourceDetailTableBody.insertRow();
+                    row.insertCell().textContent = source.provider_name;
+                    row.insertCell().textContent = source.media_id;
+                    const statusCell = row.insertCell();
+                    statusCell.textContent = source.is_favorited ? '🌟' : '';
+                    row.insertCell().textContent = new Date(source.created_at).toLocaleString();
+                    const actionsCell = row.insertCell();
+                    actionsCell.className = 'actions-cell';
+                    actionsCell.innerHTML = `
+                        <div class="action-buttons-wrapper">
+                            <button class="action-btn" title="精确标记" onclick="handleSourceAction('favorite', ${source.source_id}, '${anime.title.replace(/'/g, "\\'")}', ${anime.animeId})">${source.is_favorited ? '🌟' : '⭐'}</button>
+                            <button class="action-btn" title="查看/编辑分集" onclick="handleSourceAction('view_episodes', ${source.source_id}, '${anime.title.replace(/'/g, "\\'")}', ${anime.animeId})">📖</button>
+                            <button class="action-btn" title="刷新此源" onclick="handleSourceAction('refresh', ${source.source_id}, '${anime.title}')">🔄</button>
+                            <button class="action-btn" title="删除此源" onclick="handleSourceAction('delete', ${source.source_id}, '${anime.title}')">🗑️</button>
+                        </div>
+                    `;
+                });
+            } else {
+                sourceDetailTableBody.innerHTML = `<tr><td colspan="5">未关联任何数据源。</td></tr>`;
+            }
+        } catch (error) {
+            detailViewTitle.textContent = '加载详情失败';
+            detailViewMeta.textContent = error.message || error;
         }
     }
 
@@ -1569,25 +1553,26 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const state = await apiFetch('/api/bgm/auth/state');
             if (state.is_authenticated) {
-                const authorizedAt = state.authorized_at ? new Date(state.authorized_at).toLocaleString() : 'N/A';
-                const expiresAt = state.expires_at ? new Date(state.expires_at).toLocaleString() : '永不（或未知）';
+                bangumiUserNickname.textContent = state.nickname;
+                bangumiUserId.textContent = state.bangumi_user_id || 'N/A';
+                bangumiAuthorizedAt.textContent = state.authorized_at ? new Date(state.authorized_at).toLocaleString() : 'N/A';
+                bangumiExpiresAt.textContent = state.expires_at ? new Date(state.expires_at).toLocaleString() : '永不（或未知）';
+                bangumiUserAvatar.src = state.avatar_url || '/static/placeholder.png';
 
-                bangumiAuthStateDiv.innerHTML = `
-                    <p>状态: 已作为 <strong>${state.nickname}</strong> 授权</p>
-                    <p>用户ID: ${state.bangumi_user_id || 'N/A'}</p>
-                    <p>授权时间: ${authorizedAt}</p>
-                    <p>过期时间: ${expiresAt}</p>
-                    <img src="${state.avatar_url || '/static/placeholder.png'}" alt="avatar" style="width: 40px; height: 40px; border-radius: 50%; margin-top: 10px;">
-                `;
+                bangumiAuthStateAuthenticated.classList.remove('hidden');
+                bangumiAuthStateUnauthenticated.classList.add('hidden');
                 bangumiLoginBtn.classList.add('hidden');
                 bangumiLogoutBtn.classList.remove('hidden');
             } else {
-                bangumiAuthStateDiv.innerHTML = '<p>当前未授权。授权后可使用更多功能。</p>';
+                bangumiAuthStateAuthenticated.classList.add('hidden');
+                bangumiAuthStateUnauthenticated.classList.remove('hidden');
                 bangumiLoginBtn.classList.remove('hidden');
                 bangumiLogoutBtn.classList.add('hidden');
             }
         } catch (error) {
-            bangumiAuthStateDiv.innerHTML = `<p class="error">获取授权状态失败: ${error.message}</p>`;
+            bangumiAuthStateUnauthenticated.innerHTML = `<p class="error">获取授权状态失败: ${error.message}</p>`;
+            bangumiAuthStateAuthenticated.classList.add('hidden');
+            bangumiAuthStateUnauthenticated.classList.remove('hidden');
         }
     }
 
