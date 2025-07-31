@@ -82,7 +82,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let token = localStorage.getItem('danmu_api_token');
     let logRefreshInterval = null;
     let originalSearchResults = []; // 用于存储原始搜索结果以进行前端过滤
-    let clearedTaskIds = new Set(); // 新增：用于存储已从视图中清除的任务ID
 
     // --- Core Functions ---
     function toggleLoader(show) {
@@ -808,11 +807,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderTasks(tasks) {
         if (!taskListUl) return;
 
-        // 过滤掉那些已经被前端清除的任务
-        const tasksToRender = tasks.filter(task => !clearedTaskIds.has(task.task_id));
-
         // If no tasks, show message and clear list
-        if (tasksToRender.length === 0) {
+        if (tasks.length === 0) {
             taskListUl.innerHTML = '<li>当前没有任务。</li>';
             return;
         }
@@ -824,7 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const existingTaskElements = new Map([...taskListUl.querySelectorAll('.task-item')].map(el => [el.dataset.taskId, el]));
-        const incomingTaskIds = new Set(tasksToRender.map(t => t.task_id));
+        const incomingTaskIds = new Set(tasks.map(t => t.task_id));
 
         // Remove tasks that are no longer in the list (e.g., if backend state is cleared)
         for (const [taskId, element] of existingTaskElements.entries()) {
@@ -834,7 +830,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Update existing or add new tasks
-        tasksToRender.forEach(task => {
+        tasks.forEach(task => {
             const statusColor = {
                 "已完成": "var(--success-color)",
                 "失败": "var(--error-color)",
@@ -871,25 +867,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
                 taskListUl.appendChild(li);
-                taskElement = li; // Use the newly created element for the next step
-            }
-
-            // Schedule removal for completed tasks
-            if (task.status === '已完成' && !taskElement.dataset.removing) {
-                taskElement.dataset.removing = 'true';
-                // 立即将任务ID添加到已清除集合，防止下次轮询时再次渲染
-                clearedTaskIds.add(task.task_id);
-
-                setTimeout(() => {
-                    taskElement.style.opacity = '0';
-                    setTimeout(() => {
-                        taskElement.remove();
-                        // After removing, check if the list is now empty.
-                        if (taskListUl.children.length === 0) {
-                             taskListUl.innerHTML = '<li>当前没有任务。</li>';
-                        }
-                    }, 500); // This duration should match the CSS transition
-                }, 2500); // Wait 2.5 seconds before starting the fade-out
             }
         });
     }
@@ -1596,14 +1573,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const expiresAt = state.expires_at ? new Date(state.expires_at).toLocaleString() : '永不（或未知）';
 
                 bangumiAuthStateDiv.innerHTML = `
-                    <div class="bangumi-user-profile">
-                        <img src="${state.avatar_url || '/static/placeholder.png'}" alt="avatar">
-                        <div class="bangumi-user-details">
-                            <p>已作为 <strong>${state.nickname}</strong> 授权 (ID: ${state.bangumi_user_id || 'N/A'})</p>
-                            <p class="meta">授权于: ${authorizedAt}</p>
-                            <p class="meta">过期于: ${expiresAt}</p>
-                        </div>
-                    </div>
+                    <p>状态: 已作为 <strong>${state.nickname}</strong> 授权</p>
+                    <p>用户ID: ${state.bangumi_user_id || 'N/A'}</p>
+                    <p>授权时间: ${authorizedAt}</p>
+                    <p>过期时间: ${expiresAt}</p>
+                    <img src="${state.avatar_url || '/static/placeholder.png'}" alt="avatar" style="width: 40px; height: 40px; border-radius: 50%; margin-top: 10px;">
                 `;
                 bangumiLoginBtn.classList.add('hidden');
                 bangumiLogoutBtn.classList.remove('hidden');

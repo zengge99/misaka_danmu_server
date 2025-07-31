@@ -657,7 +657,6 @@ header {
     padding: 15px;
     margin-bottom: 10px;
     border-left: 5px solid var(--primary-color);
-    transition: opacity 0.5s ease-out;
 }
 
 .task-item[data-status="排队中"] {
@@ -832,31 +831,6 @@ header {
     font-family: 'Courier New', Courier, monospace;
 }
 
-/* Bangumi Auth State Styles */
-.bangumi-user-profile {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    padding: 10px;
-    background-color: var(--secondary-color);
-    border-radius: 8px;
-}
-
-.bangumi-user-details {
-    display: flex;
-    flex-direction: column;
-}
-
-.bangumi-user-details p {
-    margin: 0;
-    line-height: 1.4;
-}
-
-.bangumi-user-details .meta {
-    font-size: 0.85em;
-    color: #666;
-}
-
 /* Modal Styles */
 .modal-overlay {
     position: fixed;
@@ -912,5 +886,4 @@ header {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    flex-shrink: 0;
 }
