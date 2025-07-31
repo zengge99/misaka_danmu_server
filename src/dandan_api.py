@@ -420,11 +420,11 @@ async def get_bangumi_details(
     """
     anime_id_int: Optional[int] = None
     if anime_id.startswith('A') and anime_id[1:].isdigit():
+        # 格式1: "A" + animeId, 例如 "A123"
         anime_id_int = int(anime_id[1:])
     elif anime_id.isdigit():
-        anime_id_int = int(anime_id)
-    else:
-        # 假定为真实的 bangumi_id
+        # 格式2: 纯数字的 Bangumi ID, 例如 "148099"
+        # 我们需要通过 bangumi_id 找到我们自己数据库中的 anime_id
         anime_id_int = await crud.get_anime_id_by_bangumi_id(pool, anime_id)
 
     if anime_id_int is None:

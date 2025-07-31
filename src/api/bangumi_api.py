@@ -112,7 +112,7 @@ async def get_bangumi_client(
 
     # 检查 token 是否过期
     expires_at = auth_info.get("expires_at")
-    if expires_at and datetime.now(timezone.utc) >= expires_at:
+    if expires_at and datetime.now() >= expires_at:
         # 尝试刷新 token
         try:
             async with httpx.AsyncClient() as client:
@@ -128,7 +128,7 @@ async def get_bangumi_client(
 
                 auth_info["access_token"] = new_token_info.access_token
                 auth_info["refresh_token"] = new_token_info.refresh_token
-                auth_info["expires_at"] = datetime.now(timezone.utc) + timedelta(seconds=new_token_info.expires_in)
+                auth_info["expires_at"] = datetime.now() + timedelta(seconds=new_token_info.expires_in)
                 await crud.save_bangumi_auth(pool, current_user.id, auth_info)
                 logger.info(f"用户 '{current_user.username}' 的 Bangumi token 已成功刷新。")
         except Exception as e:
@@ -211,7 +211,7 @@ async def bangumi_auth_callback(
                 "avatar_url": bgm_user.avatar.get("large"),
                 "access_token": token_info.access_token,
                 "refresh_token": token_info.refresh_token,
-                "expires_at": datetime.now(timezone.utc) + timedelta(seconds=token_info.expires_in)
+                "expires_at": datetime.now() + timedelta(seconds=token_info.expires_in)
             }
             await crud.save_bangumi_auth(pool, user.id, auth_to_save)
 
