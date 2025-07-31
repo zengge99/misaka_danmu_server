@@ -468,10 +468,11 @@ async def update_anime_details(pool: aiomysql.Pool, anime_id: int, update_data: 
                 await cursor.execute("""
                     INSERT INTO anime_metadata (anime_id, tmdb_id, tmdb_episode_group_id, bangumi_id, tvdb_id, douban_id, imdb_id)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    AS new_values
                     ON DUPLICATE KEY UPDATE
-                        tmdb_id = VALUES(tmdb_id), tmdb_episode_group_id = VALUES(tmdb_episode_group_id),
-                        bangumi_id = VALUES(bangumi_id), tvdb_id = VALUES(tvdb_id),
-                        douban_id = VALUES(douban_id), imdb_id = VALUES(imdb_id)
+                        tmdb_id = new_values.tmdb_id, tmdb_episode_group_id = new_values.tmdb_episode_group_id,
+                        bangumi_id = new_values.bangumi_id, tvdb_id = new_values.tvdb_id,
+                        douban_id = new_values.douban_id, imdb_id = new_values.imdb_id
                 """, (anime_id, update_data.tmdb_id, update_data.tmdb_episode_group_id, update_data.bangumi_id, update_data.tvdb_id, update_data.douban_id, update_data.imdb_id))
 
                 await conn.commit()
@@ -641,10 +642,11 @@ async def set_cache(pool: aiomysql.Pool, key: str, value: Any, ttl_seconds: int,
             query = """
                 INSERT INTO cache_data (cache_provider, cache_key, cache_value, expires_at) 
                 VALUES (%s, %s, %s, NOW() + INTERVAL %s SECOND) 
-                ON DUPLICATE KEY UPDATE 
-                    cache_provider = VALUES(cache_provider), 
-                    cache_value = VALUES(cache_value), 
-                    expires_at = VALUES(expires_at)
+                AS new_values
+                ON DUPLICATE KEY UPDATE
+                    cache_provider = new_values.cache_provider,
+                    cache_value = new_values.cache_value,
+                    expires_at = new_values.expires_at
             """
             await cursor.execute(query, (provider, key, json_value, ttl_seconds))
 
@@ -655,7 +657,8 @@ async def update_config_value(pool: aiomysql.Pool, key: str, value: str):
             query = """
                 INSERT INTO config (config_key, config_value)
                 VALUES (%s, %s)
-                ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)
+                AS new_values
+                ON DUPLICATE KEY UPDATE config_value = new_values.config_value
             """
             await cursor.execute(query, (key, value))
 
@@ -808,13 +811,14 @@ async def save_bangumi_auth(pool: aiomysql.Pool, user_id: int, auth_data: Dict[s
             query = """
                 INSERT INTO bangumi_auth (user_id, bangumi_user_id, nickname, avatar_url, access_token, refresh_token, expires_at, authorized_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                AS new_values
                 ON DUPLICATE KEY UPDATE
-                    bangumi_user_id = VALUES(bangumi_user_id),
-                    nickname = VALUES(nickname),
-                    avatar_url = VALUES(avatar_url),
-                    access_token = VALUES(access_token),
-                    refresh_token = VALUES(refresh_token),
-                    expires_at = VALUES(expires_at)
+                    bangumi_user_id = new_values.bangumi_user_id,
+                    nickname = new_values.nickname,
+                    avatar_url = new_values.avatar_url,
+                    access_token = new_values.access_token,
+                    refresh_token = new_values.refresh_token,
+                    expires_at = new_values.expires_at
             """
             await cursor.execute(query, (
                 user_id, auth_data.get('bangumi_user_id'), auth_data.get('nickname'),
