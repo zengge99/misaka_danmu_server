@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
         librarySearchInput.addEventListener('input', handleLibrarySearch);
 
         // Special listener for BGM ID search button
-        document.querySelector('#edit-anime-bgmid + .icon-btn').addEventListener('click', handleSearchBgmId);
+        document.getElementById('search-bgmid-btn').addEventListener('click', handleSearchBgmId);
         // Listener for OAuth popup completion
         window.addEventListener('message', handleOAuthCallbackMessage);
 
