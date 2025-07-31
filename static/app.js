@@ -95,6 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let logRefreshInterval = null;
     let currentEpisodes = []; // 用于存储当前分集列表的上下文
     let originalSearchResults = []; // 用于存储原始搜索结果以进行前端过滤
+    let _currentSearchSelectionData = null; // 用于存储搜索选择的数据，以供“应用”按钮使用
 
     // --- Core Functions ---
     function toggleLoader(show) {
@@ -282,6 +283,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // New listeners for Bangumi Search View
         backToEditAnimeFromBgmSearchBtn.addEventListener('click', handleBackToEditAnime);
         bangumiSearchForm.addEventListener('submit', handleBangumiSearchSubmit);
+
+        // Listener for "apply" buttons in edit form (using event delegation)
+        editAnimeForm.addEventListener('click', (e) => {
+            if (e.target.classList.contains('apply-btn')) {
+                const wrapper = e.target.parentElement;
+                const input = wrapper.querySelector('input');
+                if (input) {
+                    input.value = e.target.dataset.newValue || '';
+                    e.target.remove(); // Apply and then remove the button
+                }
+            }
+        });
         settingsSubNav.addEventListener('click', handleSettingsSubNav);
     }
 
@@ -1246,10 +1259,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const selectBtn = document.createElement('button');
             selectBtn.textContent = '选择';
             selectBtn.addEventListener('click', () => {
-                document.getElementById('edit-anime-bgmid').value = result.id;
-                // 新增：同时填充日文名
-                document.getElementById('edit-anime-name-jp').value = result.name_jp || '';
+                _currentSearchSelectionData = result; // 存储完整结果
                 handleBackToEditAnime(); // 返回编辑视图
+                // 延迟应用，确保视图已切换
+                setTimeout(applySearchSelectionData, 50);
             });
             li.appendChild(selectBtn);
 
@@ -1260,6 +1273,8 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showEditAnimeView(animeId) {
         libraryView.classList.add('hidden');
         animeDetailView.classList.add('hidden');
+        // 新增：在显示编辑视图前，清除旧的搜索选择状态
+        clearSearchSelectionState();
         episodeListView.classList.add('hidden');
         editAnimeView.classList.remove('hidden');
         
@@ -1295,6 +1310,60 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('back-to-library-from-edit-btn').click();
         } finally {
             editAnimeForm.querySelector('button[type="submit"]').disabled = false;
+        }
+    }
+
+    function clearSearchSelectionState() {
+        _currentSearchSelectionData = null;
+        const applyBtns = document.querySelectorAll('#edit-anime-form .apply-btn');
+        applyBtns.forEach(btn => btn.remove()); // 直接从DOM中移除所有“应用”按钮
+    }
+
+    function applySearchSelectionData() {
+        if (!_currentSearchSelectionData) return;
+        const data = _currentSearchSelectionData;
+
+        // 直接填充 BGM ID，它没有“应用”逻辑
+        document.getElementById('edit-anime-bgmid').value = data.id || '';
+
+        // 对有“应用”逻辑的字段调用辅助函数
+        updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
+        updateFieldWithApplyLogic('edit-anime-name-en', data.name_en);
+        updateFieldWithApplyLogic('edit-anime-name-romaji', data.name_romaji);
+
+        const cnAliases = data.aliases_cn || [];
+        updateFieldWithApplyLogic('edit-anime-alias-cn-1', cnAliases[0]);
+        updateFieldWithApplyLogic('edit-anime-alias-cn-2', cnAliases[1]);
+        updateFieldWithApplyLogic('edit-anime-alias-cn-3', cnAliases[2]);
+    }
+
+    function updateFieldWithApplyLogic(fieldId, newValue) {
+        const input = document.getElementById(fieldId);
+        if (!input) return;
+
+        const wrapper = input.parentElement;
+        let applyBtn = wrapper.querySelector('.apply-btn');
+        const normalizedNewValue = (newValue === null || newValue === undefined) ? '' : String(newValue).trim();
+
+        if (normalizedNewValue === '') {
+            if (applyBtn) applyBtn.remove(); // 如果新值为空，移除按钮
+            return;
+        }
+
+        const currentValue = input.value.trim();
+        if (currentValue === '' || currentValue === normalizedNewValue) {
+            input.value = normalizedNewValue;
+            if (applyBtn) applyBtn.remove(); // 如果值匹配或原值为空，更新并移除按钮
+        } else { // 如果值不匹配，则创建或更新按钮
+            if (!applyBtn) {
+                applyBtn = document.createElement('button');
+                applyBtn.type = 'button';
+                applyBtn.className = 'apply-btn';
+                applyBtn.title = '应用搜索结果';
+                applyBtn.textContent = '↵';
+                wrapper.appendChild(applyBtn);
+            }
+            applyBtn.dataset.newValue = normalizedNewValue;
         }
     }
 

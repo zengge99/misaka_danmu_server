@@ -76,6 +76,7 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
         JOIN anime a ON s.anime_id = a.id
         JOIN scrapers sc ON s.provider_name = sc.provider_name
         LEFT JOIN anime_metadata m ON a.id = m.anime_id
+        LEFT JOIN anime_aliases al ON a.id = al.anime_id
         WHERE {{title_condition}} {episode_condition} {season_condition}
         ORDER BY LENGTH(a.title) ASC, sc.display_order ASC
     """
@@ -89,14 +90,26 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
             if results:
                 return results
 
-            # 2. Fallback to LIKE search
-            logging.info(f"FULLTEXT search for '{clean_title}' yielded no results, falling back to LIKE search.")
-            # 为了处理全角/半角冒号和空格不一致的问题，我们在查询时进行归一化
-            # 1. 将搜索词中的冒号统一为半角，并移除所有空格
-            normalized_like_title = clean_title.replace("：", ":").replace(" ", "")
-            # 2. 在SQL查询中，也对数据库字段进行替换，确保两侧格式一致
-            query_like = query_template.format(title_condition="REPLACE(REPLACE(a.title, '：', ':'), ' ', '') LIKE %s")
-            await cursor.execute(query_like, tuple([f"%{normalized_like_title}%"] + params_episode + params_season))
+            # 2. Fallback to LIKE search on main title and all aliases
+            logging.info(f"FULLTEXT search for '{clean_title}' yielded no results, falling back to LIKE search including aliases.")
+            
+            normalized_like_title = f"%{clean_title.replace('：', ':').replace(' ', '')}%"
+            
+            like_conditions = [
+                "REPLACE(REPLACE(a.title, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.name_en, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.name_jp, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.name_romaji, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.alias_cn_1, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.alias_cn_2, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.alias_cn_3, '：', ':'), ' ', '') LIKE %s",
+            ]
+            
+            title_condition_like = f"({' OR '.join(like_conditions)})"
+            query_like = query_template.format(title_condition=title_condition_like)
+            
+            like_params = [normalized_like_title] * len(like_conditions)
+            await cursor.execute(query_like, tuple(like_params + params_episode + params_season))
             return await cursor.fetchall()
 
 async def search_animes_for_dandan(pool: aiomysql.Pool, keyword: str) -> List[Dict[str, Any]]:
@@ -117,6 +130,7 @@ async def search_animes_for_dandan(pool: aiomysql.Pool, keyword: str) -> List[Di
             (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as episodeCount,
             m.bangumi_id AS bangumiId
         FROM anime a
+        LEFT JOIN anime_aliases al ON a.id = al.anime_id
         LEFT JOIN anime_metadata m ON a.id = m.anime_id
         WHERE {title_condition}
         ORDER BY a.id
@@ -132,9 +146,21 @@ async def search_animes_for_dandan(pool: aiomysql.Pool, keyword: str) -> List[Di
                 return results
 
             # 2. Fallback to LIKE search
-            normalized_like_title = clean_title.replace("：", ":").replace(" ", "")
-            query_like = query_template.format(title_condition="REPLACE(REPLACE(a.title, '：', ':'), ' ', '') LIKE %s")
-            await cursor.execute(query_like, (f"%{normalized_like_title}%",))
+            normalized_like_title = f"%{clean_title.replace('：', ':').replace(' ', '')}%"
+            like_conditions = [
+                "REPLACE(REPLACE(a.title, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.name_en, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.name_jp, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.name_romaji, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.alias_cn_1, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.alias_cn_2, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.alias_cn_3, '：', ':'), ' ', '') LIKE %s",
+            ]
+            title_condition_like = f"({' OR '.join(like_conditions)})"
+            query_like = query_template.format(title_condition=title_condition_like)
+            
+            like_params = [normalized_like_title] * len(like_conditions)
+            await cursor.execute(query_like, tuple(like_params))
             return await cursor.fetchall()
 
 async def get_anime_details_for_dandan(pool: aiomysql.Pool, anime_id: int) -> Optional[Dict[str, Any]]:

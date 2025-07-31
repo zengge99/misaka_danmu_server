@@ -58,6 +58,33 @@ class BangumiSearchSubject(BaseModel):
         return None
 
     @property
+    def aliases(self) -> Dict[str, Any]:
+        """从 infobox 提取别名。"""
+        data = {
+            "name_en": None,
+            "name_romaji": None,
+            "aliases_cn": []
+        }
+        if not self.infobox:
+            return data
+
+        def extract_value(value: Any) -> List[str]:
+            if isinstance(value, str):
+                return [v.strip() for v in value.split('/') if v.strip()]
+            elif isinstance(value, list):
+                return [v.get("v", "").strip() for v in value if isinstance(v, dict) and v.get("v")]
+            return []
+
+        for item in self.infobox:
+            key, value = item.key.strip(), item.value
+            if key == "英文名" and isinstance(value, str): data["name_en"] = value.strip()
+            elif key == "罗马字" and isinstance(value, str): data["name_romaji"] = value.strip()
+            elif key == "别名": data["aliases_cn"].extend(extract_value(value))
+        
+        data["aliases_cn"] = list(dict.fromkeys(data["aliases_cn"])) # 去重
+        return data
+
+    @property
     def details_string(self) -> str:
         """从 infobox 和 date 构建一个详细描述字符串。"""
         parts = []
@@ -288,12 +315,16 @@ async def search_bangumi_subjects(
                 try:
                     # 使用我们扩展后的模型来验证和处理数据
                     subject = BangumiSearchSubject.model_validate(subject_data)
+                    aliases = subject.aliases
                     final_results.append({
                         "id": subject.id,
                         "name": subject.display_name,
                         "name_jp": subject.name, # 原始名称，通常是日文名
                         "image_url": subject.image_url,
-                        "details": subject.details_string
+                        "details": subject.details_string,
+                        "name_en": aliases.get("name_en"),
+                        "name_romaji": aliases.get("name_romaji"),
+                        "aliases_cn": aliases.get("aliases_cn", [])
                     })
                 except ValidationError as e:
                     logger.error(f"验证 Bangumi subject 详情失败: {e}")
