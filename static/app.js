@@ -50,8 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const bangumiAuthStateDiv = document.getElementById('bangumi-auth-state');
     const bangumiLoginBtn = document.getElementById('bangumi-login-btn');
     const bangumiLogoutBtn = document.getElementById('bangumi-logout-btn');
-    const bangumiDirectTokenForm = document.getElementById('bangumi-direct-token-form');
-    const bangumiTokenSaveMessage = document.getElementById('bangumi-token-save-message');
 
     // Sources View Elements
     const sourcesList = document.getElementById('sources-list');
@@ -75,6 +73,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const settingsSubNav = document.querySelector('.settings-sub-nav');
     const settingsSubViews = document.querySelectorAll('.settings-subview');
 
+    // Modal Elements
+    const selectionModal = document.getElementById('selection-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalList = document.getElementById('modal-list');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
     let logRefreshInterval = null;
@@ -210,8 +213,6 @@ document.addEventListener('DOMContentLoaded', () => {
         editAnimeForm.addEventListener('submit', handleEditAnimeSave);
         editEpisodeForm.addEventListener('submit', handleEditEpisodeSave);
 
-        bangumiDirectTokenForm.addEventListener('submit', handleSaveBangumiDirectToken);
-
         // Sidebar Navigation
         sidebar.addEventListener('click', handleSidebarNavigation);
 
@@ -266,6 +267,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (settingsSubNav) {
             settingsSubNav.addEventListener('click', handleSettingsSubNav);
         }
+
+        // Modal Listeners
+        modalCloseBtn.addEventListener('click', () => selectionModal.classList.add('hidden'));
+        selectionModal.addEventListener('click', (e) => {
+            if (e.target === selectionModal) {
+                selectionModal.classList.add('hidden');
+            }
+        });
     }
 
     // --- Event Handlers ---
@@ -662,19 +671,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const results = await apiFetch(`/api/bgm/search?keyword=${encodeURIComponent(title)}`);
+            
+            modalTitle.textContent = `为 "${title}" 选择一个 Bangumi 条目`;
+            modalList.innerHTML = ''; // Clear previous results
+
             if (results.length === 0) {
-                alert(`未找到与 "${title}" 相关的 Bangumi 条目。`);
-                return;
+                modalList.innerHTML = '<li>未找到匹配项。</li>';
+            } else {
+                results.forEach(result => {
+                    const li = document.createElement('li');
+                    li.textContent = result.name;
+                    li.dataset.bgmId = result.id;
+                    li.addEventListener('click', () => {
+                        document.getElementById('edit-anime-bgmid').value = result.id;
+                        selectionModal.classList.add('hidden');
+                    });
+                    modalList.appendChild(li);
+                });
             }
+            selectionModal.classList.remove('hidden');
 
-            // For simplicity, if there's an exact match, use it. Otherwise, use the first result.
-            // A more advanced implementation could show a selection dialog.
-            const exactMatch = results.find(r => r.name.toLowerCase() === title.toLowerCase());
-            const resultToUse = exactMatch || results[0];
-
-            if (confirm(`找到匹配项: "${resultToUse.name}" (ID: ${resultToUse.id})。\n是否要填入BGM ID输入框？`)) {
-                document.getElementById('edit-anime-bgmid').value = resultToUse.id;
-            }
         } catch (error) {
             alert(`搜索 Bangumi ID 失败: ${error.message}`);
         } finally {
@@ -709,23 +725,6 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 alert(`注销失败: ${error.message}`);
             }
-        }
-    }
-
-    async function handleSaveBangumiDirectToken(e) {
-        e.preventDefault();
-        const tokenInput = document.getElementById('bangumi-access-token');
-        const accessToken = tokenInput.value.trim();
-        if (!accessToken) return;
-
-        try {
-            await apiFetch('/api/bgm/auth/token', { method: 'POST', body: JSON.stringify({ access_token: accessToken }) });
-            bangumiTokenSaveMessage.textContent = 'Token 保存成功！';
-            bangumiTokenSaveMessage.className = 'message success';
-            loadBangumiAuthState();
-        } catch (error) {
-            bangumiTokenSaveMessage.textContent = `保存失败: ${error.message}`;
-            bangumiTokenSaveMessage.className = 'message error';
         }
     }
 
@@ -1593,10 +1592,17 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const state = await apiFetch('/api/bgm/auth/state');
             if (state.is_authenticated) {
+                const authorizedAt = state.authorized_at ? new Date(state.authorized_at).toLocaleString() : 'N/A';
+                const expiresAt = state.expires_at ? new Date(state.expires_at).toLocaleString() : '永不（或未知）';
+
                 bangumiAuthStateDiv.innerHTML = `
                     <div class="bangumi-user-profile">
                         <img src="${state.avatar_url || '/static/placeholder.png'}" alt="avatar">
-                        <span>已作为 <strong>${state.nickname}</strong> 授权</span>
+                        <div class="bangumi-user-details">
+                            <p>已作为 <strong>${state.nickname}</strong> 授权 (ID: ${state.bangumi_user_id || 'N/A'})</p>
+                            <p class="meta">授权于: ${authorizedAt}</p>
+                            <p class="meta">过期于: ${expiresAt}</p>
+                        </div>
                     </div>
                 `;
                 bangumiLoginBtn.classList.add('hidden');

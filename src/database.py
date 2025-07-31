@@ -220,6 +220,7 @@ async def init_db_tables(app: FastAPI):
               `access_token` TEXT NOT NULL,
               `refresh_token` TEXT NULL,
               `expires_at` TIMESTAMP NULL,
+              `authorized_at` TIMESTAMP NULL,
               PRIMARY KEY (`user_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
@@ -334,6 +335,16 @@ async def init_db_tables(app: FastAPI):
             try:
                 await cursor.execute("ALTER TABLE `anime_sources` ADD COLUMN `is_favorited` BOOLEAN NOT NULL DEFAULT FALSE AFTER `media_id`;")
                 print("'anime_sources' 表 'is_favorited' 字段添加完成。")
+            except aiomysql.OperationalError as e:
+                if e.args[0] == 1060: # Duplicate column name
+                    pass
+                else:
+                    raise
+
+            # 迁移检查：为 bangumi_auth 表添加 authorized_at
+            try:
+                await cursor.execute("ALTER TABLE `bangumi_auth` ADD COLUMN `authorized_at` TIMESTAMP NULL AFTER `expires_at`;")
+                print("'bangumi_auth' 表 'authorized_at' 字段添加完成。")
             except aiomysql.OperationalError as e:
                 if e.args[0] == 1060: # Duplicate column name
                     pass

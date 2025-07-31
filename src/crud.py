@@ -803,9 +803,11 @@ async def save_bangumi_auth(pool: aiomysql.Pool, user_id: int, auth_data: Dict[s
     """保存或更新用户的 Bangumi 授权信息。"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
+            # 当记录不存在时，authorized_at 会被设置为 NOW()。
+            # 当记录已存在时（ON DUPLICATE KEY UPDATE），authorized_at 不会被更新，保留首次授权时间。
             query = """
-                INSERT INTO bangumi_auth (user_id, bangumi_user_id, nickname, avatar_url, access_token, refresh_token, expires_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO bangumi_auth (user_id, bangumi_user_id, nickname, avatar_url, access_token, refresh_token, expires_at, authorized_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     bangumi_user_id = VALUES(bangumi_user_id),
                     nickname = VALUES(nickname),
@@ -817,7 +819,8 @@ async def save_bangumi_auth(pool: aiomysql.Pool, user_id: int, auth_data: Dict[s
             await cursor.execute(query, (
                 user_id, auth_data.get('bangumi_user_id'), auth_data.get('nickname'),
                 auth_data.get('avatar_url'), auth_data.get('access_token'),
-                auth_data.get('refresh_token'), auth_data.get('expires_at')
+                auth_data.get('refresh_token'), auth_data.get('expires_at'),
+                datetime.now()
             ))
 
 async def delete_bangumi_auth(pool: aiomysql.Pool, user_id: int) -> bool:

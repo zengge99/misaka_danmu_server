@@ -321,20 +321,6 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="form-card">
-                                <h3>或: 直接提供 Access Token</h3>
-                                <p>您可以从 <a href="https://bgm.tv/settings/apps" target="_blank">Bangumi 个人设置</a> 页面获取或生成 Access Token，然后粘贴到下方。</p>
-                                <form id="bangumi-direct-token-form">
-                                    <div class="form-row">
-                                        <label for="bangumi-access-token">Access Token</label>
-                                        <input type="text" id="bangumi-access-token" placeholder="粘贴您的 Personal Access Token" required>
-                                    </div>
-                                    <div class="form-actions">
-                                        <button type="submit">保存 Token</button>
-                                    </div>
-                                    <p id="bangumi-token-save-message" class="message"></p>
-                                </form>
-                            </div>
                         </div>
 
                         <div id="api-settings-subview" class="settings-subview hidden">
@@ -345,6 +331,19 @@
                         </div>
                     </div>
                 </main>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通用选择模态窗口 -->
+    <div id="selection-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">选择一个项目</h3>
+                <button id="modal-close-btn" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <ul id="modal-list"></ul>
             </div>
         </div>
     </div>

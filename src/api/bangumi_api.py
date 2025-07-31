@@ -47,9 +47,9 @@ class BangumiAuthState(BaseModel):
     is_authenticated: bool
     nickname: Optional[str] = None
     avatar_url: Optional[str] = None
-
-class DirectTokenRequest(BaseModel):
-    access_token: str
+    bangumi_user_id: Optional[int] = None
+    authorized_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
 
 # --- Helper Function ---
 
@@ -184,18 +184,11 @@ async def get_bangumi_auth_state(
     return BangumiAuthState(
         is_authenticated=True,
         nickname=auth_info.get("nickname"),
-        avatar_url=auth_info.get("avatar_url")
+        avatar_url=auth_info.get("avatar_url"),
+        bangumi_user_id=auth_info.get("bangumi_user_id"),
+        authorized_at=auth_info.get("authorized_at"),
+        expires_at=auth_info.get("expires_at")
     )
-
-@router.post("/auth/token", status_code=status.HTTP_204_NO_CONTENT, summary="直接设置 Access Token")
-async def set_direct_access_token(
-    data: DirectTokenRequest,
-    current_user: models.User = Depends(security.get_current_user),
-    pool: aiomysql.Pool = Depends(get_db_pool)
-):
-    # 这种方式无法获取 refresh token 和过期时间，所以这些字段为 null
-    auth_to_save = {"access_token": data.access_token, "refresh_token": None, "expires_at": None}
-    await crud.save_bangumi_auth(pool, current_user.id, auth_to_save)
 
 @router.delete("/auth", status_code=status.HTTP_204_NO_CONTENT, summary="注销 Bangumi 授权")
 async def deauthorize_bangumi(
@@ -210,7 +203,8 @@ async def search_bangumi_subjects(
     client: httpx.AsyncClient = Depends(get_bangumi_client)
 ):
     async with client:
-        response = await client.get(f"https://api.bgm.tv/v0/search/subjects?keyword={keyword}", params={"type": 2}) # type=2 for anime
+        params = {"keyword": keyword, "type": 2} # type=2 for anime
+        response = await client.get("https://api.bgm.tv/v0/search/subjects", params=params)
         response.raise_for_status()
         search_result = BangumiSearchResponse.model_validate(response.json())
         if not search_result.data:
