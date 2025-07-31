@@ -17,6 +17,7 @@ async def get_library_anime(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
                     a.id as animeId,
                     a.image_url as imageUrl,
                     a.title,
+            a.type,
                     a.season,
                     a.created_at as createdAt,
                     (SELECT COUNT(DISTINCT e.id) FROM anime_sources s JOIN episode e ON s.id = e.source_id WHERE s.anime_id = a.id) as episodeCount,
@@ -424,6 +425,7 @@ async def get_anime_full_details(pool: aiomysql.Pool, anime_id: int) -> Optional
                 SELECT
                     a.id as anime_id,
                     a.title,
+                    a.type,
                     a.season,
                     a.image_url,
                     m.tmdb_id,
@@ -448,8 +450,8 @@ async def update_anime_details(pool: aiomysql.Pool, anime_id: int, update_data: 
 
                 # 1. 更新 anime 表
                 await cursor.execute(
-                    "UPDATE anime SET title = %s, season = %s WHERE id = %s",
-                    (update_data.title, update_data.season, anime_id)
+                    "UPDATE anime SET title = %s, type = %s, season = %s WHERE id = %s",
+                    (update_data.title, update_data.type, update_data.season, anime_id)
                 )
                 
                 # 2. 更新 anime_metadata 表 (使用 INSERT ... ON DUPLICATE KEY UPDATE)

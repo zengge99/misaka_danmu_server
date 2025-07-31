@@ -39,6 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const episodeListView = document.getElementById('episode-list-view');
     const danmakuListView = document.getElementById('danmaku-list-view');
     const editEpisodeView = document.getElementById('edit-episode-view');
+    const editAnimeTypeSelect = document.getElementById('edit-anime-type');
+    const editAnimeSeasonInput = document.getElementById('edit-anime-season');
     const editEpisodeForm = document.getElementById('edit-episode-form');
     const editAnimeForm = document.getElementById('edit-anime-form');
     const librarySearchInput = document.getElementById('library-search-input');
@@ -195,6 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Sidebar Navigation
         sidebar.addEventListener('click', handleSidebarNavigation);
 
+        editAnimeTypeSelect.addEventListener('change', handleAnimeTypeChange);
         // Buttons
         logoutBtn.addEventListener('click', logout);
         clearCacheBtn.addEventListener('click', handleClearCache);
@@ -310,6 +313,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     firstSubNavBtn.click();
                 }
             }
+        }
+    }
+
+    function handleAnimeTypeChange() {
+        if (editAnimeTypeSelect.value === 'movie') {
+            editAnimeSeasonInput.value = 1;
+            editAnimeSeasonInput.disabled = true;
+        } else {
+            editAnimeSeasonInput.disabled = false;
         }
     }
 
@@ -487,6 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const payload = {
             title: document.getElementById('edit-anime-title').value,
+            type: document.getElementById('edit-anime-type').value,
             season: newSeason,
             tmdb_id: document.getElementById('edit-anime-tmdbid').value || null,
             tmdb_episode_group_id: document.getElementById('edit-anime-egid').value || null,
@@ -895,19 +908,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadLibrary() {
         if (!libraryTableBody) return;
-        libraryTableBody.innerHTML = '<tr><td colspan="7">加载中...</td></tr>';
+        libraryTableBody.innerHTML = '<tr><td colspan="8">加载中...</td></tr>';
         try {
             const data = await apiFetch('/api/ui/library');
             renderLibrary(data.animes);
         } catch (error) {
-            libraryTableBody.innerHTML = `<tr><td colspan="7" class="error">加载失败: ${(error.message || error)}</td></tr>`;
+            libraryTableBody.innerHTML = `<tr><td colspan="8" class="error">加载失败: ${(error.message || error)}</td></tr>`;
         }
     }
 
     function renderLibrary(animes) {
         libraryTableBody.innerHTML = '';
         if (animes.length === 0) {
-            libraryTableBody.innerHTML = '<tr><td colspan="7">媒体库为空。</td></tr>';
+            libraryTableBody.innerHTML = '<tr><td colspan="8">媒体库为空。</td></tr>';
             return;
         }
 
@@ -923,6 +936,15 @@ document.addEventListener('DOMContentLoaded', () => {
             posterCell.appendChild(img);
 
             row.insertCell().textContent = anime.title;
+
+            const typeCell = row.insertCell();
+            const typeMap = {
+                'tv_series': '电视节目',
+                'movie': '电影/剧场版',
+                'ova': 'OVA',
+                'other': '其他'
+            };
+            typeCell.textContent = typeMap[anime.type] || anime.type;
             row.insertCell().textContent = anime.season;
             row.insertCell().textContent = anime.episodeCount;
             row.insertCell().textContent = anime.sourceCount;
@@ -1083,6 +1105,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Populate form
             document.getElementById('edit-anime-id').value = details.anime_id;
             document.getElementById('edit-anime-title').value = details.title;
+            editAnimeTypeSelect.value = details.type;
             document.getElementById('edit-anime-season').value = details.season;
             document.getElementById('edit-anime-tmdbid').value = details.tmdb_id || '';
             document.getElementById('edit-anime-egid').value = details.tmdb_episode_group_id || '';
@@ -1090,6 +1113,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('edit-anime-tvdbid').value = details.tvdb_id || '';
             document.getElementById('edit-anime-doubanid').value = details.douban_id || '';
             document.getElementById('edit-anime-imdbid').value = details.imdb_id || '';
+            // Trigger change handler to set initial state of season input
+            handleAnimeTypeChange();
 
         } catch (error) {
             alert(`加载编辑信息失败: ${error.message}`);
