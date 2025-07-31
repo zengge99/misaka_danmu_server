@@ -10,7 +10,6 @@ import aiomysql
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 
-from . import crud, models, security
 from .log_manager import get_logs
 from .task_manager import TaskManager
 from .scraper_manager import ScraperManager
@@ -46,22 +45,6 @@ async def get_task_manager(request: Request) -> TaskManager:
     """依赖项：从应用状态获取任务管理器"""
     return request.app.state.task_manager
 
-def parse_filename_for_match(filename: str) -> Optional[dict]:
-    """使用正则表达式从文件名中解析出番剧标题和集数"""
-    PATTERNS = [
-        re.compile(r"\[.*?\]\s*(?P<title>.+?)\s*[-_]\s*(?P<episode>\d{1,3})"),
-        re.compile(r"(?P<title>.+?)\s*[-_]\s*(?P<episode>\d{1,3})"),
-    ]
-    for pattern in PATTERNS:
-        match = pattern.search(filename)
-        if match:
-            data = match.groupdict()
-            return {
-                "title": data["title"].strip().replace("_", " "),
-                "episode": int(data["episode"]),
-            }
-    return None
-
 @router.get(
     "/search/anime",
     response_model=models.AnimeSearchResponse,
@@ -85,7 +68,8 @@ async def search_anime_local(
 )
 async def search_anime_provider(
     keyword: str = Query(..., min_length=1, description="搜索关键词"),
-    manager: ScraperManager = Depends(get_scraper_manager)
+    manager: ScraperManager = Depends(get_scraper_manager),
+    current_user: models.User = Depends(security.get_current_user)
 ):
     """
     从所有已配置的数据源（如腾讯、B站等）搜索节目信息。
@@ -93,6 +77,7 @@ async def search_anime_provider(
     """
     parsed_keyword = parse_search_keyword(keyword)
 
+    logger.info(f"用户 '{current_user.username}' 正在搜索: '{keyword}'")
     # 新增：检查是否有启用的搜索源
     if not manager.has_enabled_scrapers:
         # 如果没有启用任何源，直接返回错误，而不是空列表
@@ -109,36 +94,6 @@ async def search_anime_provider(
 
     results = await manager.search_all(search_title, episode_info=episode_info)
     return models.ProviderSearchResponse(results=results)
-
-@router.get(
-    "/match",
-    response_model=models.MatchResponse,
-    summary="匹配本地文件获取弹幕库",
-)
-async def match_episode(
-    fileName: str = Query(..., description="本地文件名"),
-    pool=Depends(get_db_pool)
-):
-    parsed = parse_filename_for_match(fileName)
-    if not parsed:
-        return models.MatchResponse(isMatched=False, matches=[])
-
-    anime = await crud.find_anime_by_title(pool, parsed["title"])
-    if not anime:
-        return models.MatchResponse(isMatched=False, matches=[])
-
-    episode = await crud.find_episode(pool, anime["id"], parsed["episode"])
-    if not episode:
-        return models.MatchResponse(isMatched=False, matches=[])
-
-    match_info = models.MatchInfo(
-        animeId=anime["id"],
-        animeTitle=anime["title"],
-        episodeId=episode["id"],
-        episodeTitle=episode["title"],
-        type=anime["type"],
-    )
-    return models.MatchResponse(isMatched=True, matches=[match_info])
 
 @router.get("/library", response_model=models.LibraryResponse, summary="获取媒体库内容")
 async def get_library(
