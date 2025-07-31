@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
+from urllib.parse import urlencode
 import aiomysql
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -88,7 +89,7 @@ async def get_bangumi_client(
 
     headers = {
         "Authorization": f"Bearer {auth_info['access_token']}",
-        "User-Agent": f"DanmuApiServer/1.0 ({settings.server.host})",
+        "User-Agent": "l429609201/danmu_api_server(https://github.com/l429609201/danmu_api_server)",
     }
     return httpx.AsyncClient(headers=headers, timeout=20.0)
 
@@ -105,9 +106,10 @@ async def get_bangumi_auth_url(
     params = {
         "client_id": settings.bangumi.client_id,
         "response_type": "code",
-        "redirect_uri": redirect_uri,
+        "redirect_uri": str(redirect_uri),
     }
-    auth_url = f"https://bgm.tv/oauth/authorize?{httpx.URL(params).query.decode('utf-8')}"
+    query_string = urlencode(params)
+    auth_url = f"https://bgm.tv/oauth/authorize?{query_string}"
     return {"url": auth_url}
 
 @router.get("/auth/callback", response_class=HTMLResponse, summary="Bangumi OAuth 回调", name="bangumi_auth_callback")
@@ -130,7 +132,7 @@ async def bangumi_auth_callback(
         "client_id": settings.bangumi.client_id,
         "client_secret": settings.bangumi.client_secret,
         "code": code,
-        "redirect_uri": request.url_for('bangumi_auth_callback'),
+        "redirect_uri": str(request.url_for('bangumi_auth_callback')),
     }
     try:
         async with httpx.AsyncClient() as client:
