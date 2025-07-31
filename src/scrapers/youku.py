@@ -165,7 +165,9 @@ class YoukuScraper(BaseScraper):
         await self._set_to_cache(cache_key, results_to_cache, 'search_ttl_seconds', 300)
         return results
 
-    async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None) -> List[models.ProviderEpisodeInfo]:
+    async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None, db_media_type: Optional[str] = None) -> List[models.ProviderEpisodeInfo]:
+        # 优酷的逻辑不区分电影和电视剧，都是从一个show_id获取列表，
+        # 所以db_media_type在这里用不上，但为了接口统一还是保留参数。
         # 仅当请求完整列表时才使用缓存
         cache_key = f"episodes_{media_id}"
         if target_episode_index is None:

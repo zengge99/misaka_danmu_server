@@ -320,11 +320,13 @@ class TencentScraper(BaseScraper):
         # 某些综艺节目可能会返回重复的剧集，这里进行去重
         return final_episodes
 
-    async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None) -> List[models.ProviderEpisodeInfo]:
+    async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None, db_media_type: Optional[str] = None) -> List[models.ProviderEpisodeInfo]:
         """
         获取指定cid的所有分集列表。
         media_id 对于腾讯来说就是 cid。
         """
+        # 腾讯的逻辑不区分电影和电视剧，都是从一个cid获取列表，
+        # 所以db_media_type在这里用不上，但为了接口统一还是保留参数。
         tencent_episodes = await self._internal_get_episodes(media_id, target_episode_index=target_episode_index)
         
         all_provider_episodes = [

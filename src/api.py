@@ -419,7 +419,11 @@ async def generic_import_task(
 
         # 2. 获取所有分集信息
         # 将目标集数信息传递给 scraper，让其可以优化获取过程
-        episodes = await scraper.get_episodes(media_id, target_episode_index=current_episode_index)
+        episodes = await scraper.get_episodes(
+            media_id,
+            target_episode_index=current_episode_index,
+            db_media_type=media_type
+        )
         if not episodes:
             logger.warning(f"未能为 provider='{provider}' media_id='{media_id}' 获取到任何分集。")
             if current_episode_index:

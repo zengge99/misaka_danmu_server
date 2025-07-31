@@ -253,22 +253,37 @@ class IqiyiScraper(BaseScraper):
             self.logger.error(f"爱奇艺: 获取剧集列表失败 (album_id: {album_id}): {e}", exc_info=True)
             return []
 
-    async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None) -> List[models.ProviderEpisodeInfo]:
+    async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None, db_media_type: Optional[str] = None) -> List[models.ProviderEpisodeInfo]:
         cache_key = f"episodes_{media_id}"
-        if target_episode_index is None:
+        # 仅当不是强制模式（即初次导入）且请求完整列表时才使用缓存
+        if target_episode_index is None and db_media_type is None:
             cached_episodes = await self._get_from_cache(cache_key)
             if cached_episodes is not None:
                 self.logger.info(f"爱奇艺: 从缓存中命中分集列表 (media_id={media_id})")
                 return [models.ProviderEpisodeInfo.model_validate(e) for e in cached_episodes]
 
         base_info = await self._get_video_base_info(media_id)
-        if not base_info:
+        if base_info is None:
             return []
 
         episodes: List[IqiyiEpisodeInfo] = []
-        # 核心修复：如果视频总数是1，或者频道是电影，都按单集（电影）逻辑处理
-        if base_info.video_count == 1 or base_info.channel_name == "电影":
-            # 修正：手动创建符合Pydantic别名的字典，然后进行验证
+
+        # 决定处理模式：优先使用数据库类型，其次根据刮削信息判断
+        is_movie_mode = False
+        if db_media_type == "movie":
+            is_movie_mode = True
+            self.logger.info(f"爱奇艺: 根据数据库类型 'movie'，强制使用单集模式 (media_id={media_id})")
+        elif db_media_type == "tv_series":
+            is_movie_mode = False
+            self.logger.info(f"爱奇艺: 根据数据库类型 'tv_series'，强制使用剧集模式 (media_id={media_id})")
+        else:  # db_media_type is None, fall back to scraping logic
+            is_movie_mode = (
+                base_info.video_count == 1 or
+                (base_info.channel_name is not None and base_info.channel_name.strip() == "电影")
+            )
+
+        if is_movie_mode:
+            # 单集（电影）处理逻辑
             episode_data = {
                 "tvId": base_info.tv_id or 0,
                 "name": base_info.video_name,
@@ -276,11 +291,10 @@ class IqiyiScraper(BaseScraper):
                 "playUrl": base_info.video_url
             }
             episodes.append(IqiyiEpisodeInfo.model_validate(episode_data))
-
-        elif base_info.channel_name == "电视剧" or base_info.channel_name == "动漫":
+        else:
+            # 多集（电视剧/动漫）处理逻辑
             episodes = await self._get_tv_episodes(base_info.album_id, base_info.video_count)
 
-            # 优化：如果指定了目标分集，则只处理目标分集，避免不必要的网络请求
             if target_episode_index:
                 target_episode_from_list = next((ep for ep in episodes if ep.order == target_episode_index), None)
                 if target_episode_from_list:
@@ -288,30 +302,21 @@ class IqiyiScraper(BaseScraper):
                 else:
                     self.logger.warning(f"爱奇艺: 目标分集 {target_episode_index} 在获取的列表中未找到 (album_id={base_info.album_id})")
                     return []
-            
-            # 为了获取更准确的分集标题（如“林朝夕平行世界变孤儿”），
-            # 我们需要并发地访问每个分集的页面。
+
             self.logger.debug(f"爱奇艺: 正在为 {len(episodes)} 个分集并发获取真实标题...")
             tasks = [self._get_video_base_info(ep.link_id) for ep in episodes if ep.link_id]
             detailed_infos = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # 创建一个从 tv_id 到真实标题的映射
             specific_title_map = {}
             for info in detailed_infos:
                 if isinstance(info, IqiyiHtmlVideoInfo) and info.tv_id:
                     specific_title_map[info.tv_id] = info.video_name
-            
-            # 在创建最终列表时，使用真实标题替换通用标题
+
             for ep in episodes:
                 specific_title = specific_title_map.get(ep.tv_id)
                 if specific_title and specific_title != ep.name:
                     self.logger.debug(f"爱奇艺: 标题替换: '{ep.name}' -> '{specific_title}'")
                     ep.name = specific_title
-
-        else: # 综艺等其他类型暂不处理，C#代码中综艺逻辑复杂且易出错
-            self.logger.warning(f"爱奇艺: 不支持的频道类型 '{base_info.channel_name}'，无法获取分集。")
-            # 尝试使用电视剧逻辑获取，可能对某些频道有效
-            episodes = await self._get_tv_episodes(base_info.album_id, base_info.video_count)
 
         provider_episodes = [
             models.ProviderEpisodeInfo(
@@ -323,8 +328,8 @@ class IqiyiScraper(BaseScraper):
             ) for ep in episodes if ep.link_id
         ]
 
-        # 仅当获取完整列表时才进行缓存
-        if target_episode_index is None and provider_episodes:
+        # 仅当不是强制模式且获取完整列表时才进行缓存
+        if target_episode_index is None and db_media_type is None and provider_episodes:
             episodes_to_cache = [e.model_dump() for e in provider_episodes]
             await self._set_to_cache(cache_key, episodes_to_cache, 'episodes_ttl_seconds', 1800)
         return provider_episodes

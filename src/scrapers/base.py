@@ -48,10 +48,11 @@ class BaseScraper(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None) -> List[models.ProviderEpisodeInfo]:
+    async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None, db_media_type: Optional[str] = None) -> List[models.ProviderEpisodeInfo]:
         """
         获取给定媒体ID的所有分集。
         如果提供了 target_episode_index，则可以优化为只获取到该分集为止。
+        db_media_type: 从数据库中读取的媒体类型 ('movie', 'tv_series')，可用于指导刮削策略。
         """
         raise NotImplementedError
 
