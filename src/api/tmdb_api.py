@@ -15,6 +15,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+async def _get_robust_image_base_url(pool: aiomysql.Pool) -> str:
+    """
+    获取TMDB图片基础URL，并对其进行健壮性处理。
+    如果用户只配置了域名，则自动附加默认的尺寸路径。
+    """
+    image_base_url_config = await crud.get_config_value(
+        pool, "tmdb_image_base_url", "https://image.tmdb.org/t/p/w500"
+    )
+    
+    # 如果配置中不包含 /t/p/ 路径，说明用户可能只填写了域名
+    if '/t/p/' not in image_base_url_config:
+        # 我们附加一个默认的尺寸路径，使其成为一个有效的图片基础URL
+        return f"{image_base_url_config.rstrip('/')}/t/p/w500"
+    
+    return image_base_url_config
+
 async def get_tmdb_client(
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool),
@@ -137,7 +153,7 @@ async def search_tmdb_subjects(
             return []
 
         # Fetch image base URL
-        image_base_url = await crud.get_config_value(pool, "tmdb_image_base_url", "https://image.tmdb.org/t/p/w500")
+        image_base_url = await _get_robust_image_base_url(pool)
 
         # 步骤 3: 组合并格式化最终结果
         final_results = []
@@ -188,7 +204,7 @@ async def search_tmdb_movie_subjects(
             return []
 
         # Fetch image base URL
-        image_base_url = await crud.get_config_value(pool, "tmdb_image_base_url", "https://image.tmdb.org/t/p/w500")
+        image_base_url = await _get_robust_image_base_url(pool)
 
         return [
             {
