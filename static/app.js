@@ -649,6 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             anime_title: item.title,
                             type: item.type,
                             image_url: item.imageUrl,
+                            douban_id: item.douban_id,
                             current_episode_index: item.currentEpisodeIndex,
                         }),
                     });
@@ -894,6 +895,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     anime_title: item.title,
                     type: item.type,
                     image_url: item.imageUrl,
+                    douban_id: item.douban_id,
                     current_episode_index: item.currentEpisodeIndex,
                 }),
             });

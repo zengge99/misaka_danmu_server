@@ -577,6 +577,21 @@ async def update_episode_fetch_time(pool: aiomysql.Pool, episode_id: int):
 
 # --- 数据库缓存服务 ---
 
+async def update_douban_id_if_not_exists(pool: aiomysql.Pool, anime_id: int, douban_id: str):
+    """如果一个作品记录没有豆瓣ID，则更新它。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            # 首先，确保元数据行存在，以防是刚刚创建的新作品
+            await cursor.execute(
+                "INSERT IGNORE INTO anime_metadata (anime_id) VALUES (%s)",
+                (anime_id,)
+            )
+            # 然后，仅当 douban_id 字段为空或NULL时才更新
+            await cursor.execute(
+                "UPDATE anime_metadata SET douban_id = %s WHERE anime_id = %s AND (douban_id IS NULL OR douban_id = '')",
+                (douban_id, anime_id)
+            )
+
 async def check_source_exists_by_media_id(pool: aiomysql.Pool, provider: str, media_id: str) -> bool:
     """通过 provider 和 media_id 检查数据源是否已存在于任何番剧下。"""
     async with pool.acquire() as conn:

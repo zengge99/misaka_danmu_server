@@ -53,6 +53,7 @@ class ProviderSearchInfo(BaseModel):
     type: str = Field(..., description="节目类型, e.g., 'tv_series', 'movie'")
     year: Optional[int] = Field(None, description="发行年份")
     imageUrl: Optional[str] = Field(None, description="封面图片URL")
+    douban_id: Optional[str] = Field(None, description="豆瓣ID (如果可用)")
     episodeCount: Optional[int] = Field(None, description="总集数")
     currentEpisodeIndex: Optional[int] = Field(None, description="如果搜索词指定了集数，则为当前集数")
 
@@ -76,6 +77,7 @@ class ImportRequest(BaseModel):
     anime_title: str = Field(..., description="要存储在数据库中的番剧标题")
     type: str = Field(..., description="媒体类型, e.g., 'tv_series', 'movie'")
     image_url: Optional[str] = Field(None, description="封面图片URL")
+    douban_id: Optional[str] = None
     current_episode_index: Optional[int] = Field(None, description="如果搜索时指定了集数，则只导入此分集")
 
 class AnimeDetailUpdate(BaseModel):

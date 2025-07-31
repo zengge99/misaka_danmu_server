@@ -6,7 +6,6 @@ import json
 from typing import ClassVar
 import zlib
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Callable
 
 import httpx
@@ -16,6 +15,9 @@ from .. import models
 from .base import BaseScraper
 
 # --- Pydantic Models for iQiyi API ---
+
+class IqiyiVideoLibMeta(BaseModel):
+    douban_id: Optional[int] = Field(None, alias="douban_id")
 
 class IqiyiSearchVideoInfo(BaseModel):
     item_link: str = Field(alias="itemLink")
@@ -30,6 +32,7 @@ class IqiyiSearchAlbumInfo(BaseModel):
     channel: Optional[str] = None
     release_date: Optional[str] = Field(None, alias="releaseDate")
     album_img: Optional[str] = Field(None, alias="albumImg")
+    video_lib_meta: Optional[IqiyiVideoLibMeta] = Field(None, alias="video_lib_meta")
     videoinfos: Optional[List[IqiyiSearchVideoInfo]] = None
 
     @property
@@ -150,6 +153,10 @@ class IqiyiScraper(BaseScraper):
                 if "原创" in album.channel or "教育" in album.channel:
                     continue
 
+                douban_id = None
+                if album.video_lib_meta and album.video_lib_meta.douban_id:
+                    douban_id = str(album.video_lib_meta.douban_id)
+
                 link_id = album.link_id
                 if not link_id:
                     continue
@@ -165,6 +172,7 @@ class IqiyiScraper(BaseScraper):
                     type=media_type,
                     year=album.year,
                     imageUrl=album.album_img,
+                    douban_id=douban_id,
                     episodeCount=album.item_total_number,
                     currentEpisodeIndex=current_episode,
                 ))
@@ -246,7 +254,6 @@ class IqiyiScraper(BaseScraper):
             return []
 
     async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None) -> List[models.ProviderEpisodeInfo]:
-        # 仅当请求完整列表时才使用缓存
         cache_key = f"episodes_{media_id}"
         if target_episode_index is None:
             cached_episodes = await self._get_from_cache(cache_key)
@@ -259,7 +266,8 @@ class IqiyiScraper(BaseScraper):
             return []
 
         episodes: List[IqiyiEpisodeInfo] = []
-        if base_info.channel_name == "电影":
+        # 核心修复：如果视频总数是1，或者频道是电影，都按单集（电影）逻辑处理
+        if base_info.video_count == 1 or base_info.channel_name == "电影":
             # 修正：手动创建符合Pydantic别名的字典，然后进行验证
             episode_data = {
                 "tvId": base_info.tv_id or 0,

@@ -397,6 +397,7 @@ async def generic_import_task(
     media_type: str,
     current_episode_index: Optional[int],
     image_url: Optional[str],
+    douban_id: Optional[str],
     progress_callback: Callable,
     pool: aiomysql.Pool,
     manager: ScraperManager
@@ -410,6 +411,8 @@ async def generic_import_task(
 
         # 1. 在数据库中创建或获取番剧ID，并链接数据源
         anime_id = await crud.get_or_create_anime(pool, anime_title, media_type, image_url)
+        if douban_id:
+            await crud.update_douban_id_if_not_exists(pool, anime_id, douban_id)
         source_id = await crud.link_source_to_anime(pool, anime_id, provider, media_id)
 
         logger.info(f"媒体 '{anime_title}' (ID: {anime_id}, 类型: {media_type}) 已准备就绪。")
@@ -559,6 +562,7 @@ async def import_from_provider(
         media_type=request_data.type,
         current_episode_index=request_data.current_episode_index,
         image_url=request_data.image_url,
+        douban_id=request_data.douban_id,
         progress_callback=callback,
         pool=pool,
         manager=scraper_manager
