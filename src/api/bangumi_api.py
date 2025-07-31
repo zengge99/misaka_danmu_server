@@ -205,6 +205,12 @@ async def search_bangumi_subjects(
     async with client:
         params = {"keyword": keyword, "type": 2} # type=2 for anime
         response = await client.get("https://api.bgm.tv/v0/search/subjects", params=params)
+        
+        # Handle Bangumi's 404 for "no results" gracefully
+        if response.status_code == 404:
+            return []
+        
+        # For other errors, raise the exception
         response.raise_for_status()
         search_result = BangumiSearchResponse.model_validate(response.json())
         if not search_result.data:
