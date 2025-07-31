@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const libraryTableBody = document.querySelector('#library-table tbody');
     const libraryView = document.getElementById('library-view');
     const animeDetailView = document.getElementById('anime-detail-view');
+    const sourceDetailTableBody = document.getElementById('source-detail-table-body');
     const editAnimeView = document.getElementById('edit-anime-view');
     const settingsView = document.getElementById('settings-view');
     const episodeListView = document.getElementById('episode-list-view');
@@ -78,11 +79,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const settingsSubNav = document.querySelector('.settings-sub-nav');
     const settingsSubViews = document.querySelectorAll('.settings-subview');
 
-    // Modal Elements
-    const selectionModal = document.getElementById('selection-modal');
-    const modalTitle = document.getElementById('modal-title');
-    const modalList = document.getElementById('modal-list');
-    const modalCloseBtn = document.getElementById('modal-close-btn');
+    // Bangumi Search View Elements
+    const bangumiSearchView = document.getElementById('bangumi-search-view');
+    const bangumiSearchViewTitle = document.getElementById('bangumi-search-view-title');
+    const bangumiSearchForm = document.getElementById('bangumi-search-form');
+    const bangumiSearchKeywordInput = document.getElementById('bangumi-search-keyword');
+    const bangumiSearchResultsList = document.getElementById('bangumi-search-results-list');
+    const backToEditAnimeFromBgmSearchBtn = document.getElementById('back-to-edit-anime-from-bgm-search-btn');
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
     let logRefreshInterval = null;
@@ -271,18 +274,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('search-bgmid-btn').addEventListener('click', handleSearchBgmId);
         // Listener for OAuth popup completion
         window.addEventListener('message', handleOAuthCallbackMessage);
-
-        if (settingsSubNav) {
-            settingsSubNav.addEventListener('click', handleSettingsSubNav);
-        }
-
-        // Modal Listeners
-        modalCloseBtn.addEventListener('click', () => selectionModal.classList.add('hidden'));
-        selectionModal.addEventListener('click', (e) => {
-            if (e.target === selectionModal) {
-                selectionModal.classList.add('hidden');
-            }
-        });
+        // New listeners for Bangumi Search View
+        backToEditAnimeFromBgmSearchBtn.addEventListener('click', handleBackToEditAnime);
+        bangumiSearchForm.addEventListener('submit', handleBangumiSearchSubmit);
+        settingsSubNav.addEventListener('click', handleSettingsSubNav);
     }
 
     // --- Event Handlers ---
@@ -663,47 +658,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             saveDomainBtn.disabled = false;
             saveDomainBtn.textContent = '保存域名';
-        }
-    }
-
-    async function handleSearchBgmId() {
-        const title = document.getElementById('edit-anime-title').value;
-        if (!title) {
-            alert("请输入影视名称以进行搜索。");
-            return;
-        }
-
-        const searchButton = this; // The clicked button
-        searchButton.textContent = '...';
-        searchButton.disabled = true;
-
-        try {
-            const results = await apiFetch(`/api/bgm/search?keyword=${encodeURIComponent(title)}`);
-            
-            modalTitle.textContent = `为 "${title}" 选择一个 Bangumi 条目`;
-            modalList.innerHTML = ''; // Clear previous results
-
-            if (results.length === 0) {
-                modalList.innerHTML = '<li>未找到匹配项。</li>';
-            } else {
-                results.forEach(result => {
-                    const li = document.createElement('li');
-                    li.textContent = result.name;
-                    li.dataset.bgmId = result.id;
-                    li.addEventListener('click', () => {
-                        document.getElementById('edit-anime-bgmid').value = result.id;
-                        selectionModal.classList.add('hidden');
-                    });
-                    modalList.appendChild(li);
-                });
-            }
-            selectionModal.classList.remove('hidden');
-
-        } catch (error) {
-            alert(`搜索 Bangumi ID 失败: ${error.message}`);
-        } finally {
-            searchButton.textContent = '🔍';
-            searchButton.disabled = false;
         }
     }
 
@@ -1158,6 +1112,65 @@ document.addEventListener('DOMContentLoaded', () => {
             detailViewTitle.textContent = '加载详情失败';
             detailViewMeta.textContent = error.message || error;
         }
+    }
+
+    function handleSearchBgmId() {
+        const title = document.getElementById('edit-anime-title').value;
+        const animeId = document.getElementById('edit-anime-id').value;
+    
+        // Store context
+        bangumiSearchView.dataset.returnToAnimeId = animeId;
+    
+        // Switch views
+        editAnimeView.classList.add('hidden');
+        bangumiSearchView.classList.remove('hidden');
+    
+        // Pre-populate search
+        bangumiSearchKeywordInput.value = title;
+        bangumiSearchViewTitle.textContent = `为 "${title}" 搜索 Bangumi ID`;
+        bangumiSearchResultsList.innerHTML = ''; // Clear previous results
+    }
+    
+    function handleBackToEditAnime() {
+        bangumiSearchView.classList.add('hidden');
+        editAnimeView.classList.remove('hidden');
+    }
+    
+    async function handleBangumiSearchSubmit(e) {
+        e.preventDefault();
+        const keyword = bangumiSearchKeywordInput.value.trim();
+        if (!keyword) return;
+    
+        bangumiSearchResultsList.innerHTML = '<li>正在搜索...</li>';
+        const searchButton = bangumiSearchForm.querySelector('button[type="submit"]');
+        searchButton.disabled = true;
+    
+        try {
+            const results = await apiFetch(`/api/bgm/search?keyword=${encodeURIComponent(keyword)}`);
+            renderBangumiSearchResults(results);
+        } catch (error) {
+            bangumiSearchResultsList.innerHTML = `<li class="error">搜索失败: ${error.message}</li>`;
+        } finally {
+            searchButton.disabled = false;
+        }
+    }
+    
+    function renderBangumiSearchResults(results) {
+        bangumiSearchResultsList.innerHTML = '';
+        if (results.length === 0) {
+            bangumiSearchResultsList.innerHTML = '<li>未找到匹配项。</li>';
+            return;
+        }
+    
+        results.forEach(result => {
+            const li = document.createElement('li');
+            li.innerHTML = `<div class="info"><p class="title">${result.name}</p><p class="meta">ID: ${result.id}</p></div><button>选择</button>`;
+            li.querySelector('button').addEventListener('click', () => {
+                document.getElementById('edit-anime-bgmid').value = result.id;
+                handleBackToEditAnime(); // Go back to the edit view
+            });
+            bangumiSearchResultsList.appendChild(li);
+        });
     }
 
     async function showEditAnimeView(animeId) {

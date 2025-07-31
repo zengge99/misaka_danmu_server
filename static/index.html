@@ -78,7 +78,7 @@
                                 <button id="bulk-import-btn">批量导入</button>
                             </div>
                             <div id="loader" class="hidden"></div>
-                            <ul id="results-list"></ul>
+                            <ul id="results-list" class="results-list-style"></ul>
                         </div>
                         <div id="logs-section">
                             <h2>日志/状态</h2>
@@ -178,6 +178,19 @@
                                 </div>
                             </form>
                         </div>
+                    </div>
+                    <div id="bangumi-search-view" class="content-view hidden">
+                        <div class="view-header-flexible">
+                            <h2 id="bangumi-search-view-title">搜索 Bangumi ID</h2>
+                            <button id="back-to-edit-anime-from-bgm-search-btn">&lt; 返回编辑</button>
+                        </div>
+                        <form id="bangumi-search-form" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                            <input type="text" id="bangumi-search-keyword" placeholder="输入番剧名称..." required style="flex-grow: 1;">
+                            <button type="submit">搜索</button>
+                        </form>
+                        <ul id="bangumi-search-results-list" class="results-list-style">
+                            <!-- Search results will be populated here -->
+                        </ul>
                     </div>
                     <div id="anime-detail-view" class="content-view hidden">
                         <div class="view-header-flexible">
@@ -351,19 +364,6 @@
                         </div>
                     </div>
                 </main>
-            </div>
-        </div>
-    </div>
-
-    <!-- 通用选择模态窗口 -->
-    <div id="selection-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modal-title">选择一个项目</h3>
-                <button id="modal-close-btn" class="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <ul id="modal-list"></ul>
             </div>
         </div>
     </div>

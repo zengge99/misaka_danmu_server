@@ -491,11 +491,11 @@ header {
     border-bottom: 1px solid var(--border-color);
 }
 
-#results-list li:last-child {
+.results-list-style li:last-child {
     border-bottom: none;
 }
 
-#results-list li .poster {
+.results-list-style li .poster {
     width: 40px;
     height: 56px;
     object-fit: cover;
@@ -503,27 +503,27 @@ header {
     margin-right: 15px;
     background-color: #eee;
 }
-#results-list li input[type="checkbox"] {
+.results-list-style li input[type="checkbox"] {
     width: 20px;
     height: 20px;
     margin-right: 15px; /* 与海报的间距 */
     flex-shrink: 0; /* 防止复选框被压缩 */
 }
 
-#results-list li .info {
+.results-list-style li .info {
     flex-grow: 1;
 }
 
-#results-list li .info .title {
+.results-list-style li .info .title {
     font-weight: bold;
 }
 
-#results-list li .info .meta {
+.results-list-style li .info .meta {
     font-size: 0.9em;
     color: #666;
 }
 
-#results-list button {
+.results-list-style button {
     margin-left: 10px;
     white-space: nowrap;
 }
@@ -829,57 +829,6 @@ header {
     word-break: break-all;
     color: var(--text-color);
     font-family: 'Courier New', Courier, monospace;
-}
-
-/* Modal Styles */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
-
-.modal-content {
-    background-color: var(--bg-color);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    width: 90%;
-    max-width: 600px;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-}
-
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 10px;
-    margin-bottom: 15px;
-}
-
-.modal-header h3 {
-    margin: 0;
-}
-
-.modal-close {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    cursor: pointer;
-    color: #666;
-}
-
-.modal-body {
-    overflow-y: auto;
 }
 
 .bangumi-user-profile img {
