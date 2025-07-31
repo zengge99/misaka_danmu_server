@@ -661,7 +661,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchButton.disabled = true;
 
         try {
-            const results = await apiFetch(`/api/ui/bangumi/search?keyword=${encodeURIComponent(title)}`);
+            const results = await apiFetch(`/api/bgm/search?keyword=${encodeURIComponent(title)}`);
             if (results.length === 0) {
                 alert(`未找到与 "${title}" 相关的 Bangumi 条目。`);
                 return;
@@ -685,7 +685,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleBangumiLogin() {
         try {
-            const { url } = await apiFetch('/api/ui/bangumi/auth/url');
+            const { url } = await apiFetch('/api/bgm/auth/url');
             window.open(url, 'BangumiAuth', 'width=600,height=700');
         } catch (error) {
             alert(`启动 Bangumi 授权失败: ${error.message}`);
@@ -704,7 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleBangumiLogout() {
         if (confirm("确定要注销 Bangumi 授权吗？")) {
             try {
-                await apiFetch('/api/ui/bangumi/auth', { method: 'DELETE' });
+                await apiFetch('/api/bgm/auth', { method: 'DELETE' });
                 loadBangumiAuthState();
             } catch (error) {
                 alert(`注销失败: ${error.message}`);
@@ -719,7 +719,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!accessToken) return;
 
         try {
-            await apiFetch('/api/ui/bangumi/auth/token', { method: 'POST', body: JSON.stringify({ access_token: accessToken }) });
+            await apiFetch('/api/bgm/auth/token', { method: 'POST', body: JSON.stringify({ access_token: accessToken }) });
             bangumiTokenSaveMessage.textContent = 'Token 保存成功！';
             bangumiTokenSaveMessage.className = 'message success';
             loadBangumiAuthState();
@@ -1591,7 +1591,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadBangumiAuthState() {
         try {
-            const state = await apiFetch('/api/ui/bangumi/auth/state');
+            const state = await apiFetch('/api/bgm/auth/state');
             if (state.is_authenticated) {
                 bangumiAuthStateDiv.innerHTML = `
                     <div class="bangumi-user-profile">

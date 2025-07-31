@@ -99,7 +99,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(ui_router, prefix="/api/ui", tags=["Web UI API"])
 app.include_router(auth_router, prefix="/api/ui/auth", tags=["Auth"])
 app.include_router(dandan_router, prefix="/api/{token}", tags=["DanDanPlay Compatible"])
-app.include_router(bangumi_router, prefix="/api/ui", dependencies=[Depends(security.get_current_user)])
+app.include_router(bangumi_router, prefix="/api/bgm", tags=["Bangumi"])
 
 # 根路径返回前端页面
 @app.get("/", response_class=FileResponse, include_in_schema=False)

@@ -15,7 +15,7 @@ from ..config import settings
 from ..database import get_db_pool
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/bangumi", tags=["Bangumi"])
+router = APIRouter()
 
 # --- Pydantic Models for Bangumi API ---
 
