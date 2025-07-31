@@ -203,33 +203,33 @@ async def search_bangumi_subjects(
     client: httpx.AsyncClient = Depends(get_bangumi_client)
 ):
     async with client:
-        # 切换到用户提供的文档中描述的旧版 API (POST /search/subject/{keyword})
-        # 这需要将关键词进行 URL 编码并放入路径中
-        encoded_keyword = quote(keyword)
-        url = f"https://api.bgm.tv/search/subject/{encoded_keyword}"
+        # 严格按照官方 v0 API (POST /v0/search/subjects) 进行调整
+        # API 文档: https://bangumi.github.io/api/#/%E6%9D%A1%E7%9B%AE/searchSubjects
+        url = "https://api.bgm.tv/v0/search/subjects"
 
+        # 构建符合 v0 POST 规范的请求体，确保只搜索动漫类型
         payload = {
-            "type": 2,  # 2 for anime
-            "responseGroup": "small"
+            "keyword": keyword,
+            "filter": {
+                "type": [
+                    2  # 2: 动画 (Anime)
+                ]
+            }
         }
 
-        # 旧版 API 使用 POST 方法
         response = await client.post(url, json=payload)
 
-        # 旧版 API 同样可能用 404 表示未找到结果
+        # Bangumi 在没有找到结果时会返回 404
         if response.status_code == 404:
             return []
 
         # 对于其他错误，抛出异常
         response.raise_for_status()
 
-        data = response.json()
-
-        # 旧版 API 的响应结构是 {"results": ..., "list": [...]}
-        search_list = data.get("list")
-        if not search_list:
+        # v0 API 的响应结构是 {"data": [...]}
+        search_result = BangumiSearchResponse.model_validate(response.json())
+        if not search_result.data:
             return []
-
-        # 复用现有的 Pydantic 模型来验证和提取数据
-        validated_subjects = [BangumiSearchSubject.model_validate(item) for item in search_list if isinstance(item, dict)]
-        return [{"id": subject.id, "name": subject.display_name} for subject in validated_subjects]
+        
+        # 返回前端需要的数据格式
+        return [{"id": subject.id, "name": subject.display_name} for subject in search_result.data]
