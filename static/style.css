@@ -476,14 +476,14 @@ header {
     font-style: italic;
 }
 
-#results-list {
+.results-list-style {
     list-style-type: none;
     padding: 0;
     max-height: 400px;
     overflow-y: auto;
 }
 
-#results-list li {
+.results-list-style li {
     display: flex;
     justify-content: space-between;
     align-items: center;
