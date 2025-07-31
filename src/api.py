@@ -491,7 +491,17 @@ async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: Scrape
     await crud.clear_source_data(pool, source_id)
     logger.info(f"已清空源 ID: {source_id} 的旧分集和弹幕。") # image_url 在这里不会被传递，因为刷新时我们不希望覆盖已有的海报
     # 2. 重新执行通用导入逻辑
-    await generic_import_task(source_info["provider_name"], source_info["media_id"], source_info["title"], source_info["type"], None, None, progress_callback, pool, manager)
+    await generic_import_task(
+        provider=source_info["provider_name"],
+        media_id=source_info["media_id"],
+        anime_title=source_info["title"],
+        media_type=source_info["type"],
+        current_episode_index=None,
+        image_url=None,
+        douban_id=None,
+        progress_callback=progress_callback,
+        pool=pool,
+        manager=manager)
 
 async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: ScraperManager, progress_callback: Callable):
     """后台任务：刷新单个分集的弹幕"""
