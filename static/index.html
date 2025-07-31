@@ -410,8 +410,16 @@
                                 <p>请从 <a href="https://www.themoviedb.org/settings/api" target="_blank">TMDB官网</a> 获取您的 API Key (v3 auth)。</p>
                                 <form id="tmdb-settings-form">
                                     <div class="form-row">
-                                        <label for="tmdb-api-key">API Key</label>
+                                        <label for="tmdb-api-key">API Key (v3)</label>
                                         <input type="password" id="tmdb-api-key" placeholder="在此输入您的 TMDB API Key">
+                                    </div>
+                                    <div class="form-row">
+                                        <label for="tmdb-api-base-url">API 域名</label>
+                                        <input type="text" id="tmdb-api-base-url" placeholder="例如: https://api.themoviedb.org/3">
+                                    </div>
+                                    <div class="form-row">
+                                        <label for="tmdb-image-base-url">图片域名</label>
+                                        <input type="text" id="tmdb-image-base-url" placeholder="例如: https://image.tmdb.org/t/p/w500">
                                     </div>
                                     <div class="form-actions">
                                         <button type="submit">保存</button>

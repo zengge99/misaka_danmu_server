@@ -282,28 +282,30 @@ async def get_server_logs(current_user: models.User = Depends(security.get_curre
     """获取存储在内存中的最新日志条目。"""
     return get_logs()
 
-@router.get("/config/tmdb_api_key", response_model=Dict[str, str], summary="获取TMDB API Key")
-async def get_tmdb_api_key(
+@router.get("/config/tmdb", response_model=Dict[str, str], summary="获取TMDB配置")
+async def get_tmdb_settings(
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
-    """获取存储在数据库中的TMDB API Key。"""
-    value = await crud.get_config_value(pool, "tmdb_api_key", "")
-    return {"key": "tmdb_api_key", "value": value}
+    """获取所有TMDB相关的配置。"""
+    keys = ["tmdb_api_key", "tmdb_api_base_url", "tmdb_image_base_url"]
+    tasks = [crud.get_config_value(pool, key, "") for key in keys]
+    values = await asyncio.gather(*tasks)
+    return dict(zip(keys, values))
 
-@router.put("/config/tmdb_api_key", status_code=status.HTTP_204_NO_CONTENT, summary="更新TMDB API Key")
-async def update_tmdb_api_key(
+@router.put("/config/tmdb", status_code=status.HTTP_204_NO_CONTENT, summary="更新TMDB配置")
+async def update_tmdb_settings(
     payload: Dict[str, str],
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
-    """更新存储在数据库中的TMDB API Key。"""
-    value = payload.get("value")
-    if value is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing 'value' in request body")
-    
-    await crud.update_config_value(pool, "tmdb_api_key", value)
-    logger.info(f"用户 '{current_user.username}' 更新了 TMDB API Key。")
+    """批量更新TMDB相关的配置。"""
+    tasks = []
+    for key, value in payload.items():
+        if key in ["tmdb_api_key", "tmdb_api_base_url", "tmdb_image_base_url"]:
+            tasks.append(crud.update_config_value(pool, key, value or ""))
+    await asyncio.gather(*tasks)
+    logger.info(f"用户 '{current_user.username}' 更新了 TMDB 配置。")
     
 @router.post("/cache/clear", status_code=status.HTTP_200_OK, summary="清除所有缓存")
 async def clear_all_caches(

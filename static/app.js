@@ -293,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // New listeners for TMDB Search View
         document.getElementById('back-to-edit-anime-from-tmdb-search-btn').addEventListener('click', handleBackToEditAnime);
         tmdbSearchForm.addEventListener('submit', handleTmdbSearchSubmit);
-        document.getElementById('tmdb-settings-form').addEventListener('submit', handleSaveTmdbKey);
+        document.getElementById('tmdb-settings-form').addEventListener('submit', handleSaveTmdbSettings);
 
         // Listener for "apply" buttons in edit form (using event delegation)
         editAnimeForm.addEventListener('click', (e) => {
@@ -692,10 +692,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function handleSaveTmdbKey(e) {
+    async function handleSaveTmdbSettings(e) {
         e.preventDefault();
-        const apiKeyInput = document.getElementById('tmdb-api-key');
-        const apiKey = apiKeyInput.value.trim();
+        const apiKey = document.getElementById('tmdb-api-key').value.trim();
+        const apiBaseUrl = document.getElementById('tmdb-api-base-url').value.trim();
+        const imageBaseUrl = document.getElementById('tmdb-image-base-url').value.trim();
+        
         const saveBtn = e.target.querySelector('button[type="submit"]');
         const messageEl = document.getElementById('tmdb-save-message');
 
@@ -704,11 +706,15 @@ document.addEventListener('DOMContentLoaded', () => {
         messageEl.className = 'message';
 
         try {
-            await apiFetch('/api/ui/config/tmdb_api_key', {
+            await apiFetch('/api/ui/config/tmdb', {
                 method: 'PUT',
-                body: JSON.stringify({ value: apiKey })
+                body: JSON.stringify({
+                    tmdb_api_key: apiKey,
+                    tmdb_api_base_url: apiBaseUrl,
+                    tmdb_image_base_url: imageBaseUrl
+                })
             });
-            messageEl.textContent = 'TMDB API Key 保存成功！';
+            messageEl.textContent = 'TMDB 配置保存成功！';
             messageEl.classList.add('success');
         } catch (error) {
             messageEl.textContent = `保存失败: ${error.message}`;
@@ -1915,11 +1921,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadTmdbSettings() {
         const apiKeyInput = document.getElementById('tmdb-api-key');
+        const apiBaseUrlInput = document.getElementById('tmdb-api-base-url');
+        const imageBaseUrlInput = document.getElementById('tmdb-image-base-url');
         const messageEl = document.getElementById('tmdb-save-message');
         messageEl.textContent = '';
         try {
-            const data = await apiFetch('/api/ui/config/tmdb_api_key');
-            apiKeyInput.value = data.value || '';
+            const data = await apiFetch('/api/ui/config/tmdb');
+            apiKeyInput.value = data.tmdb_api_key || '';
+            apiBaseUrlInput.value = data.tmdb_api_base_url || '';
+            imageBaseUrlInput.value = data.tmdb_image_base_url || '';
         } catch (error) {
             messageEl.textContent = `加载TMDB配置失败: ${error.message}`;
         }

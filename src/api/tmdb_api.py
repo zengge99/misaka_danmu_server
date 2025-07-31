@@ -3,9 +3,9 @@ import logging
 
 import aiomysql
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Path
 from pydantic import BaseModel, Field, ValidationError
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 from .. import crud, models, security
 from ..config import settings
@@ -20,17 +20,27 @@ async def get_tmdb_client(
     pool: aiomysql.Pool = Depends(get_db_pool),
 ) -> httpx.AsyncClient:
     """依赖项：创建一个带有 TMDB 授权的 httpx 客户端。"""
-    api_key = await crud.get_config_value(pool, "tmdb_api_key", "")
+    # Fetch all configs in parallel
+    keys = ["tmdb_api_key", "tmdb_api_base_url"]
+    tasks = [crud.get_config_value(pool, key, "") for key in keys]
+    api_key, base_url = await asyncio.gather(*tasks)
+
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="TMDB API Key not configured. Please set it in the settings page."
         )
+    if not base_url:
+        base_url = "https://api.themoviedb.org/3" # Fallback to default
+        logger.warning("TMDB API Base URL not configured, using default.")
+
+    # TMDB v3 API 使用 api_key 查询参数进行身份验证
+    params = {"api_key": api_key}
     headers = {
-        "Authorization": f"Bearer {api_key}",
-        "User-Agent": "l429609201/danmu_api_server(https://github.com/l429609201/danmu_api_server)",
+        # 使用一个更通用的 User-Agent
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    return httpx.AsyncClient(headers=headers, timeout=20.0)
+    return httpx.AsyncClient(base_url=base_url, params=params, headers=headers, timeout=20.0)
 
 # --- Pydantic Models for TMDB API ---
 
@@ -44,24 +54,40 @@ class TMDBResults(BaseModel):
     name: str
     poster_path: Optional[str] = None
 
-    @property
-    def image_url(self) -> Optional[str]:
-        """从 images 字典中获取一个合适的图片URL。"""
-
-        if self.poster_path:
-            return f"https://image.tmdb.org/t/p/w500{self.poster_path}"
-        return None
-
 
 class TMDBsearchresults(BaseModel):
     results: List[TMDBResults]
     total_pages: int
 
 
+class TMDBExternalIDs(BaseModel):
+    imdb_id: Optional[str] = None
+    tvdb_id: Optional[int] = None
+
+
+class TMDBAlternativeTitle(BaseModel):
+    iso_3166_1: str
+    title: str
+    type: str
+
+
+class TMDBAlternativeTitles(BaseModel):
+    titles: List[TMDBAlternativeTitle] = []
+
+
+class TMDBTVDetails(BaseModel):
+    id: int
+    name: str
+    original_name: str
+    alternative_titles: Optional[TMDBAlternativeTitles] = None
+    external_ids: Optional[TMDBExternalIDs] = None
+
+
 @router.get("/search/tv", response_model=List[Dict[str, str]], summary="搜索 TMDB 电视剧")
 async def search_tmdb_subjects(
     keyword: str = Query(..., min_length=1),
     client: httpx.AsyncClient = Depends(get_tmdb_client),
+    pool: aiomysql.Pool = Depends(get_db_pool),
 ):
     async with client:
         # 步骤 1: 初始搜索以获取ID列表
@@ -71,38 +97,48 @@ async def search_tmdb_subjects(
             "language": "zh-CN",
         }
         search_response = await client.get(
-            "https://api.themoviedb.org/3/search/tv", params=params
+            "/search/tv", params=params
         )
 
-        if search_response.status_code == 404:
+        if search_response.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="TMDB API Key is invalid or unauthorized. Please check your key in the settings.",
+            )
+
+        if search_response.status_code != 200:
+            logger.error(f"TMDB search for TV failed with status {search_response.status_code}: {search_response.text}")
             return []
-        search_response.raise_for_status()
 
         search_result = TMDBsearchresults.model_validate(search_response.json())
         if not search_result.results:
             return []
 
+        # Fetch image base URL
+        image_base_url = await crud.get_config_value(pool, "tmdb_image_base_url", "https://image.tmdb.org/t/p/w500")
+
         # 步骤 3: 组合并格式化最终结果
         final_results = []
         for subject in search_result.results:
+            image_url = f"{image_base_url.rstrip('/')}{subject.poster_path}" if subject.poster_path else None
             try:
                 final_results.append(
                     {
                         "id": subject.id,
                         "name": subject.name,
-                        "image_url": subject.image_url,
+                        "image_url": image_url,
                     }
                 )
             except ValidationError as e:
                 logger.error(f"验证 TMDB subject 详情失败: {e}")
 
         return final_results
-
-
+ 
 @router.get("/search/movie", response_model=List[Dict[str, str]], summary="搜索 TMDB 电影作品")
 async def search_tmdb_movie_subjects(
     keyword: str = Query(..., min_length=1),
     client: httpx.AsyncClient = Depends(get_tmdb_client),
+    pool: aiomysql.Pool = Depends(get_db_pool),
 ):
     async with client:
         # 步骤 1: 初始搜索以获取ID列表
@@ -112,14 +148,82 @@ async def search_tmdb_movie_subjects(
             "language": "zh-CN",
         }
         search_response = await client.get(
-            "https://api.themoviedb.org/3/search/movie", params=params
+            "/search/movie", params=params
         )
 
-        if search_response.status_code == 404:
+        if search_response.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="TMDB API Key is invalid or unauthorized. Please check your key in the settings.",
+            )
+
+        if search_response.status_code != 200:
+            logger.error(f"TMDB search for Movie failed with status {search_response.status_code}: {search_response.text}")
             return []
-        search_response.raise_for_status()
 
         search_result = TMDBsearchresults.model_validate(search_response.json())
         if not search_result.results:
             return []
-        return [{"id": subject.id, "name": subject.name, "image_url": subject.image_url} for subject in search_result.results]
+
+        # Fetch image base URL
+        image_base_url = await crud.get_config_value(pool, "tmdb_image_base_url", "https://image.tmdb.org/t/p/w500")
+
+        return [
+            {
+                "id": subject.id,
+                "name": subject.name,
+                "image_url": f"{image_base_url.rstrip('/')}{subject.poster_path}" if subject.poster_path else None
+            }
+            for subject in search_result.results
+        ]
+
+
+@router.get("/details/{media_type}/{tmdb_id}", response_model=Dict[str, Any], summary="获取 TMDB 作品详情")
+async def get_tmdb_details(
+    media_type: str = Path(..., description="媒体类型, 'tv' 或 'movie'"),
+    tmdb_id: int = Path(..., description="TMDB ID"),
+    client: httpx.AsyncClient = Depends(get_tmdb_client),
+):
+    if media_type not in ["tv", "movie"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid media type. Must be 'tv' or 'movie'.")
+
+    async with client:
+        params = {
+            "append_to_response": "alternative_titles,external_ids",
+            "language": "zh-CN",
+        }
+        details_response = await client.get(f"/{media_type}/{tmdb_id}", params=params)
+
+        if details_response.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="TMDB API Key is invalid or unauthorized. Please check your key in the settings.",
+            )
+        if details_response.status_code == 404:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="TMDB entry not found.")
+        
+        details_response.raise_for_status()
+        details_json = details_response.json()
+
+        if media_type == "tv":
+            details = TMDBTVDetails.model_validate(details_json)
+            name_en = details.original_name
+            name_romaji = None # TMDB doesn't provide this directly
+        else: # movie
+            # Re-use the TV model, as the relevant fields are the same for our purpose
+            details = TMDBTVDetails.model_validate(details_json)
+            name_en = details.original_name
+            name_romaji = None
+
+        aliases_cn = []
+        if details.alternative_titles:
+            for alt_title in details.alternative_titles.titles:
+                if alt_title.iso_3166_1 == "CN":
+                    aliases_cn.append(alt_title.title)
+        
+        return {
+            "id": details.id,
+            "name_en": name_en,
+            "name_romaji": name_romaji,
+            "aliases_cn": list(dict.fromkeys(aliases_cn)) # Deduplicate
+        }
