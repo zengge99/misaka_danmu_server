@@ -2,7 +2,7 @@ import aiomysql
 import json
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 
 from . import models, security
@@ -852,7 +852,7 @@ async def save_bangumi_auth(pool: aiomysql.Pool, user_id: int, auth_data: Dict[s
                 user_id, auth_data.get('bangumi_user_id'), auth_data.get('nickname'),
                 auth_data.get('avatar_url'), auth_data.get('access_token'),
                 auth_data.get('refresh_token'), auth_data.get('expires_at'),
-                datetime.now()
+                datetime.now(timezone.utc)
             ))
 
 async def delete_bangumi_auth(pool: aiomysql.Pool, user_id: int) -> bool:

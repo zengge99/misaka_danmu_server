@@ -1227,7 +1227,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // 创建信息div
             const infoDiv = document.createElement('div');
             infoDiv.className = 'info';
-            infoDiv.innerHTML = `<p class="title">${result.name}</p><p class="meta">ID: ${result.id}</p>`;
+            const detailsText = result.details ? `${result.details} / ID: ${result.id}` : `ID: ${result.id}`;
+            infoDiv.innerHTML = `<p class="title">${result.name}</p><p class="meta">${detailsText}</p>`;
             li.appendChild(infoDiv);
 
             // 创建选择按钮
@@ -1235,6 +1236,8 @@ document.addEventListener('DOMContentLoaded', () => {
             selectBtn.textContent = '选择';
             selectBtn.addEventListener('click', () => {
                 document.getElementById('edit-anime-bgmid').value = result.id;
+                // 新增：同时填充日文名
+                document.getElementById('edit-anime-name-jp').value = result.name_jp || '';
                 handleBackToEditAnime(); // 返回编辑视图
             });
             li.appendChild(selectBtn);

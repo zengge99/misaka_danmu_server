@@ -1,14 +1,14 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Union
 
 from urllib.parse import urlencode, quote
 import aiomysql
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from .. import crud, models, security
 from ..config import settings
@@ -31,11 +31,17 @@ class BangumiUser(BaseModel):
     nickname: str
     avatar: Dict[str, str]
 
+class InfoboxItem(BaseModel):
+    key: str
+    value: Any
+
 class BangumiSearchSubject(BaseModel):
     id: int
     name: str
     name_cn: str
     images: Optional[Dict[str, str]] = None
+    date: Optional[str] = None
+    infobox: Optional[List[InfoboxItem]] = None
 
     @property
     def display_name(self) -> str:
@@ -50,6 +56,37 @@ class BangumiSearchSubject(BaseModel):
                 if url := self.images.get(size):
                     return url
         return None
+
+    @property
+    def details_string(self) -> str:
+        """从 infobox 和 date 构建一个详细描述字符串。"""
+        parts = []
+        if self.date:
+            try:
+                dt = datetime.fromisoformat(self.date)
+                parts.append(dt.strftime('%Y年%m月%d日'))
+            except (ValueError, TypeError):
+                parts.append(self.date)
+
+        if self.infobox:
+            staff_keys_of_interest = ["导演", "原作", "脚本", "人物设定", "系列构成", "总作画监督"]
+            staff_found = {}
+            for item in self.infobox:
+                if item.key in staff_keys_of_interest:
+                    value_str = ""
+                    if isinstance(item.value, str):
+                        value_str = item.value.strip()
+                    elif isinstance(item.value, list):
+                        names = [v.get("v", "").strip() for v in item.value if isinstance(v, dict) and v.get("v")]
+                        value_str = "、".join(names)
+                    if value_str:
+                        staff_found[item.key] = value_str
+            
+            for key in staff_keys_of_interest:
+                if key in staff_found and len(parts) < 5: # 限制总字段数，避免过长
+                    parts.append(staff_found[key])
+        
+        return " / ".join(parts)
 
 class BangumiSearchResponse(BaseModel):
     data: Optional[List[BangumiSearchSubject]] = None
@@ -75,7 +112,7 @@ async def get_bangumi_client(
 
     # 检查 token 是否过期
     expires_at = auth_info.get("expires_at")
-    if expires_at and datetime.now() >= expires_at:
+    if expires_at and datetime.now(timezone.utc) >= expires_at:
         # 尝试刷新 token
         try:
             async with httpx.AsyncClient() as client:
@@ -91,7 +128,7 @@ async def get_bangumi_client(
 
                 auth_info["access_token"] = new_token_info.access_token
                 auth_info["refresh_token"] = new_token_info.refresh_token
-                auth_info["expires_at"] = datetime.now() + timedelta(seconds=new_token_info.expires_in)
+                auth_info["expires_at"] = datetime.now(timezone.utc) + timedelta(seconds=new_token_info.expires_in)
                 await crud.save_bangumi_auth(pool, current_user.id, auth_info)
                 logger.info(f"用户 '{current_user.username}' 的 Bangumi token 已成功刷新。")
         except Exception as e:
@@ -174,7 +211,7 @@ async def bangumi_auth_callback(
                 "avatar_url": bgm_user.avatar.get("large"),
                 "access_token": token_info.access_token,
                 "refresh_token": token_info.refresh_token,
-                "expires_at": datetime.now() + timedelta(seconds=token_info.expires_in)
+                "expires_at": datetime.now(timezone.utc) + timedelta(seconds=token_info.expires_in)
             }
             await crud.save_bangumi_auth(pool, user.id, auth_to_save)
 
@@ -214,33 +251,51 @@ async def search_bangumi_subjects(
     client: httpx.AsyncClient = Depends(get_bangumi_client)
 ):
     async with client:
-        # 严格按照官方 v0 API (POST /v0/search/subjects) 进行调整
-        # API 文档: https://bangumi.github.io/api/#/%E6%9D%A1%E7%9B%AE/searchSubjects
-        url = "https://api.bgm.tv/v0/search/subjects"
-
-        # 构建符合 v0 POST 规范的请求体，确保只搜索动漫类型
-        payload = {
+        # 步骤 1: 初始搜索以获取ID列表
+        search_payload = {
             "keyword": keyword,
-            "filter": {
-                "type": [
-                    2  # 2: 动画 (Anime)
-                ]
-            }
+            "filter": {"type": [2]}  # 2: 动画 (Anime)
         }
+        search_response = await client.post("https://api.bgm.tv/v0/search/subjects", json=search_payload)
 
-        response = await client.post(url, json=payload)
-
-        # Bangumi 在没有找到结果时会返回 404
-        if response.status_code == 404:
+        if search_response.status_code == 404:
             return []
-
-        # 对于其他错误，抛出异常
-        response.raise_for_status()
-
-        # v0 API 的响应结构是 {"data": [...]}
-        search_result = BangumiSearchResponse.model_validate(response.json())
+        search_response.raise_for_status()
+        
+        search_result = BangumiSearchResponse.model_validate(search_response.json())
         if not search_result.data:
             return []
+
+        # 步骤 2: 为每个搜索结果并发获取完整详情
+        async def fetch_subject_details(subject_id: int, client: httpx.AsyncClient):
+            try:
+                # 获取完整详情以包含 infobox
+                details_url = f"https://api.bgm.tv/v0/subjects/{subject_id}"
+                details_response = await client.get(details_url)
+                if details_response.status_code == 200:
+                    return details_response.json()
+            except Exception as e:
+                logger.error(f"获取 Bangumi subject {subject_id} 详情失败: {e}")
+            return None
+
+        tasks = [fetch_subject_details(subject.id, client) for subject in search_result.data]
+        detailed_results = await asyncio.gather(*tasks)
+
+        # 步骤 3: 组合并格式化最终结果
+        final_results = []
+        for subject_data in detailed_results:
+            if subject_data:
+                try:
+                    # 使用我们扩展后的模型来验证和处理数据
+                    subject = BangumiSearchSubject.model_validate(subject_data)
+                    final_results.append({
+                        "id": subject.id,
+                        "name": subject.display_name,
+                        "name_jp": subject.name, # 原始名称，通常是日文名
+                        "image_url": subject.image_url,
+                        "details": subject.details_string
+                    })
+                except ValidationError as e:
+                    logger.error(f"验证 Bangumi subject 详情失败: {e}")
         
-        # 返回前端需要的数据格式
-        return [{"id": subject.id, "name": subject.display_name, "image_url": subject.image_url} for subject in search_result.data]
+        return final_results
