@@ -553,50 +553,44 @@ async def save_tmdb_episode_group_mappings(
 
                 # 1. 删除旧映射
                 await cursor.execute(
-                    "DELETE FROM tmdb_season_mappings WHERE tmdb_episode_group_id = %s", (group_id,)
-                )
-                await cursor.execute(
-                    "DELETE FROM tmdb_episode_mappings WHERE tmdb_episode_group_id = %s", (group_id,)
+                    "DELETE FROM tmdb_episode_mapping WHERE tmdb_episode_group_id = %s", (group_id,)
                 )
 
                 # 2. 准备并插入新映射
-                season_mappings_to_insert = []
-                episode_mappings_to_insert = []
-                processed_seasons = set()
+                mappings_to_insert = []
 
                 # 按 order 字段对剧集组（季度）进行排序
                 sorted_groups = sorted(group_details.groups, key=lambda g: g.order)
 
-                for season_group in sorted_groups:
-                    if not season_group.episodes:
+                for custom_season_group in sorted_groups:
+                    if not custom_season_group.episodes:
                         continue
                     
-                    # 一个剧集组内的多个 "group" 可能都属于同一个实际季 (e.g., 最终季 Part 1, Part 2)
-                    # 这会导致 tmdb_season_number 重复，违反唯一键约束。
-                    # 我们只为每个 tmdb_season_number 插入第一条遇到的映射。
-                    tmdb_season_num = season_group.episodes[0].season_number
-                    if tmdb_season_num not in processed_seasons:
-                        season_mappings_to_insert.append(
-                            (tmdb_tv_id, group_id, tmdb_season_num, season_group.order)
-                        )
-                        processed_seasons.add(tmdb_season_num)
-
-                    for episode in season_group.episodes:
-                        episode_mappings_to_insert.append(
-                            (episode.id, group_id, episode.order + 1)
+                    # 使用 enumerate 来获取分集在当前自定义季度中的索引
+                    for custom_episode_index, episode in enumerate(custom_season_group.episodes):
+                        mappings_to_insert.append(
+                            (
+                                tmdb_tv_id,
+                                group_id,
+                                episode.id,
+                                episode.season_number,
+                                episode.episode_number,
+                                custom_season_group.order, # 自定义季度号
+                                custom_episode_index + 1,  # 自定义本季集数
+                                episode.order + 1          # 绝对集数
+                            )
                         )
                 
                 # 3. 批量插入
-                if season_mappings_to_insert:
-                    season_query = "INSERT INTO tmdb_season_mappings (tmdb_tv_id, tmdb_episode_group_id, tmdb_season_number, custom_season_number) VALUES (%s, %s, %s, %s)"
-                    await cursor.executemany(season_query, season_mappings_to_insert)
-
-                if episode_mappings_to_insert:
-                    episode_query = "INSERT INTO tmdb_episode_mappings (tmdb_episode_id, tmdb_episode_group_id, custom_episode_number) VALUES (%s, %s, %s)"
-                    await cursor.executemany(episode_query, episode_mappings_to_insert)
+                if mappings_to_insert:
+                    query = """
+                        INSERT INTO tmdb_episode_mapping (tmdb_tv_id, tmdb_episode_group_id, tmdb_episode_id, tmdb_season_number, tmdb_episode_number, custom_season_number, custom_episode_number, absolute_episode_number)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    await cursor.executemany(query, mappings_to_insert)
 
                 await conn.commit()
-                logging.info(f"成功为剧集组 {group_id} 保存了 {len(season_mappings_to_insert)} 条季度映射和 {len(episode_mappings_to_insert)} 条分集映射。")
+                logging.info(f"成功为剧集组 {group_id} 保存了 {len(mappings_to_insert)} 条分集映射。")
 
             except Exception as e:
                 await conn.rollback()

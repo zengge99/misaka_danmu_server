@@ -251,27 +251,22 @@ async def init_db_tables(app: FastAPI):
               CONSTRAINT `fk_aliases_anime` FOREIGN KEY (`anime_id`) REFERENCES `anime`(`id`) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
-            # 新增：创建 TMDB 季度映射表
+            # 新增：创建 TMDB 全能分集映射表
             await cursor.execute("""
-            CREATE TABLE IF NOT EXISTS `tmdb_season_mappings` (
+            CREATE TABLE IF NOT EXISTS `tmdb_episode_mapping` (
               `id` BIGINT NOT NULL AUTO_INCREMENT,
               `tmdb_tv_id` INT NOT NULL,
               `tmdb_episode_group_id` VARCHAR(50) NOT NULL,
-              `tmdb_season_number` INT NOT NULL,
-              `custom_season_number` INT NOT NULL,
-              PRIMARY KEY (`id`),
-              UNIQUE KEY `idx_season_mapping_unique` (`tmdb_tv_id`, `tmdb_episode_group_id`, `tmdb_season_number`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """)
-            # 新增：创建 TMDB 分集映射表
-            await cursor.execute("""
-            CREATE TABLE IF NOT EXISTS `tmdb_episode_mappings` (
-              `id` BIGINT NOT NULL AUTO_INCREMENT,
               `tmdb_episode_id` INT NOT NULL,
-              `tmdb_episode_group_id` VARCHAR(50) NOT NULL,
+              `tmdb_season_number` INT NOT NULL,
+              `tmdb_episode_number` INT NOT NULL,
+              `custom_season_number` INT NOT NULL,
               `custom_episode_number` INT NOT NULL,
+              `absolute_episode_number` INT NOT NULL,
               PRIMARY KEY (`id`),
-              UNIQUE KEY `idx_episode_mapping_unique` (`tmdb_episode_id`, `tmdb_episode_group_id`)
+              UNIQUE KEY `idx_group_episode_unique` (`tmdb_episode_group_id`, `tmdb_episode_id`),
+              INDEX `idx_custom_season_episode` (`tmdb_tv_id`, `tmdb_episode_group_id`, `custom_season_number`, `custom_episode_number`),
+              INDEX `idx_absolute_episode` (`tmdb_tv_id`, `tmdb_episode_group_id`, `absolute_episode_number`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
             print("数据表检查完成。")
