@@ -88,6 +88,8 @@ async def get_tmdb_client(
     return httpx.AsyncClient(base_url=base_url, params=params, headers=headers, timeout=20.0)
 
 # --- Pydantic Models for TMDB API ---
+# Most models have been moved to src/models.py.
+# Models still used locally are kept here.
 
 class TMDBTVResult(BaseModel):
     id: int
@@ -107,6 +109,8 @@ class TMDBMovieSearchResults(BaseModel):
     results: List[TMDBMovieResult]
     total_pages: int
 
+# This model is required by get_tmdb_episode_groups but was missed during refactoring.
+# It is kept here to ensure the file is runnable.
 class TMDBEpisodeGroup(BaseModel):
     id: str
     name: str
@@ -114,25 +118,6 @@ class TMDBEpisodeGroup(BaseModel):
     episode_count: int
     group_count: int
     type: int
-
-class TMDBEpisodeGroupList(BaseModel):
-    results: List[TMDBEpisodeGroup]
-    id: int
-
-class TMDBEpisodeInGroupDetail(BaseModel):
-    id: int
-    name: str
-    episode_number: int
-    season_number: int
-    air_date: Optional[str] = None
-    overview: Optional[str] = ""
-    order: int
-
-class TMDBGroupInGroupDetail(BaseModel):
-    id: str
-    name: str
-    order: int
-    episodes: List[TMDBEpisodeInGroupDetail]
 
 class TMDBSearchResponseItem(BaseModel):
     id: int
@@ -143,16 +128,13 @@ class TMDBExternalIDs(BaseModel):
     imdb_id: Optional[str] = None
     tvdb_id: Optional[int] = None
 
-
 class TMDBAlternativeTitle(BaseModel):
     iso_3166_1: str
     title: str
     type: str
 
-
 class TMDBAlternativeTitles(BaseModel):
     titles: List[TMDBAlternativeTitle] = []
-
 
 class TMDBTVDetails(BaseModel):
     id: int
@@ -169,38 +151,6 @@ class TMDBMovieDetails(BaseModel):
     original_title: str
     alternative_titles: Optional[TMDBAlternativeTitles] = None
     external_ids: Optional[TMDBExternalIDs] = None
-
-class TMDBEpisodeGroupDetails(BaseModel):
-    id: str
-    name: str
-    description: Optional[str] = ""
-    episode_count: int
-    group_count: int
-    groups: List[TMDBGroupInGroupDetail]
-    network: Optional[Dict[str, Any]] = None
-    type: int
-
-# --- Models for Enriched Episode Group Details ---
-
-class EnrichedTMDBEpisodeInGroupDetail(BaseModel):
-    id: int
-    name: str # This will be the Chinese name
-    episode_number: int
-    season_number: int
-    air_date: Optional[str] = None
-    overview: Optional[str] = ""
-    order: int
-    name_jp: Optional[str] = None
-    image_url: Optional[str] = None
-
-class EnrichedTMDBGroupInGroupDetail(BaseModel):
-    id: str
-    name: str
-    order: int
-    episodes: List[EnrichedTMDBEpisodeInGroupDetail]
-
-class EnrichedTMDBEpisodeGroupDetails(TMDBEpisodeGroupDetails):
-    groups: List[EnrichedTMDBGroupInGroupDetail]
 
 class TMDBEpisodeWithStill(BaseModel):
     id: int
@@ -433,14 +383,15 @@ async def get_tmdb_episode_groups(
         if response.status_code == 404:
             return [] # Not found is a valid case, just return empty list
         response.raise_for_status()
-        
-        data = TMDBEpisodeGroupList.model_validate(response.json())
-        results_to_cache = [r.model_dump() for r in data.results]
+
+        data = response.json()
+        results = [TMDBEpisodeGroup.model_validate(r) for r in data.get("results", [])]
+        results_to_cache = [r.model_dump() for r in results]
         ttl_seconds_str = await crud.get_config_value(pool, 'metadata_search_ttl_seconds', '1800')
         await crud.set_cache(pool, cache_key, results_to_cache, int(ttl_seconds_str), provider='tmdb')
-        return data.results
+        return results
 
-@router.get("/episode_group/{group_id}", response_model=EnrichedTMDBEpisodeGroupDetails, summary="获取特定剧集组的详情")
+@router.get("/episode_group/{group_id}", response_model=models.EnrichedTMDBEpisodeGroupDetails, summary="获取特定剧集组的详情")
 async def get_tmdb_episode_group_details(
     group_id: str = Path(..., description="TMDB剧集组ID"),
     tv_id: int = Query(..., description="TMDB电视剧ID, 用于获取图片"),
@@ -470,7 +421,7 @@ async def get_tmdb_episode_group_details(
         zh_response.raise_for_status()
         
         # Use the Chinese response as the base
-        details = TMDBEpisodeGroupDetails.model_validate(zh_response.json())
+        details = models.TMDBEpisodeGroupDetails.model_validate(zh_response.json())
         # 按照 order 字段对剧集组进行排序
         details.groups.sort(key=lambda g: g.order)
 
@@ -478,7 +429,7 @@ async def get_tmdb_episode_group_details(
         ja_name_map = {}
         if isinstance(ja_response, httpx.Response) and ja_response.status_code == 200:
             try:
-                ja_details = TMDBEpisodeGroupDetails.model_validate(ja_response.json())
+                ja_details = models.TMDBEpisodeGroupDetails.model_validate(ja_response.json())
                 for group in ja_details.groups:
                     for episode in group.episodes:
                         ja_name_map[episode.id] = episode.name
@@ -512,18 +463,18 @@ async def get_tmdb_episode_group_details(
             enriched_episodes = []
             for episode in group.episodes:
                 still_path = image_map.get(episode.id)
-                enriched_episodes.append(EnrichedTMDBEpisodeInGroupDetail(
+                enriched_episodes.append(models.EnrichedTMDBEpisodeInGroupDetail(
                     id=episode.id, name=episode.name, episode_number=episode.episode_number,
                     season_number=episode.season_number, air_date=episode.air_date,
                     overview=episode.overview, order=episode.order,
                     name_jp=ja_name_map.get(episode.id),
                     image_url=f"{image_base_url.rstrip('/')}{still_path}" if still_path else None
                 ))
-            enriched_groups.append(EnrichedTMDBGroupInGroupDetail(
+            enriched_groups.append(models.EnrichedTMDBGroupInGroupDetail(
                 id=group.id, name=group.name, order=group.order, episodes=enriched_episodes
             ))
 
-        final_response_object = EnrichedTMDBEpisodeGroupDetails(**details.model_dump(exclude={'groups'}), groups=enriched_groups)
+        final_response_object = models.EnrichedTMDBEpisodeGroupDetails(**details.model_dump(exclude={'groups'}), groups=enriched_groups)
         
         # Cache the final object
         ttl_seconds_str = await crud.get_config_value(pool, 'metadata_search_ttl_seconds', '1800')

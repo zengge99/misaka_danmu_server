@@ -1,5 +1,5 @@
-from typing import List, Optional
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -199,3 +199,51 @@ class TokenData(BaseModel):
 class PasswordChange(BaseModel):
     old_password: str = Field(..., description="当前密码")
     new_password: str = Field(..., min_length=8, description="新密码 (至少8位)")
+
+
+# --- TMDB API Models ---
+
+class TMDBEpisodeInGroupDetail(BaseModel):
+    id: int
+    name: str
+    episode_number: int
+    season_number: int
+    air_date: Optional[str] = None
+    overview: Optional[str] = ""
+    order: int
+
+class TMDBGroupInGroupDetail(BaseModel):
+    id: str
+    name: str
+    order: int
+    episodes: List[TMDBEpisodeInGroupDetail]
+
+class TMDBEpisodeGroupDetails(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = ""
+    episode_count: int
+    group_count: int
+    groups: List[TMDBGroupInGroupDetail]
+    network: Optional[Dict[str, Any]] = None
+    type: int
+
+class EnrichedTMDBEpisodeInGroupDetail(BaseModel):
+    id: int
+    name: str # This will be the Chinese name
+    episode_number: int
+    season_number: int
+    air_date: Optional[str] = None
+    overview: Optional[str] = ""
+    order: int
+    name_jp: Optional[str] = None
+    image_url: Optional[str] = None
+
+class EnrichedTMDBGroupInGroupDetail(BaseModel):
+    id: str
+    name: str
+    order: int
+    episodes: List[EnrichedTMDBEpisodeInGroupDetail]
+
+class EnrichedTMDBEpisodeGroupDetails(TMDBEpisodeGroupDetails):
+    groups: List[EnrichedTMDBGroupInGroupDetail]

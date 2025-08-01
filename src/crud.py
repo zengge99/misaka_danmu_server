@@ -536,6 +536,65 @@ async def update_anime_details(pool: aiomysql.Pool, anime_id: int, update_data: 
                 logging.getLogger(__name__).error(f"更新番剧详情 (ID: {anime_id}) 时出错: {e}", exc_info=True)
                 return False
 
+async def save_tmdb_episode_group_mappings(
+    pool: aiomysql.Pool,
+    tmdb_tv_id: int,
+    group_id: str,
+    group_details: models.TMDBEpisodeGroupDetails
+):
+    """
+    在事务中保存TMDB剧集组的季度和分集映射。
+    会先删除该剧集组的旧映射，再插入新映射。
+    """
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            try:
+                await conn.begin()
+
+                # 1. 删除旧映射
+                await cursor.execute(
+                    "DELETE FROM tmdb_season_mappings WHERE tmdb_episode_group_id = %s", (group_id,)
+                )
+                await cursor.execute(
+                    "DELETE FROM tmdb_episode_mappings WHERE tmdb_episode_group_id = %s", (group_id,)
+                )
+
+                # 2. 准备并插入新映射
+                season_mappings_to_insert = []
+                episode_mappings_to_insert = []
+
+                # 按 order 字段对剧集组（季度）进行排序
+                sorted_groups = sorted(group_details.groups, key=lambda g: g.order)
+
+                for season_group in sorted_groups:
+                    if not season_group.episodes:
+                        continue
+                    
+                    season_mappings_to_insert.append(
+                        (tmdb_tv_id, group_id, season_group.episodes[0].season_number, season_group.order)
+                    )
+                    for episode in season_group.episodes:
+                        episode_mappings_to_insert.append(
+                            (episode.id, group_id, episode.order + 1)
+                        )
+                
+                # 3. 批量插入
+                if season_mappings_to_insert:
+                    season_query = "INSERT INTO tmdb_season_mappings (tmdb_tv_id, tmdb_episode_group_id, tmdb_season_number, custom_season_number) VALUES (%s, %s, %s, %s)"
+                    await cursor.executemany(season_query, season_mappings_to_insert)
+
+                if episode_mappings_to_insert:
+                    episode_query = "INSERT INTO tmdb_episode_mappings (tmdb_episode_id, tmdb_episode_group_id, custom_episode_number) VALUES (%s, %s, %s)"
+                    await cursor.executemany(episode_query, episode_mappings_to_insert)
+
+                await conn.commit()
+                logging.info(f"成功为剧集组 {group_id} 保存了 {len(season_mappings_to_insert)} 条季度映射和 {len(episode_mappings_to_insert)} 条分集映射。")
+
+            except Exception as e:
+                await conn.rollback()
+                logging.error(f"保存TMDB映射时出错 (group_id={group_id}): {e}", exc_info=True)
+                raise
+
 async def delete_anime_source(pool: aiomysql.Pool, source_id: int, conn: Optional[aiomysql.Connection] = None) -> bool:
     """
     删除一个数据源及其所有关联的分集和弹幕。

@@ -7,6 +7,7 @@ import logging
 
 from datetime import timedelta, datetime, timezone
 import aiomysql
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks, Response
 from fastapi.security import OAuth2PasswordRequestForm
 
@@ -14,6 +15,7 @@ from .. import crud, models, security
 from ..log_manager import get_logs
 from ..task_manager import TaskManager
 from ..scraper_manager import ScraperManager
+from .tmdb_api import get_tmdb_client
 from ..config import settings
 from ..config import settings
 from ..database import get_db_pool
@@ -46,6 +48,28 @@ async def get_scraper_manager(request: Request) -> ScraperManager:
 async def get_task_manager(request: Request) -> TaskManager:
     """依赖项：从应用状态获取任务管理器"""
     return request.app.state.task_manager
+
+async def update_tmdb_mappings(
+    pool: aiomysql.Pool,
+    client: httpx.AsyncClient,
+    tmdb_tv_id: int,
+    group_id: str
+):
+    """
+    获取TMDB剧集组详情并将其映射关系存入数据库。
+    """
+    async with client:
+        response = await client.get(f"/tv/episode_group/{group_id}", params={"language": "zh-CN"})
+        response.raise_for_status()
+        
+        group_details = models.TMDBEpisodeGroupDetails.model_validate(response.json())
+        
+        await crud.save_tmdb_episode_group_mappings(
+            pool=pool,
+            tmdb_tv_id=tmdb_tv_id,
+            group_id=group_id,
+            group_details=group_details
+        )
 
 @router.get(
     "/search/anime",
@@ -125,13 +149,29 @@ async def edit_anime_info(
     anime_id: int,
     update_data: models.AnimeDetailUpdate,
     current_user: models.User = Depends(security.get_current_user),
-    pool: aiomysql.Pool = Depends(get_db_pool)
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    client: httpx.AsyncClient = Depends(get_tmdb_client)
 ):
     """更新指定番剧的标题、季度和元数据。"""
     updated = await crud.update_anime_details(pool, anime_id, update_data)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anime not found or update failed")
     logger.info(f"用户 '{current_user.username}' 更新了番剧 ID: {anime_id} 的详细信息。")
+
+    # 新增：如果提供了TMDB ID和剧集组ID，则更新映射表
+    if update_data.tmdb_id and update_data.tmdb_episode_group_id:
+        logger.info(f"检测到TMDB ID和剧集组ID，开始更新映射表...")
+        try:
+            await update_tmdb_mappings(
+                pool=pool,
+                client=client,
+                tmdb_tv_id=int(update_data.tmdb_id),
+                group_id=update_data.tmdb_episode_group_id
+            )
+            logger.info(f"成功更新了 TV ID {update_data.tmdb_id} 和 Group ID {update_data.tmdb_episode_group_id} 的TMDB映射。")
+        except Exception as e:
+            # 仅记录错误，不中断主流程，因为核心信息已保存
+            logger.error(f"更新TMDB映射失败: {e}", exc_info=True)
     return
 
 class ReassociationRequest(models.BaseModel):
