@@ -146,10 +146,9 @@
                                 </div>
                                 <div class="form-row">
                                     <label for="edit-anime-egid">剧集组ID</label>
-                                    <div class="input-with-two-icons">
+                                    <div class="input-with-icon">
                                         <input type="text" id="edit-anime-egid" placeholder="TMDB Episode Group ID">
-                                        <button type="button" id="select-egid-btn" class="icon-btn" title="选择剧集组" disabled>🔽</button>
-                                        <button type="button" id="view-egid-episodes-btn" class="icon-btn" title="查看剧集" disabled>👁️</button>
+                                        <button type="button" class="icon-btn" title="选择">🔽</button>
                                     </div>
                                     <span class="disabled-indicator hidden">❌</span>
                                 </div>
@@ -433,27 +432,6 @@
                         </div>
                     </div>
                 </main>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modals -->
-    <div id="egid-selection-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <h3>选择剧集组</h3>
-            <ul id="egid-selection-list" class="results-list-style"></ul>
-            <div class="modal-actions">
-                <button id="close-egid-selection-modal-btn">关闭</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="egid-episodes-modal" class="modal-overlay hidden">
-        <div class="modal-content wide">
-            <h3 id="egid-episodes-modal-title">剧集详情</h3>
-            <div id="egid-episodes-list-container"></div>
-            <div class="modal-actions">
-                <button id="close-egid-episodes-modal-btn">关闭</button>
             </div>
         </div>
     </div>

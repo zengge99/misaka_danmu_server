@@ -364,22 +364,12 @@ header {
     overflow: hidden; /* Ensures children conform to the border-radius */
 }
 
-.input-with-icon.disabled,
-.input-with-two-icons.disabled {
+.input-with-icon.disabled {
     background-color: #f5f7fa; /* Match disabled input background */
     cursor: not-allowed;
 }
 
-.input-with-two-icons {
-    display: flex;
-    align-items: stretch;
-    flex-grow: 1;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background-color: var(--bg-color);
-    overflow: hidden;
-}
-.input-with-icon input, .input-with-two-icons input {
+.input-with-icon input {
     /* The actual input element is now transparent and borderless */
     flex-grow: 1;
     border: none;
@@ -389,7 +379,7 @@ header {
     font-size: 16px;
 }
 
-.input-with-icon .icon-btn, .input-with-two-icons .icon-btn {
+.input-with-icon .icon-btn {
     /* The button is a flex item, not absolutely positioned */
     flex-shrink: 0; /* Prevent the button from shrinking */
     width: 38px;
@@ -402,7 +392,7 @@ header {
     transition: background-color 0.2s;
 }
 
-.input-with-icon .icon-btn:hover, .input-with-two-icons .icon-btn:hover {
+.input-with-icon .icon-btn:hover {
     background-color: #e9ecef;
 }
 
@@ -411,7 +401,7 @@ header {
     cursor: not-allowed;
 }
 
-.input-with-icon .icon-btn:disabled:hover, .input-with-two-icons .icon-btn:disabled:hover {
+.input-with-icon .icon-btn:disabled:hover {
     /* 阻止在禁用按钮上的悬停效果 */
     background-color: #f5f7fa;
 }
@@ -932,69 +922,4 @@ header {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-}
-
-/* Modal Styles */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
-
-.modal-content {
-    background-color: var(--bg-color);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-    width: 90%;
-    max-width: 600px;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-}
-
-.modal-content.wide {
-    max-width: 900px;
-}
-
-.modal-content h3 {
-    margin-top: 0;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 10px;
-}
-
-.modal-content ul {
-    flex-grow: 1;
-    overflow-y: auto;
-    margin-bottom: 15px;
-}
-
-.modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 15px;
-}
-
-/* Episode Group Details Modal Styles */
-#egid-episodes-list-container {
-    flex-grow: 1;
-    overflow-y: auto;
-}
-
-.egid-season-group {
-    margin-bottom: 15px;
-}
-
-.egid-season-group h4 {
-    margin: 0 0 5px 0;
-    background-color: var(--secondary-color);
-    padding: 5px;
-    border-radius: 4px;
 }
