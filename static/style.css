@@ -364,6 +364,11 @@ header {
     overflow: hidden; /* Ensures children conform to the border-radius */
 }
 
+.input-with-icon.disabled {
+    background-color: #f5f7fa; /* Match disabled input background */
+    cursor: not-allowed;
+}
+
 .input-with-icon input {
     /* The actual input element is now transparent and borderless */
     flex-grow: 1;

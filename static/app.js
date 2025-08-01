@@ -407,6 +407,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (egidButton) {
             egidButton.disabled = isMovie;
         }
+        egidWrapper.classList.toggle('disabled', isMovie);
         if (egidIndicator && egidIndicator.classList.contains('disabled-indicator')) {
             egidIndicator.classList.toggle('hidden', !isMovie);
         }
