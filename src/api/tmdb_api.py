@@ -267,7 +267,7 @@ async def search_tmdb_subjects(
 
         # 缓存结果
         ttl_seconds_str = await crud.get_config_value(pool, 'metadata_search_ttl_seconds', '1800')
-        await crud.set_cache(pool, cache_key, final_results, int(ttl_seconds_str))
+        await crud.set_cache(pool, cache_key, final_results, int(ttl_seconds_str), provider='tmdb')
 
         return final_results
  
@@ -321,7 +321,7 @@ async def search_tmdb_movie_subjects(
         ]
         # 缓存结果
         ttl_seconds_str = await crud.get_config_value(pool, 'metadata_search_ttl_seconds', '1800')
-        await crud.set_cache(pool, cache_key, results, int(ttl_seconds_str))
+        await crud.set_cache(pool, cache_key, results, int(ttl_seconds_str), provider='tmdb')
         return results
 
 
@@ -437,7 +437,7 @@ async def get_tmdb_episode_groups(
         data = TMDBEpisodeGroupList.model_validate(response.json())
         results_to_cache = [r.model_dump() for r in data.results]
         ttl_seconds_str = await crud.get_config_value(pool, 'metadata_search_ttl_seconds', '1800')
-        await crud.set_cache(pool, cache_key, results_to_cache, int(ttl_seconds_str))
+        await crud.set_cache(pool, cache_key, results_to_cache, int(ttl_seconds_str), provider='tmdb')
         return data.results
 
 @router.get("/episode_group/{group_id}", response_model=EnrichedTMDBEpisodeGroupDetails, summary="获取特定剧集组的详情")
@@ -527,6 +527,6 @@ async def get_tmdb_episode_group_details(
         
         # Cache the final object
         ttl_seconds_str = await crud.get_config_value(pool, 'metadata_search_ttl_seconds', '1800')
-        await crud.set_cache(pool, cache_key, final_response_object.model_dump(), int(ttl_seconds_str))
+        await crud.set_cache(pool, cache_key, final_response_object.model_dump(), int(ttl_seconds_str), provider='tmdb')
 
         return final_response_object
