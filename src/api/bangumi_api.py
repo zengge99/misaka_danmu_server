@@ -199,7 +199,7 @@ async def get_bangumi_client(
                 logger.info(f"用户 '{current_user.username}' 的 Bangumi token 已成功刷新。")
         except Exception as e:
             logger.error(f"刷新 Bangumi token 失败: {e}", exc_info=True)
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bangumi token expired and refresh failed")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bangumi token 已过期且刷新失败")
 
     headers = {
         "Authorization": f"Bearer {auth_info['access_token']}",
@@ -314,8 +314,17 @@ async def deauthorize_bangumi(
 @router.get("/search", response_model=List[Dict[str, Any]], summary="搜索 Bangumi 作品")
 async def search_bangumi_subjects(
     keyword: str = Query(..., min_length=1),
-    client: httpx.AsyncClient = Depends(get_bangumi_client)
+    client: httpx.AsyncClient = Depends(get_bangumi_client),
+    pool: aiomysql.Pool = Depends(get_db_pool),
 ):
+    cache_key = f"bgm_search_{keyword}"
+    cached_results = await crud.get_cache(pool, cache_key)
+    if cached_results is not None:
+        logger.info(f"Bangumi 搜索 '{keyword}' 命中缓存。")
+        # The response model is List[Dict[str, Any]], so no strict validation is needed here
+        # for the cached data, which is good.
+        return cached_results
+
     async with client:
         # 步骤 1: 初始搜索以获取ID列表
         search_payload = {
@@ -368,4 +377,8 @@ async def search_bangumi_subjects(
                 except ValidationError as e:
                     logger.error(f"验证 Bangumi subject 详情失败: {e}")
         
+        # 缓存结果
+        ttl_seconds_str = await crud.get_config_value(pool, 'metadata_search_ttl_seconds', '1800')
+        await crud.set_cache(pool, cache_key, final_results, int(ttl_seconds_str))
+
         return final_results

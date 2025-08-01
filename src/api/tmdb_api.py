@@ -69,7 +69,7 @@ async def get_tmdb_client(
         )
     if not domain:
         domain = "https://api.themoviedb.org" # Fallback to default domain
-        logger.warning("TMDB API Domain not configured, using default.")
+        logger.warning("TMDB API 域名未配置，将使用默认域名。")
 
     # 从域名构建完整的 API 基础 URL
     # 增加健壮性：如果用户输入的域名已经包含了 /3，则不再重复添加
@@ -215,6 +215,13 @@ async def search_tmdb_subjects(
     client: httpx.AsyncClient = Depends(get_tmdb_client),
     pool: aiomysql.Pool = Depends(get_db_pool),
 ):
+    cache_key = f"tmdb_search_tv_{keyword}"
+    cached_results = await crud.get_cache(pool, cache_key)
+    if cached_results is not None:
+        logger.info(f"TMDB 电视剧搜索 '{keyword}' 命中缓存。")
+        # Pydantic will re-validate the cached data against the response_model
+        return cached_results
+
     async with client:
         # 步骤 1: 初始搜索以获取ID列表
         params = {
@@ -229,11 +236,11 @@ async def search_tmdb_subjects(
         if search_response.status_code == 401:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="TMDB API Key is invalid or unauthorized. Please check your key in the settings.",
+                detail="TMDB API Key 无效或未授权，请在设置中检查您的密钥。",
             )
 
         if search_response.status_code != 200:
-            logger.error(f"TMDB search for TV failed with status {search_response.status_code}: {search_response.text}")
+            logger.error(f"TMDB 电视剧搜索失败，状态码: {search_response.status_code}，响应: {search_response.text}")
             return []
 
         search_result = TMDBTVSearchResults.model_validate(search_response.json())
@@ -258,6 +265,10 @@ async def search_tmdb_subjects(
             except ValidationError as e:
                 logger.error(f"验证 TMDB subject 详情失败: {e}")
 
+        # 缓存结果
+        ttl_seconds_str = await crud.get_config_value(pool, 'metadata_search_ttl_seconds', '1800')
+        await crud.set_cache(pool, cache_key, final_results, int(ttl_seconds_str))
+
         return final_results
  
 @router.get("/search/movie", response_model=List[TMDBSearchResponseItem], summary="搜索 TMDB 电影作品")
@@ -266,6 +277,12 @@ async def search_tmdb_movie_subjects(
     client: httpx.AsyncClient = Depends(get_tmdb_client),
     pool: aiomysql.Pool = Depends(get_db_pool),
 ):
+    cache_key = f"tmdb_search_movie_{keyword}"
+    cached_results = await crud.get_cache(pool, cache_key)
+    if cached_results is not None:
+        logger.info(f"TMDB 电影搜索 '{keyword}' 命中缓存。")
+        return cached_results
+
     async with client:
         # 步骤 1: 初始搜索以获取ID列表
         params = {
@@ -280,11 +297,11 @@ async def search_tmdb_movie_subjects(
         if search_response.status_code == 401:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="TMDB API Key is invalid or unauthorized. Please check your key in the settings.",
+                detail="TMDB API Key 无效或未授权，请在设置中检查您的密钥。",
             )
 
         if search_response.status_code != 200:
-            logger.error(f"TMDB search for Movie failed with status {search_response.status_code}: {search_response.text}")
+            logger.error(f"TMDB 电影搜索失败，状态码: {search_response.status_code}，响应: {search_response.text}")
             return []
 
         search_result = TMDBMovieSearchResults.model_validate(search_response.json())
@@ -294,7 +311,7 @@ async def search_tmdb_movie_subjects(
         # Fetch image base URL
         image_base_url = await _get_robust_image_base_url(pool)
 
-        return [
+        results = [
             {
                 "id": subject.id,
                 "name": subject.title,
@@ -302,6 +319,10 @@ async def search_tmdb_movie_subjects(
             }
             for subject in search_result.results
         ]
+        # 缓存结果
+        ttl_seconds_str = await crud.get_config_value(pool, 'metadata_search_ttl_seconds', '1800')
+        await crud.set_cache(pool, cache_key, results, int(ttl_seconds_str))
+        return results
 
 
 @router.get("/details/{media_type}/{tmdb_id}", response_model=Dict[str, Any], summary="获取 TMDB 作品详情")
@@ -311,7 +332,7 @@ async def get_tmdb_details(
     client: httpx.AsyncClient = Depends(get_tmdb_client),
 ):
     if media_type not in ["tv", "movie"]:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid media type. Must be 'tv' or 'movie'.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="无效的媒体类型，必须是 'tv' 或 'movie'。")
 
     async with client:
         params = {
@@ -323,10 +344,10 @@ async def get_tmdb_details(
         if details_response.status_code == 401:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="TMDB API Key is invalid or unauthorized. Please check your key in the settings.",
+                detail="TMDB API Key 无效或未授权，请在设置中检查您的密钥。",
             )
         if details_response.status_code == 404:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="TMDB entry not found.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到 TMDB 条目。")
         
         details_response.raise_for_status()
         details_json = details_response.json()
@@ -397,16 +418,26 @@ async def get_tmdb_details(
 async def get_tmdb_episode_groups(
     tmdb_id: int = Path(..., description="TMDB电视剧ID"),
     client: httpx.AsyncClient = Depends(get_tmdb_client),
+    pool: aiomysql.Pool = Depends(get_db_pool),
 ):
+    cache_key = f"tmdb_episode_groups_{tmdb_id}"
+    cached_results = await crud.get_cache(pool, cache_key)
+    if cached_results is not None:
+        logger.info(f"TMDB 电视剧(ID: {tmdb_id})的剧集组列表命中缓存。")
+        return cached_results
+
     async with client:
         response = await client.get(f"/tv/{tmdb_id}/episode_groups")
         if response.status_code == 401:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="TMDB API Key is invalid.")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="TMDB API Key 无效。")
         if response.status_code == 404:
             return [] # Not found is a valid case, just return empty list
         response.raise_for_status()
         
         data = TMDBEpisodeGroupList.model_validate(response.json())
+        results_to_cache = [r.model_dump() for r in data.results]
+        ttl_seconds_str = await crud.get_config_value(pool, 'metadata_search_ttl_seconds', '1800')
+        await crud.set_cache(pool, cache_key, results_to_cache, int(ttl_seconds_str))
         return data.results
 
 @router.get("/episode_group/{group_id}", response_model=EnrichedTMDBEpisodeGroupDetails, summary="获取特定剧集组的详情")
@@ -416,6 +447,12 @@ async def get_tmdb_episode_group_details(
     client: httpx.AsyncClient = Depends(get_tmdb_client),
     pool: aiomysql.Pool = Depends(get_db_pool),
 ):
+    cache_key = f"tmdb_episode_group_details_{group_id}_{tv_id}"
+    cached_results = await crud.get_cache(pool, cache_key)
+    if cached_results is not None:
+        logger.info(f"TMDB 剧集组详情(ID: {group_id})命中缓存。")
+        return cached_results
+
     async with client:
         # Step 1: Fetch details in parallel for Chinese and Japanese
         zh_task = client.get(f"/tv/episode_group/{group_id}", params={"language": "zh-CN"})
@@ -424,12 +461,12 @@ async def get_tmdb_episode_group_details(
 
         # Handle primary (Chinese) response errors
         if isinstance(zh_response, Exception):
-            logger.error(f"Failed to fetch Chinese details for group {group_id}: {zh_response}")
-            raise HTTPException(status_code=500, detail="Failed to fetch episode group details.")
+            logger.error(f"获取剧集组 {group_id} 的中文详情失败: {zh_response}")
+            raise HTTPException(status_code=500, detail="获取剧集组详情失败。")
         if zh_response.status_code == 401:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="TMDB API Key is invalid.")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="TMDB API Key 无效。")
         if zh_response.status_code == 404:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode group not found.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到剧集组。")
         zh_response.raise_for_status()
         
         # Use the Chinese response as the base
@@ -446,7 +483,7 @@ async def get_tmdb_episode_group_details(
                     for episode in group.episodes:
                         ja_name_map[episode.id] = episode.name
             except ValidationError as e:
-                logger.warning(f"Failed to parse Japanese details for group {group_id}: {e}")
+                logger.warning(f"解析剧集组 {group_id} 的日文详情失败: {e}")
 
         # Step 3: Fetch image paths by fetching season details
         image_map = {}
@@ -459,7 +496,7 @@ async def get_tmdb_episode_group_details(
                 season_details = TMDBSeasonDetails.model_validate(res.json())
                 return {ep.id: ep.still_path for ep in season_details.episodes if ep.still_path}
             except Exception as e:
-                logger.warning(f"Failed to fetch stills for season {season_num} of TV {tv_id}: {e}")
+                logger.warning(f"获取电视剧 {tv_id} 第 {season_num} 季的剧照失败: {e}")
                 return {}
 
         if season_numbers:
@@ -486,5 +523,10 @@ async def get_tmdb_episode_group_details(
                 id=group.id, name=group.name, order=group.order, episodes=enriched_episodes
             ))
 
-        # Create the final response object using the base details and the new enriched groups
-        return EnrichedTMDBEpisodeGroupDetails(**details.model_dump(exclude={'groups'}), groups=enriched_groups)
+        final_response_object = EnrichedTMDBEpisodeGroupDetails(**details.model_dump(exclude={'groups'}), groups=enriched_groups)
+        
+        # Cache the final object
+        ttl_seconds_str = await crud.get_config_value(pool, 'metadata_search_ttl_seconds', '1800')
+        await crud.set_cache(pool, cache_key, final_response_object.model_dump(), int(ttl_seconds_str))
+
+        return final_response_object

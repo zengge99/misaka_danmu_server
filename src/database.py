@@ -422,6 +422,7 @@ async def _init_default_config(cursor: aiomysql.Cursor):
         ('search_ttl_seconds', '300', '搜索结果的缓存时间（秒），默认5分钟。'),
         ('episodes_ttl_seconds', '1800', '分集列表的缓存时间（秒），默认30分钟。'),
         ('base_info_ttl_seconds', '1800', '基础媒体信息（如爱奇艺）的缓存时间（秒），默认30分钟。'),
+        ('metadata_search_ttl_seconds', '1800', '元数据（如TMDB, Bangumi）搜索结果的缓存时间（秒），默认30分钟。'),
         ('custom_api_domain', '', '用于拼接弹幕API地址的自定义域名。'),
         ('jwt_expire_minutes', str(settings.jwt.access_token_expire_minutes), 'JWT令牌的有效期（分钟）。-1 表示永不过期。'),
         ('tmdb_api_key', '', '用于访问 The Movie Database API 的密钥。'),
