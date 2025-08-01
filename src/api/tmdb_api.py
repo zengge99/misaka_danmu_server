@@ -107,6 +107,32 @@ class TMDBMovieSearchResults(BaseModel):
     results: List[TMDBMovieResult]
     total_pages: int
 
+class TMDBEpisodeGroup(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = ""
+    episode_count: int
+    group_count: int
+    type: int
+
+class TMDBEpisodeGroupList(BaseModel):
+    results: List[TMDBEpisodeGroup]
+    id: int
+
+class TMDBEpisodeInGroupDetail(BaseModel):
+    id: int
+    name: str
+    episode_number: int
+    season_number: int
+    air_date: Optional[str] = None
+    overview: Optional[str] = ""
+
+class TMDBGroupInGroupDetail(BaseModel):
+    id: str
+    name: str
+    order: int
+    episodes: List[TMDBEpisodeInGroupDetail]
+
 class TMDBSearchResponseItem(BaseModel):
     id: int
     name: str
@@ -142,6 +168,16 @@ class TMDBMovieDetails(BaseModel):
     original_title: str
     alternative_titles: Optional[TMDBAlternativeTitles] = None
     external_ids: Optional[TMDBExternalIDs] = None
+
+class TMDBEpisodeGroupDetails(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = ""
+    episode_count: int
+    group_count: int
+    groups: List[TMDBGroupInGroupDetail]
+    network: Optional[Dict[str, Any]] = None
+    type: int
 
 
 @router.get("/search/tv", response_model=List[TMDBSearchResponseItem], summary="搜索 TMDB 电视剧")
@@ -327,3 +363,34 @@ async def get_tmdb_details(
             "name_romaji": _clean_movie_title(name_romaji),
             "aliases_cn": list(dict.fromkeys(cleaned_aliases_cn)) # Deduplicate
         }
+
+@router.get("/tv/{tmdb_id}/episode_groups", response_model=List[TMDBEpisodeGroup], summary="获取电视剧的所有剧集组")
+async def get_tmdb_episode_groups(
+    tmdb_id: int = Path(..., description="TMDB电视剧ID"),
+    client: httpx.AsyncClient = Depends(get_tmdb_client),
+):
+    async with client:
+        response = await client.get(f"/tv/{tmdb_id}/episode_groups")
+        if response.status_code == 401:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="TMDB API Key is invalid.")
+        if response.status_code == 404:
+            return [] # Not found is a valid case, just return empty list
+        response.raise_for_status()
+        
+        data = TMDBEpisodeGroupList.model_validate(response.json())
+        return data.results
+
+@router.get("/episode_group/{group_id}", response_model=TMDBEpisodeGroupDetails, summary="获取特定剧集组的详情")
+async def get_tmdb_episode_group_details(
+    group_id: str = Path(..., description="TMDB剧集组ID"),
+    client: httpx.AsyncClient = Depends(get_tmdb_client),
+):
+    async with client:
+        response = await client.get(f"/tv/episode_group/{group_id}")
+        if response.status_code == 401:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="TMDB API Key is invalid.")
+        if response.status_code == 404:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode group not found.")
+        response.raise_for_status()
+        
+        return TMDBEpisodeGroupDetails.model_validate(response.json())
