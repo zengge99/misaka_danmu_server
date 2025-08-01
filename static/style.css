@@ -391,6 +391,16 @@ header {
     background-color: #e9ecef;
 }
 
+.input-with-icon .icon-btn:disabled {
+    background-color: #f5f7fa; /* 匹配禁用输入框的背景色 */
+    cursor: not-allowed;
+}
+
+.input-with-icon .icon-btn:disabled:hover {
+    /* 阻止在禁用按钮上的悬停效果 */
+    background-color: #f5f7fa;
+}
+
 /* New styles for input with apply icon */
 .input-with-apply-icon {
     display: flex;
