@@ -271,6 +271,8 @@ async def get_tmdb_details(
         name_jp = None
         name_romaji = None
         aliases_cn = []
+        imdb_id = None
+        tvdb_id = None
         
         # Get base details
         if media_type == "tv":
@@ -283,6 +285,11 @@ async def get_tmdb_details(
             main_title_cn = details.title
             original_title = details.original_title
             original_language = details.original_language
+
+        # Extract external IDs
+        if details.external_ids:
+            imdb_id = details.external_ids.imdb_id
+            tvdb_id = details.external_ids.tvdb_id
 
         # Process alternative titles for more accurate names
         if details.alternative_titles:
@@ -313,6 +320,8 @@ async def get_tmdb_details(
 
         return {
             "id": details.id,
+            "imdb_id": imdb_id,
+            "tvdb_id": tvdb_id,
             "name_en": _clean_movie_title(name_en),
             "name_jp": _clean_movie_title(name_jp),
             "name_romaji": _clean_movie_title(name_romaji),

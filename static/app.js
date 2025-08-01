@@ -1490,9 +1490,10 @@ document.addEventListener('DOMContentLoaded', () => {
             updateFieldWithApplyLogic('edit-anime-alias-cn-3', cnAliases[2]);
         } else { // Assume TMDB result
             document.getElementById('edit-anime-tmdbid').value = data.id || '';
+            updateFieldWithApplyLogic('edit-anime-imdbid', data.imdb_id);
+            updateFieldWithApplyLogic('edit-anime-tvdbid', data.tvdb_id);
             updateFieldWithApplyLogic('edit-anime-name-en', data.name_en);
-            // TMDB doesn't provide JP name directly in this flow, so we don't update it
-            // updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
+            updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
             updateFieldWithApplyLogic('edit-anime-name-romaji', data.name_romaji);
             const cnAliases = data.aliases_cn || [];
             updateFieldWithApplyLogic('edit-anime-alias-cn-1', cnAliases[0]);
