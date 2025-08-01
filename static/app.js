@@ -103,6 +103,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const egidContentContainer = document.getElementById('egid-content-container');
     const egidViewTitle = document.getElementById('egid-view-title');
     // --- State ---
+    // Reassociate View Elements
+    const reassociateView = document.getElementById('reassociate-view');
+    const reassociateSourcesBtn = document.getElementById('reassociate-sources-btn');
+    const backToEditFromReassociateBtn = document.getElementById('back-to-edit-from-reassociate-btn');
+    const reassociateSearchInput = document.getElementById('reassociate-search-input');
+    const reassociateTargetTableBody = document.querySelector('#reassociate-target-table tbody');
+
     let token = localStorage.getItem('danmu_api_token');
     let logRefreshInterval = null;
     let currentEpisodes = []; // 用于存储当前分集列表的上下文
@@ -306,6 +313,12 @@ document.addEventListener('DOMContentLoaded', () => {
             egidView.classList.add('hidden');
             editAnimeView.classList.remove('hidden');
         });
+        // New listeners for Reassociate View
+        reassociateSourcesBtn.addEventListener('click', handleReassociateSourcesClick);
+        backToEditFromReassociateBtn.addEventListener('click', () => {
+            reassociateView.classList.add('hidden');
+            editAnimeView.classList.remove('hidden');
+        });
         document.getElementById('edit-anime-tmdbid').addEventListener('input', updateEgidSelectButtonState);
         document.getElementById('tmdb-settings-form').addEventListener('submit', handleSaveTmdbSettings);
 
@@ -321,6 +334,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         settingsSubNav.addEventListener('click', handleSettingsSubNav);
+
+        // Listener for the new "Clear All Cache" button in the edit view
+        document.getElementById('clear-all-cache-in-edit-btn').addEventListener('click', handleClearCache);
+        reassociateSearchInput.addEventListener('input', handleReassociateSearch);
     }
 
     // --- Event Handlers ---
@@ -1680,6 +1697,80 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- Reassociate Sources View ---
+    async function handleReassociateSourcesClick() {
+        const sourceAnimeId = document.getElementById('edit-anime-id').value;
+        const sourceAnimeTitle = document.getElementById('edit-anime-title').value;
+        
+        if (!sourceAnimeId) {
+            alert("无法获取当前作品ID。");
+            return;
+        }
+
+        editAnimeView.classList.add('hidden');
+        reassociateView.classList.remove('hidden');
+        reassociateView.dataset.sourceAnimeId = sourceAnimeId; // Store context
+
+        document.getElementById('reassociate-view-title').textContent = `为 "${sourceAnimeTitle}" 调整关联`;
+        document.getElementById('reassociate-info-text').textContent = `此操作会将 "${sourceAnimeTitle}" (ID: ${sourceAnimeId}) 下的所有数据源移动到您选择的另一个作品条目下，然后删除原条目。`;
+        
+        reassociateTargetTableBody.innerHTML = '<tr><td colspan="2">加载中...</td></tr>';
+        try {
+            const data = await apiFetch('/api/ui/library');
+            renderReassociateTargets(data.animes, parseInt(sourceAnimeId, 10));
+        } catch (error) {
+            reassociateTargetTableBody.innerHTML = `<tr><td colspan="2" class="error">加载目标列表失败: ${error.message}</td></tr>`;
+        }
+    }
+
+    function renderReassociateTargets(animes, sourceAnimeId) {
+        reassociateTargetTableBody.innerHTML = '';
+        const potentialTargets = animes.filter(anime => anime.animeId !== sourceAnimeId);
+
+        if (potentialTargets.length === 0) {
+            reassociateTargetTableBody.innerHTML = '<tr><td colspan="2">没有其他可用的目标作品。</td></tr>';
+            return;
+        }
+
+        potentialTargets.forEach(anime => {
+            const row = reassociateTargetTableBody.insertRow();
+            row.dataset.title = anime.title.toLowerCase(); // For searching
+
+            const infoCell = row.insertCell();
+            infoCell.innerHTML = `<strong>${anime.title}</strong> (ID: ${anime.animeId}, 季: ${anime.season}, 类型: ${anime.type})`;
+
+            const actionCell = row.insertCell();
+            const associateBtn = document.createElement('button');
+            associateBtn.textContent = '关联到此';
+            associateBtn.addEventListener('click', () => handleReassociateConfirm(sourceAnimeId, anime.animeId, anime.title));
+            actionCell.appendChild(associateBtn);
+        });
+    }
+
+    function handleReassociateSearch() {
+        const searchTerm = reassociateSearchInput.value.toLowerCase();
+        const rows = reassociateTargetTableBody.querySelectorAll('tr');
+        rows.forEach(row => {
+            const title = row.dataset.title || '';
+            row.style.display = title.includes(searchTerm) ? '' : 'none';
+        });
+    }
+
+    async function handleReassociateConfirm(sourceAnimeId, targetAnimeId, targetAnimeTitle) {
+        if (confirm(`您确定要将当前作品的所有数据源关联到 "${targetAnimeTitle}" (ID: ${targetAnimeId}) 吗？\n\n此操作不可撤销！`)) {
+            try {
+                await apiFetch(`/api/ui/library/anime/${sourceAnimeId}/reassociate`, {
+                    method: 'POST',
+                    body: JSON.stringify({ target_anime_id: targetAnimeId })
+                });
+                alert("关联成功！");
+                reassociateView.classList.add('hidden');
+                document.querySelector('.nav-link[data-view="library-view"]').click(); // Go back to library and refresh
+            } catch (error) {
+                alert(`关联失败: ${error.message}`);
+            }
+        }
+    }
     // --- Episode List View ---
     async function showEpisodeListView(sourceId, animeTitle, animeId) {
         animeDetailView.classList.add('hidden');

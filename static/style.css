@@ -289,6 +289,22 @@ header {
     margin: 0 0 10px 0;
 }
 
+/* New style for header with action buttons */
+.view-header-with-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 15px;
+}
+
+.view-header-with-actions h2 {
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
 /* 编辑表单中的占位符文本样式 */
 #edit-anime-form input::placeholder {
     text-align: left;
@@ -951,4 +967,33 @@ header {
 
 .egid-detail-list .episode-item {
     padding: 5px 0;
+}
+
+/* Reassociate View Table Styles */
+#reassociate-target-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+#reassociate-target-table th, #reassociate-target-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* New style for section headers with an action button */
+.section-header-with-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.section-header-with-action h2 {
+    border: none;
+    padding: 0;
+    margin: 0;
 }

@@ -535,6 +535,34 @@ async def update_anime_details(pool: aiomysql.Pool, anime_id: int, update_data: 
                 logging.getLogger(__name__).error(f"更新番剧详情 (ID: {anime_id}) 时出错: {e}", exc_info=True)
                 return False
 
+async def reassociate_anime_sources(pool: aiomysql.Pool, source_anime_id: int, target_anime_id: int) -> bool:
+    """将一个作品的所有数据源移动到另一个作品，并删除原作品。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            try:
+                await conn.begin()
+                # 1. 检查源和目标是否存在
+                await cursor.execute("SELECT 1 FROM anime WHERE id = %s", (source_anime_id,))
+                if not await cursor.fetchone(): return False
+                await cursor.execute("SELECT 1 FROM anime WHERE id = %s", (target_anime_id,))
+                if not await cursor.fetchone(): return False
+
+                # 2. 将所有源的 anime_id 更新为目标 ID
+                # 使用 INSERT ... ON DUPLICATE KEY UPDATE 来处理潜在的唯一键冲突
+                # 如果冲突（即目标作品已有关联的相同源），则删除源作品的这个关联
+                await cursor.execute("""
+                    UPDATE anime_sources SET anime_id = %s WHERE anime_id = %s
+                """, (target_anime_id, source_anime_id))
+
+                # 3. 删除原作品记录 (ON DELETE CASCADE 会处理 aliases 和 metadata)
+                await cursor.execute("DELETE FROM anime WHERE id = %s", (source_anime_id,))
+                await conn.commit()
+                return True
+            except Exception as e:
+                await conn.rollback()
+                logging.error(f"重新关联源从 {source_anime_id} 到 {target_anime_id} 时出错: {e}", exc_info=True)
+                return False
+
 async def update_episode_info(pool: aiomysql.Pool, episode_id: int, title: str, episode_index: int, source_url: Optional[str]) -> bool:
     """更新分集信息"""
     async with pool.acquire() as conn:

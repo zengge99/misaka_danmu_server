@@ -134,6 +134,26 @@ async def edit_anime_info(
     logger.info(f"用户 '{current_user.username}' 更新了番剧 ID: {anime_id} 的详细信息。")
     return
 
+class ReassociationRequest(models.BaseModel):
+    target_anime_id: int
+
+@router.post("/library/anime/{source_anime_id}/reassociate", status_code=status.HTTP_204_NO_CONTENT, summary="重新关联作品的数据源")
+async def reassociate_anime_sources(
+    source_anime_id: int,
+    request_data: ReassociationRequest,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """将一个作品的所有数据源移动到另一个作品，并删除原作品。"""
+    if source_anime_id == request_data.target_anime_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="源作品和目标作品不能相同。")
+
+    success = await crud.reassociate_anime_sources(pool, source_anime_id, request_data.target_anime_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="源作品或目标作品未找到，或操作失败。")
+    logger.info(f"用户 '{current_user.username}' 将作品 ID {source_anime_id} 的源关联到了 ID {request_data.target_anime_id}。")
+    return
+
 @router.put("/library/source/{source_id}/favorite", status_code=status.HTTP_204_NO_CONTENT, summary="切换数据源的精确标记状态")
 async def toggle_source_favorite(
     source_id: int,

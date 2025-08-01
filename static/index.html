@@ -116,8 +116,14 @@
                         </table>
                     </div>
                     <div id="edit-anime-view" class="content-view hidden">
-                        <div class="form-card">
+                        <div class="view-header-with-actions">
                             <h2>编辑影视信息</h2>
+                            <div class="header-actions">
+                                <button id="reassociate-sources-btn">调整关联数据源</button>
+                                <button id="clear-all-cache-in-edit-btn" class="secondary-btn">清除所有缓存</button>
+                            </div>
+                        </div>
+                        <div class="form-card">
                             <form id="edit-anime-form">
                                 <input type="hidden" id="edit-anime-id">
                                 <div class="form-row">
@@ -250,6 +256,25 @@
                         <div id="egid-content-container">
                             <!-- Dynamic content (group list or episode list) will be rendered here -->
                         </div>
+                    </div>
+                    <div id="reassociate-view" class="content-view hidden">
+                        <div class="view-header-flexible">
+                            <h2 id="reassociate-view-title">调整关联数据源</h2>
+                            <button id="back-to-edit-from-reassociate-btn">&lt; 返回编辑</button>
+                        </div>
+                        <p id="reassociate-info-text"></p>
+                        <div class="library-header">
+                            <h3>选择目标作品</h3>
+                            <input type="text" id="reassociate-search-input" placeholder="搜索目标作品...">
+                        </div>
+                        <table id="reassociate-target-table">
+                            <thead>
+                                <tr>
+                                    <th>作品信息</th><th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
                     <div id="anime-detail-view" class="content-view hidden">
                         <div class="view-header-flexible">
