@@ -1619,14 +1619,20 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadAndRenderEpisodeGroupDetails(groupId, groupName) {
         egidContentContainer.innerHTML = '<p>正在加载分集详情...</p>';
         egidViewTitle.textContent = `分集详情: ${groupName}`;
+        const tmdbId = egidView.dataset.tmdbId; // Get the stored tv_id
+
+        if (!tmdbId) {
+            egidContentContainer.innerHTML = `<p class="error">错误：无法获取关联的 TMDB ID。</p>`;
+            return;
+        }
     
         try {
-            const details = await apiFetch(`/api/tmdb/episode_group/${groupId}`);
+            // Pass tv_id as a query parameter
+            const details = await apiFetch(`/api/tmdb/episode_group/${groupId}?tv_id=${tmdbId}`);
             
             const backBtn = document.createElement('button');
             backBtn.textContent = '< 返回剧集组列表';
             backBtn.addEventListener('click', () => {
-                const tmdbId = egidView.dataset.tmdbId;
                 const animeTitle = document.getElementById('edit-anime-title').value.trim();
                 egidViewTitle.textContent = `为 "${animeTitle}" 选择剧集组`;
                 loadAndRenderEpisodeGroups(tmdbId);
@@ -1645,7 +1651,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 season.episodes.forEach(ep => {
                     const epItem = document.createElement('li');
                     epItem.className = 'episode-item';
-                    epItem.textContent = `S${ep.season_number}E${ep.episode_number}: ${ep.name}`;
+                    
+                    const absNum = ep.order + 1;
+                    const seasonNum = ep.season_number;
+                    const epNum = ep.episode_number;
+                    const nameCn = ep.name; // 'name' is now Chinese name
+                    const nameJp = ep.name_jp;
+
+                    let titleHtml = `<b>[S${seasonNum}E${epNum}] (Abs.${absNum})</b>: ${nameCn || '无标题'}`;
+                    if (nameJp && nameJp !== nameCn) {
+                        titleHtml += ` / ${nameJp}`;
+                    }
+                    
+                    epItem.innerHTML = titleHtml;
                     ul.appendChild(epItem);
                 });
             });

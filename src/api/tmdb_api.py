@@ -126,6 +126,7 @@ class TMDBEpisodeInGroupDetail(BaseModel):
     season_number: int
     air_date: Optional[str] = None
     overview: Optional[str] = ""
+    order: int
 
 class TMDBGroupInGroupDetail(BaseModel):
     id: str
@@ -179,6 +180,34 @@ class TMDBEpisodeGroupDetails(BaseModel):
     network: Optional[Dict[str, Any]] = None
     type: int
 
+# --- Models for Enriched Episode Group Details ---
+
+class EnrichedTMDBEpisodeInGroupDetail(BaseModel):
+    id: int
+    name: str # This will be the Chinese name
+    episode_number: int
+    season_number: int
+    air_date: Optional[str] = None
+    overview: Optional[str] = ""
+    order: int
+    name_jp: Optional[str] = None
+    image_url: Optional[str] = None
+
+class EnrichedTMDBGroupInGroupDetail(BaseModel):
+    id: str
+    name: str
+    order: int
+    episodes: List[EnrichedTMDBEpisodeInGroupDetail]
+
+class EnrichedTMDBEpisodeGroupDetails(TMDBEpisodeGroupDetails):
+    groups: List[EnrichedTMDBGroupInGroupDetail]
+
+class TMDBEpisodeWithStill(BaseModel):
+    id: int
+    still_path: Optional[str] = None
+
+class TMDBSeasonDetails(BaseModel):
+    episodes: List[TMDBEpisodeWithStill]
 
 @router.get("/search/tv", response_model=List[TMDBSearchResponseItem], summary="搜索 TMDB 电视剧")
 async def search_tmdb_subjects(
@@ -380,21 +409,82 @@ async def get_tmdb_episode_groups(
         data = TMDBEpisodeGroupList.model_validate(response.json())
         return data.results
 
-@router.get("/episode_group/{group_id}", response_model=TMDBEpisodeGroupDetails, summary="获取特定剧集组的详情")
+@router.get("/episode_group/{group_id}", response_model=EnrichedTMDBEpisodeGroupDetails, summary="获取特定剧集组的详情")
 async def get_tmdb_episode_group_details(
     group_id: str = Path(..., description="TMDB剧集组ID"),
+    tv_id: int = Query(..., description="TMDB电视剧ID, 用于获取图片"),
     client: httpx.AsyncClient = Depends(get_tmdb_client),
+    pool: aiomysql.Pool = Depends(get_db_pool),
 ):
     async with client:
-        params = {"language": "zh-CN"}
-        response = await client.get(f"/tv/episode_group/{group_id}", params=params)
-        if response.status_code == 401:
+        # Step 1: Fetch details in parallel for Chinese and Japanese
+        zh_task = client.get(f"/tv/episode_group/{group_id}", params={"language": "zh-CN"})
+        ja_task = client.get(f"/tv/episode_group/{group_id}", params={"language": "ja-JP"})
+        zh_response, ja_response = await asyncio.gather(zh_task, ja_task, return_exceptions=True)
+
+        # Handle primary (Chinese) response errors
+        if isinstance(zh_response, Exception):
+            logger.error(f"Failed to fetch Chinese details for group {group_id}: {zh_response}")
+            raise HTTPException(status_code=500, detail="Failed to fetch episode group details.")
+        if zh_response.status_code == 401:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="TMDB API Key is invalid.")
-        if response.status_code == 404:
+        if zh_response.status_code == 404:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode group not found.")
-        response.raise_for_status()
+        zh_response.raise_for_status()
         
-        details = TMDBEpisodeGroupDetails.model_validate(response.json())
+        # Use the Chinese response as the base
+        details = TMDBEpisodeGroupDetails.model_validate(zh_response.json())
         # 按照 order 字段对剧集组进行排序
         details.groups.sort(key=lambda g: g.order)
-        return details
+
+        # Step 2: Build Japanese name map
+        ja_name_map = {}
+        if isinstance(ja_response, httpx.Response) and ja_response.status_code == 200:
+            try:
+                ja_details = TMDBEpisodeGroupDetails.model_validate(ja_response.json())
+                for group in ja_details.groups:
+                    for episode in group.episodes:
+                        ja_name_map[episode.id] = episode.name
+            except ValidationError as e:
+                logger.warning(f"Failed to parse Japanese details for group {group_id}: {e}")
+
+        # Step 3: Fetch image paths by fetching season details
+        image_map = {}
+        season_numbers = {ep.season_number for group in details.groups for ep in group.episodes}
+        
+        async def fetch_season_stills(season_num: int):
+            try:
+                res = await client.get(f"/tv/{tv_id}/season/{season_num}")
+                res.raise_for_status()
+                season_details = TMDBSeasonDetails.model_validate(res.json())
+                return {ep.id: ep.still_path for ep in season_details.episodes if ep.still_path}
+            except Exception as e:
+                logger.warning(f"Failed to fetch stills for season {season_num} of TV {tv_id}: {e}")
+                return {}
+
+        if season_numbers:
+            season_tasks = [fetch_season_stills(s_num) for s_num in season_numbers]
+            season_results = await asyncio.gather(*season_tasks)
+            for season_map in season_results:
+                image_map.update(season_map)
+
+        # Step 4: Construct final enriched response
+        image_base_url = await _get_robust_image_base_url(pool)
+        enriched_groups = []
+        for group in details.groups:
+            enriched_episodes = []
+            for episode in group.episodes:
+                still_path = image_map.get(episode.id)
+                enriched_episodes.append(EnrichedTMDBEpisodeInGroupDetail(
+                    id=episode.id, name=episode.name, episode_number=episode.episode_number,
+                    season_number=episode.season_number, air_date=episode.air_date,
+                    overview=episode.overview, order=episode.order,
+                    name_jp=ja_name_map.get(episode.id),
+                    image_url=f"{image_base_url.rstrip('/')}{still_path}" if still_path else None
+                ))
+            enriched_groups.append(EnrichedTMDBGroupInGroupDetail(
+                id=group.id, name=group.name, order=group.order, episodes=enriched_episodes
+            ))
+
+        # Create the final response object using the base details and the new enriched groups
+        return EnrichedTMDBEpisodeGroupDetails(**details.model_dump(exclude={'groups'}), groups=enriched_groups)
