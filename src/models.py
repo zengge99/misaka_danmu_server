@@ -85,6 +85,7 @@ class AnimeDetailUpdate(BaseModel):
     title: str = Field(..., min_length=1, description="新的影视名称")
     type: str
     season: int = Field(..., ge=1, description="新的季度")
+    episode_count: Optional[int] = Field(None, ge=1, description="新的集数")
     tmdb_id: Optional[str] = None
     tmdb_episode_group_id: Optional[str] = None
     bangumi_id: Optional[str] = None
@@ -110,6 +111,7 @@ class AnimeFullDetails(BaseModel):
     title: str
     type: str
     season: int
+    episode_count: Optional[int] = None
     image_url: Optional[str] = None
     tmdb_id: Optional[str] = None
     tmdb_episode_group_id: Optional[str] = None

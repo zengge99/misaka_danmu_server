@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const editEpisodeView = document.getElementById('edit-episode-view');
     const editAnimeTypeSelect = document.getElementById('edit-anime-type');
     const editAnimeSeasonInput = document.getElementById('edit-anime-season');
+    const editAnimeEpisodeCountInput = document.getElementById('edit-anime-episode-count');
     const editEpisodeForm = document.getElementById('edit-episode-form');
     const editAnimeForm = document.getElementById('edit-anime-form');
     const librarySearchInput = document.getElementById('library-search-input');
@@ -418,6 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Get related elements
         const seasonInput = document.getElementById('edit-anime-season');
+        const episodeCountInput = document.getElementById('edit-anime-episode-count');
         const egidInput = document.getElementById('edit-anime-egid');
         const seasonIndicator = seasonInput.nextElementSibling;
         const egidWrapper = egidInput.closest('.input-with-icon');
@@ -431,6 +433,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (seasonIndicator && seasonIndicator.classList.contains('disabled-indicator')) {
             seasonIndicator.classList.toggle('hidden', !isMovie);
+        }
+
+        // Handle Episode Count input
+        const episodeCountIndicator = episodeCountInput.nextElementSibling;
+        episodeCountInput.disabled = isMovie;
+        if (isMovie) {
+            episodeCountInput.value = 1;
+        }
+        if (episodeCountIndicator && episodeCountIndicator.classList.contains('disabled-indicator')) {
+            episodeCountIndicator.classList.toggle('hidden', !isMovie);
         }
 
         // Handle Episode Group ID input
@@ -620,6 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const animeId = document.getElementById('edit-anime-id').value;
         const newSeason = parseInt(document.getElementById('edit-anime-season').value, 10);
+        const episodeCountValue = document.getElementById('edit-anime-episode-count').value;
 
         if (isNaN(newSeason) || newSeason < 1) {
             alert("季度数必须是一个大于0的数字。");
@@ -630,6 +643,7 @@ document.addEventListener('DOMContentLoaded', () => {
             title: document.getElementById('edit-anime-title').value,
             type: document.getElementById('edit-anime-type').value,
             season: newSeason,
+            episode_count: episodeCountValue ? parseInt(episodeCountValue, 10) : null,
             tmdb_id: document.getElementById('edit-anime-tmdbid').value || null,
             tmdb_episode_group_id: document.getElementById('edit-anime-egid').value || null,
             bangumi_id: document.getElementById('edit-anime-bgmid').value || null,
@@ -1483,6 +1497,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('edit-anime-title').value = details.title;
             editAnimeTypeSelect.value = details.type;
             document.getElementById('edit-anime-season').value = details.season;
+            document.getElementById('edit-anime-episode-count').value = details.episode_count || '';
             document.getElementById('edit-anime-tmdbid').value = details.tmdb_id || '';
             document.getElementById('edit-anime-egid').value = details.tmdb_episode_group_id || '';
             document.getElementById('edit-anime-bgmid').value = details.bangumi_id || '';
@@ -2091,8 +2106,15 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (action === 'view_episodes' && animeId) {
             showEpisodeListView(sourceId, title, animeId);
         } else if (action === 'delete') {
-            // Placeholder for deleting a source
-            alert(`功能 '删除源' (ID: ${sourceId}) 尚未实现。`);
+            if (confirm(`您确定要删除这个数据源吗？\n此操作将删除其所有分集和弹幕，且不可恢复。`)) {
+                apiFetch(`/api/ui/library/source/${sourceId}`, {
+                    method: 'DELETE',
+                }).then(() => {
+                    showAnimeDetailView(animeId); // 刷新视图以显示更新后的源列表
+                }).catch(error => {
+                    alert(`删除失败: ${error.message}`);
+                });
+            }
         } else if (action === 'favorite') {
             apiFetch(`/api/ui/library/source/${sourceId}/favorite`, {
                 method: 'PUT',

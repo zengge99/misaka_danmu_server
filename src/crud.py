@@ -20,8 +20,8 @@ async def get_library_anime(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
                     a.title,
             a.type,
                     a.season,
-                    a.created_at as createdAt,
-                    (SELECT COUNT(DISTINCT e.id) FROM anime_sources s JOIN episode e ON s.id = e.source_id WHERE s.anime_id = a.id) as episodeCount,
+                    a.created_at as createdAt,                    
+                    COALESCE(a.episode_count, (SELECT COUNT(DISTINCT e.id) FROM anime_sources s JOIN episode e ON s.id = e.source_id WHERE s.anime_id = a.id)) as episodeCount,
                     (SELECT COUNT(*) FROM anime_sources WHERE anime_id = a.id) as sourceCount
                 FROM anime a
                 GROUP BY a.id
@@ -465,6 +465,7 @@ async def get_anime_full_details(pool: aiomysql.Pool, anime_id: int) -> Optional
                     a.title,
                     a.type,
                     a.season,
+                    a.episode_count,
                     a.image_url,
                     m.tmdb_id,
                     m.tmdb_episode_group_id,
@@ -499,8 +500,8 @@ async def update_anime_details(pool: aiomysql.Pool, anime_id: int, update_data: 
 
                 # 1. 更新 anime 表
                 await cursor.execute(
-                    "UPDATE anime SET title = %s, type = %s, season = %s WHERE id = %s",
-                    (update_data.title, update_data.type, update_data.season, anime_id)
+                    "UPDATE anime SET title = %s, type = %s, season = %s, episode_count = %s WHERE id = %s",
+                    (update_data.title, update_data.type, update_data.season, update_data.episode_count, anime_id)
                 )
                 
                 # 2. 更新 anime_metadata 表 (使用 INSERT ... ON DUPLICATE KEY UPDATE)
@@ -535,26 +536,60 @@ async def update_anime_details(pool: aiomysql.Pool, anime_id: int, update_data: 
                 logging.getLogger(__name__).error(f"更新番剧详情 (ID: {anime_id}) 时出错: {e}", exc_info=True)
                 return False
 
+async def delete_anime_source(pool: aiomysql.Pool, source_id: int, conn: Optional[aiomysql.Connection] = None) -> bool:
+    """
+    删除一个数据源及其所有关联的分集和弹幕。
+    如果提供了 conn 参数，则在该连接上执行，不进行事务管理。
+    """
+    _conn = conn or await pool.acquire()
+    try:
+        async with _conn.cursor() as cursor:
+            if not conn: await _conn.begin()
+
+            await cursor.execute("SELECT 1 FROM anime_sources WHERE id = %s", (source_id,))
+            if not await cursor.fetchone():
+                if not conn: await _conn.rollback()
+                return False
+
+            await cursor.execute("SELECT id FROM episode WHERE source_id = %s", (source_id,))
+            episode_ids = [row[0] for row in await cursor.fetchall()]
+
+            if episode_ids:
+                format_strings = ','.join(['%s'] * len(episode_ids))
+                await cursor.execute(f"DELETE FROM comment WHERE episode_id IN ({format_strings})", tuple(episode_ids))
+                await cursor.execute(f"DELETE FROM episode WHERE id IN ({format_strings})", tuple(episode_ids))
+
+            await cursor.execute("DELETE FROM anime_sources WHERE id = %s", (source_id,))
+            
+            if not conn: await _conn.commit()
+            return True
+    except Exception as e:
+        if not conn: await _conn.rollback()
+        logging.error(f"删除源 (ID: {source_id}) 时发生错误: {e}", exc_info=True)
+        return False
+    finally:
+        if not conn: pool.release(_conn)
+
 async def reassociate_anime_sources(pool: aiomysql.Pool, source_anime_id: int, target_anime_id: int) -> bool:
-    """将一个作品的所有数据源移动到另一个作品，并删除原作品。"""
+    """将一个作品的所有数据源移动到另一个作品，并删除原作品。如果目标作品已存在相同源，则会删除源作品的重复源及其数据。"""
     async with pool.acquire() as conn:
-        async with conn.cursor() as cursor:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
             try:
                 await conn.begin()
-                # 1. 检查源和目标是否存在
                 await cursor.execute("SELECT 1 FROM anime WHERE id = %s", (source_anime_id,))
                 if not await cursor.fetchone(): return False
                 await cursor.execute("SELECT 1 FROM anime WHERE id = %s", (target_anime_id,))
                 if not await cursor.fetchone(): return False
 
-                # 2. 将所有源的 anime_id 更新为目标 ID
-                # 使用 INSERT ... ON DUPLICATE KEY UPDATE 来处理潜在的唯一键冲突
-                # 如果冲突（即目标作品已有关联的相同源），则删除源作品的这个关联
-                await cursor.execute("""
-                    UPDATE anime_sources SET anime_id = %s WHERE anime_id = %s
-                """, (target_anime_id, source_anime_id))
+                await cursor.execute("SELECT id, provider_name, media_id FROM anime_sources WHERE anime_id = %s", (source_anime_id,))
+                source_sources = await cursor.fetchall()
+                for src in source_sources:
+                    try:
+                        await cursor.execute("UPDATE anime_sources SET anime_id = %s WHERE id = %s", (target_anime_id, src['id']))
+                    except aiomysql.IntegrityError:
+                        logging.info(f"处理重复源: 正在删除来自源作品 {source_anime_id} 的 {src['provider_name']} (media_id: {src['media_id']})")
+                        await delete_anime_source(pool, src['id'], conn)
 
-                # 3. 删除原作品记录 (ON DELETE CASCADE 会处理 aliases 和 metadata)
                 await cursor.execute("DELETE FROM anime WHERE id = %s", (source_anime_id,))
                 await conn.commit()
                 return True

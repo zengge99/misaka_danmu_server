@@ -98,6 +98,7 @@ async def init_db_tables(app: FastAPI):
               `type` ENUM('tv_series', 'movie', 'ova', 'other') NOT NULL DEFAULT 'tv_series',
               `image_url` VARCHAR(512) NULL,
               `season` INT NOT NULL DEFAULT 1,
+              `episode_count` INT NULL DEFAULT NULL,
               `source_url` VARCHAR(512) NULL,
               `created_at` TIMESTAMP NULL,
               PRIMARY KEY (`id`),
@@ -361,6 +362,16 @@ async def init_db_tables(app: FastAPI):
             try:
                 await cursor.execute("ALTER TABLE `bangumi_auth` ADD COLUMN `authorized_at` TIMESTAMP NULL AFTER `expires_at`;")
                 print("'bangumi_auth' 表 'authorized_at' 字段添加完成。")
+            except aiomysql.OperationalError as e:
+                if e.args[0] == 1060: # Duplicate column name
+                    pass
+                else:
+                    raise
+
+            # 迁移检查：为 anime 表添加 episode_count
+            try:
+                await cursor.execute("ALTER TABLE `anime` ADD COLUMN `episode_count` INT NULL DEFAULT NULL AFTER `season`;")
+                print("'anime' 表 'episode_count' 字段添加完成。")
             except aiomysql.OperationalError as e:
                 if e.args[0] == 1060: # Duplicate column name
                     pass

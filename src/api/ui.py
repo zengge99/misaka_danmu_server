@@ -154,6 +154,19 @@ async def reassociate_anime_sources(
     logger.info(f"用户 '{current_user.username}' 将作品 ID {source_anime_id} 的源关联到了 ID {request_data.target_anime_id}。")
     return
 
+@router.delete("/library/source/{source_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除指定的数据源")
+async def delete_source_from_anime(
+    source_id: int,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """删除一个数据源及其所有关联的分集和弹幕。"""
+    deleted = await crud.delete_anime_source(pool, source_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
+    logger.info(f"用户 '{current_user.username}' 删除了数据源 ID: {source_id}。")
+    return
+
 @router.put("/library/source/{source_id}/favorite", status_code=status.HTTP_204_NO_CONTENT, summary="切换数据源的精确标记状态")
 async def toggle_source_favorite(
     source_id: int,
