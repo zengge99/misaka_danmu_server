@@ -1654,13 +1654,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     const absNum = ep.order + 1;
                     const seasonNum = ep.season_number;
-                    const nameCn = ep.name; // 'name' is now Chinese name
+                    const epNum = ep.episode_number;
+                    const nameCn = ep.name;
                     const nameJp = ep.name_jp;
 
                     const seasonStr = String(seasonNum).padStart(2, '0');
-                    const absEpStr = String(absNum).padStart(2, '0');
+                    const epStr = String(epNum).padStart(2, '0');
 
-                    let titleHtml = `第${absNum}集（绝对：S${seasonStr}E${absEpStr}）| ${nameCn || '无标题'}`;
+                    let titleHtml = `第${absNum}集（绝对：S${seasonStr}E${epStr}）| ${nameCn || '无标题'}`;
                     if (nameJp && nameJp !== nameCn) {
                         titleHtml += ` / ${nameJp}`;
                     }
