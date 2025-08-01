@@ -82,6 +82,13 @@ input[type="number"] {
     font-size: 16px;
 }
 
+/* Style for disabled inputs to make them more obviously inactive */
+input:disabled {
+    background-color: #f5f7fa; /* A light grey */
+    color: #c0c4cc; /* A lighter text color */
+    cursor: not-allowed;
+}
+
 select {
     padding: 10px;
     border: 1px solid var(--border-color);
@@ -416,6 +423,13 @@ header {
     padding: 0;
     transition: background-color 0.2s;
     color: var(--primary-color);
+}
+
+/* New style for the red cross indicator on disabled fields */
+.disabled-indicator {
+    color: var(--error-color);
+    font-size: 1.2em;
+    margin-left: 5px; /* Add some space between the input and the icon */
 }
 
 /* Episode List View Styles */

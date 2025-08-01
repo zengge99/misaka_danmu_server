@@ -383,11 +383,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleAnimeTypeChange() {
-        if (editAnimeTypeSelect.value === 'movie') {
-            editAnimeSeasonInput.value = 1;
-            editAnimeSeasonInput.disabled = true;
-        } else {
-            editAnimeSeasonInput.disabled = false;
+        const isMovie = editAnimeTypeSelect.value === 'movie';
+        
+        // Get related elements
+        const seasonInput = document.getElementById('edit-anime-season');
+        const egidInput = document.getElementById('edit-anime-egid');
+        const seasonIndicator = seasonInput.nextElementSibling;
+        const egidWrapper = egidInput.closest('.input-with-icon');
+        const egidIndicator = egidWrapper.nextElementSibling;
+        const egidButton = egidWrapper.querySelector('button');
+
+        // Handle Season input
+        seasonInput.disabled = isMovie;
+        if (isMovie) {
+            seasonInput.value = 1;
+        }
+        if (seasonIndicator && seasonIndicator.classList.contains('disabled-indicator')) {
+            seasonIndicator.classList.toggle('hidden', !isMovie);
+        }
+
+        // Handle Episode Group ID input
+        egidInput.disabled = isMovie;
+        if (egidButton) {
+            egidButton.disabled = isMovie;
+        }
+        if (egidIndicator && egidIndicator.classList.contains('disabled-indicator')) {
+            egidIndicator.classList.toggle('hidden', !isMovie);
+        }
+        if (isMovie) {
+            egidInput.value = ''; // Clear the value when disabled
         }
     }
 
