@@ -1591,8 +1591,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const li = document.createElement('li');
                 li.innerHTML = `
                     <div class="info">
-                        <p class="title">${group.name}</p>
-                        <p class="meta">${group.description || '无描述'} (${group.group_count} 组, ${group.episode_count} 集)</p>
+                        <p class="title">${group.name} (${group.group_count} 组, ${group.episode_count} 集)</p>
+                        <p class="meta">${group.description || '无描述'}</p>
                     </div>
                     <div class="actions">
                         <button class="apply-group-btn">应用此组</button>

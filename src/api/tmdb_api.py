@@ -386,11 +386,15 @@ async def get_tmdb_episode_group_details(
     client: httpx.AsyncClient = Depends(get_tmdb_client),
 ):
     async with client:
-        response = await client.get(f"/tv/episode_group/{group_id}")
+        params = {"language": "zh-CN"}
+        response = await client.get(f"/tv/episode_group/{group_id}", params=params)
         if response.status_code == 401:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="TMDB API Key is invalid.")
         if response.status_code == 404:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode group not found.")
         response.raise_for_status()
         
-        return TMDBEpisodeGroupDetails.model_validate(response.json())
+        details = TMDBEpisodeGroupDetails.model_validate(response.json())
+        # 按照 order 字段对剧集组进行排序
+        details.groups.sort(key=lambda g: g.order)
+        return details
