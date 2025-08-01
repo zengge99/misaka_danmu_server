@@ -435,13 +435,16 @@ async def generic_import_task(
     try:
         scraper = manager.get_scraper(provider)
 
+        # 统一将标题中的英文冒号替换为中文冒号，作为写入数据库前的最后保障
+        normalized_title = anime_title.replace(":", "：")
+
         # 1. 在数据库中创建或获取番剧ID，并链接数据源
-        anime_id = await crud.get_or_create_anime(pool, anime_title, media_type, image_url)
+        anime_id = await crud.get_or_create_anime(pool, normalized_title, media_type, image_url)
         if douban_id:
             await crud.update_douban_id_if_not_exists(pool, anime_id, douban_id)
         source_id = await crud.link_source_to_anime(pool, anime_id, provider, media_id)
 
-        logger.info(f"媒体 '{anime_title}' (ID: {anime_id}, 类型: {media_type}) 已准备就绪。")
+        logger.info(f"媒体 '{normalized_title}' (ID: {anime_id}, 类型: {media_type}) 已准备就绪。")
 
         # 2. 获取所有分集信息
         # 将目标集数信息传递给 scraper，让其可以优化获取过程

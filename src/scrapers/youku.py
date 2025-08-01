@@ -150,7 +150,7 @@ class YoukuScraper(BaseScraper):
                 results.append(models.ProviderSearchInfo(
                     provider=self.provider_name,
                     mediaId=common_data.show_id,
-                    title=cleaned_title,
+                    title=cleaned_title.replace(":", "："),
                     type=media_type,
                     year=year,
                     imageUrl=common_data.poster_dto.v_thumb_url if common_data.poster_dto else None,

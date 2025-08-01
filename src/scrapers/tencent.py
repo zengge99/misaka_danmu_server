@@ -167,11 +167,14 @@ class TencentScraper(BaseScraper):
                     # 新增：如果搜索时指定了集数，则将其附加到结果中
                     current_episode = episode_info.get("episode") if episode_info else None
 
+                    # 在返回前统一冒号
+                    final_title = cleaned_title.replace(":", "：")
+
                     results.append(
                         models.ProviderSearchInfo(
                             provider=self.provider_name,
                             mediaId=item.doc.id,
-                            title=cleaned_title,
+                            title=final_title,
                             type=media_type,
                             year=video_info.year,
                             imageUrl=video_info.img_url,
