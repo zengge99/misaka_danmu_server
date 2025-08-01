@@ -562,6 +562,7 @@ async def save_tmdb_episode_group_mappings(
                 # 2. 准备并插入新映射
                 season_mappings_to_insert = []
                 episode_mappings_to_insert = []
+                processed_seasons = set()
 
                 # 按 order 字段对剧集组（季度）进行排序
                 sorted_groups = sorted(group_details.groups, key=lambda g: g.order)
@@ -570,9 +571,16 @@ async def save_tmdb_episode_group_mappings(
                     if not season_group.episodes:
                         continue
                     
-                    season_mappings_to_insert.append(
-                        (tmdb_tv_id, group_id, season_group.episodes[0].season_number, season_group.order)
-                    )
+                    # 一个剧集组内的多个 "group" 可能都属于同一个实际季 (e.g., 最终季 Part 1, Part 2)
+                    # 这会导致 tmdb_season_number 重复，违反唯一键约束。
+                    # 我们只为每个 tmdb_season_number 插入第一条遇到的映射。
+                    tmdb_season_num = season_group.episodes[0].season_number
+                    if tmdb_season_num not in processed_seasons:
+                        season_mappings_to_insert.append(
+                            (tmdb_tv_id, group_id, tmdb_season_num, season_group.order)
+                        )
+                        processed_seasons.add(tmdb_season_num)
+
                     for episode in season_group.episodes:
                         episode_mappings_to_insert.append(
                             (episode.id, group_id, episode.order + 1)
