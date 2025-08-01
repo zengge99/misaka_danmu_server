@@ -923,3 +923,32 @@ header {
     height: 40px;
     border-radius: 50%;
 }
+
+/* Episode Group View Styles */
+#egid-content-container .results-list-style .info {
+    flex-grow: 1;
+}
+
+#egid-content-container .results-list-style .actions {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.egid-detail-list {
+    list-style: none;
+    padding: 0;
+}
+
+.egid-detail-list .season-header {
+    font-size: 1.2em;
+    font-weight: bold;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.egid-detail-list .episode-item {
+    padding: 5px 0;
+}

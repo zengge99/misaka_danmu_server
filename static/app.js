@@ -95,6 +95,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const tmdbSearchView = document.getElementById('tmdb-search-view');
     const tmdbSearchForm = document.getElementById('tmdb-search-form');
     const tmdbSearchResultsList = document.getElementById('tmdb-search-results-list');
+
+    // EGID View Elements
+    const egidView = document.getElementById('egid-view');
+    const selectEgidBtn = document.getElementById('select-egid-btn');
+    const backToEditFromEgidBtn = document.getElementById('back-to-edit-from-egid-btn');
+    const egidContentContainer = document.getElementById('egid-content-container');
+    const egidViewTitle = document.getElementById('egid-view-title');
     // --- State ---
     let token = localStorage.getItem('danmu_api_token');
     let logRefreshInterval = null;
@@ -293,6 +300,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // New listeners for TMDB Search View
         document.getElementById('back-to-edit-anime-from-tmdb-search-btn').addEventListener('click', handleBackToEditAnime);
         tmdbSearchForm.addEventListener('submit', handleTmdbSearchSubmit);
+        // New listeners for EGID view
+        selectEgidBtn.addEventListener('click', handleSelectEgidBtnClick);
+        backToEditFromEgidBtn.addEventListener('click', () => {
+            egidView.classList.add('hidden');
+            editAnimeView.classList.remove('hidden');
+        });
+        document.getElementById('edit-anime-tmdbid').addEventListener('input', updateEgidSelectButtonState);
         document.getElementById('tmdb-settings-form').addEventListener('submit', handleSaveTmdbSettings);
 
         // Listener for "apply" buttons in edit form (using event delegation)
@@ -414,6 +428,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isMovie) {
             egidInput.value = ''; // Clear the value when disabled
         }
+        updateEgidSelectButtonState();
+    }
+
+    function updateEgidSelectButtonState() {
+        const tmdbId = document.getElementById('edit-anime-tmdbid').value.trim();
+        const isMovie = document.getElementById('edit-anime-type').value === 'movie';
+        selectEgidBtn.disabled = !tmdbId || isMovie;
     }
 
     async function handleSearch(e) {
@@ -1459,6 +1480,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('edit-anime-alias-cn-3').value = details.alias_cn_3 || '';
             // Trigger change handler to set initial state of season input
             handleAnimeTypeChange();
+            updateEgidSelectButtonState();
 
         } catch (error) {
             alert(`加载编辑信息失败: ${error.message}`);
@@ -1537,6 +1559,104 @@ document.addEventListener('DOMContentLoaded', () => {
         bangumiSearchView.classList.add('hidden');
         tmdbSearchView.classList.add('hidden');
         editAnimeView.classList.remove('hidden');
+    }
+
+    async function handleSelectEgidBtnClick() {
+        const tmdbId = document.getElementById('edit-anime-tmdbid').value.trim();
+        const animeTitle = document.getElementById('edit-anime-title').value.trim();
+        if (!tmdbId) return;
+    
+        editAnimeView.classList.add('hidden');
+        egidView.classList.remove('hidden');
+        egidView.dataset.tmdbId = tmdbId; // Store context
+    
+        egidViewTitle.textContent = `为 "${animeTitle}" 选择剧集组`;
+        await loadAndRenderEpisodeGroups(tmdbId);
+    }
+    
+    async function loadAndRenderEpisodeGroups(tmdbId) {
+        egidContentContainer.innerHTML = '<p>正在加载剧集组...</p>';
+        try {
+            const groups = await apiFetch(`/api/tmdb/tv/${tmdbId}/episode_groups`);
+            
+            if (groups.length === 0) {
+                egidContentContainer.innerHTML = '<p>未找到任何剧集组。</p>';
+                return;
+            }
+    
+            const ul = document.createElement('ul');
+            ul.className = 'results-list-style';
+    
+            groups.forEach(group => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <div class="info">
+                        <p class="title">${group.name}</p>
+                        <p class="meta">${group.description || '无描述'} (${group.group_count} 组, ${group.episode_count} 集)</p>
+                    </div>
+                    <div class="actions">
+                        <button class="apply-group-btn">应用此组</button>
+                        <button class="view-episodes-btn">查看分集</button>
+                    </div>
+                `;
+                li.querySelector('.apply-group-btn').addEventListener('click', () => {
+                    document.getElementById('edit-anime-egid').value = group.id;
+                    backToEditFromEgidBtn.click();
+                });
+                li.querySelector('.view-episodes-btn').addEventListener('click', () => {
+                    loadAndRenderEpisodeGroupDetails(group.id, group.name);
+                });
+                ul.appendChild(li);
+            });
+            egidContentContainer.innerHTML = '';
+            egidContentContainer.appendChild(ul);
+    
+        } catch (error) {
+            egidContentContainer.innerHTML = `<p class="error">加载剧集组失败: ${error.message}</p>`;
+        }
+    }
+    
+    async function loadAndRenderEpisodeGroupDetails(groupId, groupName) {
+        egidContentContainer.innerHTML = '<p>正在加载分集详情...</p>';
+        egidViewTitle.textContent = `分集详情: ${groupName}`;
+    
+        try {
+            const details = await apiFetch(`/api/tmdb/episode_group/${groupId}`);
+            
+            const backBtn = document.createElement('button');
+            backBtn.textContent = '< 返回剧集组列表';
+            backBtn.addEventListener('click', () => {
+                const tmdbId = egidView.dataset.tmdbId;
+                const animeTitle = document.getElementById('edit-anime-title').value.trim();
+                egidViewTitle.textContent = `为 "${animeTitle}" 选择剧集组`;
+                loadAndRenderEpisodeGroups(tmdbId);
+            });
+            backBtn.style.marginBottom = '20px';
+    
+            const ul = document.createElement('ul');
+            ul.className = 'egid-detail-list';
+    
+            details.groups.forEach(season => {
+                const seasonHeader = document.createElement('li');
+                seasonHeader.className = 'season-header';
+                seasonHeader.textContent = `${season.name} (Order: ${season.order})`;
+                ul.appendChild(seasonHeader);
+    
+                season.episodes.forEach(ep => {
+                    const epItem = document.createElement('li');
+                    epItem.className = 'episode-item';
+                    epItem.textContent = `S${ep.season_number}E${ep.episode_number}: ${ep.name}`;
+                    ul.appendChild(epItem);
+                });
+            });
+    
+            egidContentContainer.innerHTML = '';
+            egidContentContainer.appendChild(backBtn);
+            egidContentContainer.appendChild(ul);
+    
+        } catch (error) {
+            egidContentContainer.innerHTML = `<p class="error">加载分集详情失败: ${error.message}</p>`;
+        }
     }
 
     // --- Episode List View ---
