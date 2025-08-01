@@ -261,24 +261,7 @@
                         </table>
                     </div>
                     <div id="episode-list-view" class="content-view hidden">
-                        <div class="episode-list-header">
-                            <h3 id="episode-list-title">分集列表</h3>
-                            <button id="back-to-detail-view-btn">&lt; 返回作品详情</button>
-                        </div>
-                        <table id="episode-list-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>剧集名</th>
-                                    <th>集数</th>
-                                    <th>弹幕数</th>
-                                    <th>采集时间</th>
-                                    <th>官方链接</th>
-                                    <th>剧集操作</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
+                        <!-- 分集列表将在这里动态生成 -->
                     </div>
                     <div id="edit-episode-view" class="content-view hidden">
                         <div class="form-card">
@@ -308,11 +291,7 @@
                         </div>
                     </div>
                     <div id="danmaku-list-view" class="content-view hidden">
-                        <div class="episode-list-header">
-                            <h3 id="danmaku-list-title">弹幕列表</h3>
-                            <button id="back-to-episodes-from-danmaku-btn">&lt; 返回分集列表</button>
-                        </div>
-                        <pre id="danmaku-content-pre"></pre>
+                        <!-- 弹幕列表将在这里动态生成 -->
                     </div>
                     <div id="task-manager-view" class="content-view hidden">
                         <h2>任务管理器</h2>
@@ -478,73 +457,6 @@
             </div>
         </div>
     </div>
-
-    <!-- HTML Templates for dynamic content -->
-    <template id="search-result-item-template">
-        <li>
-            <div class="result-item-left">
-                <input type="checkbox">
-                <img class="poster" src="/static/placeholder.png" referrerpolicy="no-referrer" alt="poster">
-                <div class="info">
-                    <p class="title"></p>
-                    <p class="meta"></p>
-                </div>
-            </div>
-            <button>导入弹幕</button>
-        </li>
-    </template>
-
-    <template id="generic-search-result-item-template">
-        <li>
-            <div class="result-item-left">
-                <img class="poster" src="/static/placeholder.png" referrerpolicy="no-referrer" alt="poster">
-                <div class="info">
-                    <p class="title"></p>
-                    <p class="meta"></p>
-                </div>
-            </div>
-            <button>选择</button>
-        </li>
-    </template>
-
-    <template id="egid-selection-item-template">
-        <li style="cursor: pointer;">
-            <div class="info">
-                <p class="title"></p>
-                <p class="meta"></p>
-            </div>
-        </li>
-    </template>
-
-    <template id="egid-season-group-template">
-        <div class="egid-season-group">
-            <h4></h4>
-            <ul></ul>
-        </div>
-    </template>
-
-    <template id="egid-episode-item-template">
-        <li></li>
-    </template>
-
-    <template id="episode-list-item-template">
-        <tr>
-            <td class="episode-id"></td>
-            <td class="episode-title"></td>
-            <td class="episode-index"></td>
-            <td class="episode-comment-count"></td>
-            <td class="episode-fetched-at"></td>
-            <td class="episode-source-url"></td>
-            <td class="actions-cell">
-                <div class="action-buttons-wrapper">
-                    <button class="action-btn edit-episode-btn" title="编辑剧集">✏️</button>
-                    <button class="action-btn refresh-episode-btn" title="刷新剧集">🔄</button>
-                    <button class="action-btn view-danmaku-btn" title="查看具体弹幕">💬</button>
-                    <button class="action-btn delete-episode-btn" title="删除集">🗑️</button>
-                </div>
-            </td>
-        </tr>
-    </template>
 
     <script src="/static/app.js"></script>
 </body>
