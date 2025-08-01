@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 
@@ -8,7 +9,7 @@ import aiomysql
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from .. import crud, models, security
 from ..config import settings
@@ -17,6 +18,24 @@ from ..database import get_db_pool
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+def _clean_movie_title(title: Optional[str]) -> Optional[str]:
+    """
+    从标题中移除 "剧场版" 或 "The Movie" 等词语。
+    """
+    if not title:
+        return None
+    # A list of phrases to remove, case-insensitively
+    phrases_to_remove = ["劇場版", "the movie"]
+    
+    cleaned_title = title
+    for phrase in phrases_to_remove:
+        # This regex removes the phrase, optional surrounding whitespace, and an optional trailing colon.
+        cleaned_title = re.sub(r'\s*' + re.escape(phrase) + r'\s*:?', '', cleaned_title, flags=re.IGNORECASE)
+
+    # Clean up any double spaces that might result from the removal and leading/trailing separators
+    cleaned_title = re.sub(r'\s{2,}', ' ', cleaned_title).strip().strip(':- ')
+    
+    return cleaned_title
 # --- Pydantic Models for Bangumi API ---
 
 class BangumiTokenResponse(BaseModel):
@@ -43,6 +62,13 @@ class BangumiSearchSubject(BaseModel):
     date: Optional[str] = None
     infobox: Optional[List[InfoboxItem]] = None
 
+    @model_validator(mode='after')
+    def clean_titles(self) -> 'BangumiSearchSubject':
+        """在模型验证后清理主标题和中文标题。"""
+        self.name = _clean_movie_title(self.name)
+        self.name_cn = _clean_movie_title(self.name_cn)
+        return self
+
     @property
     def display_name(self) -> str:
         return self.name_cn or self.name
@@ -59,7 +85,7 @@ class BangumiSearchSubject(BaseModel):
 
     @property
     def aliases(self) -> Dict[str, Any]:
-        """从 infobox 提取别名。"""
+        """从 infobox 提取别名，并进行分类。"""
         data = {
             "name_en": None,
             "name_romaji": None,
@@ -72,16 +98,29 @@ class BangumiSearchSubject(BaseModel):
             if isinstance(value, str):
                 return [v.strip() for v in value.split('/') if v.strip()]
             elif isinstance(value, list):
+                # 确保 v 是一个字典并且有 'v' 键
                 return [v.get("v", "").strip() for v in value if isinstance(v, dict) and v.get("v")]
             return []
 
+        all_raw_aliases = []
+
         for item in self.infobox:
             key, value = item.key.strip(), item.value
-            if key == "英文名" and isinstance(value, str): data["name_en"] = value.strip()
-            elif key == "罗马字" and isinstance(value, str): data["name_romaji"] = value.strip()
-            elif key == "别名": data["aliases_cn"].extend(extract_value(value))
+            if key == "英文名" and isinstance(value, str):
+                data["name_en"] = _clean_movie_title(value.strip())
+            elif key == "罗马字" and isinstance(value, str):
+                data["name_romaji"] = _clean_movie_title(value.strip())
+            elif key == "别名":
+                all_raw_aliases.extend(extract_value(value))
+
+        # 1. 过滤出纯中文的别名
+        # 使用正则表达式匹配是否包含中文字符
+        chinese_char_pattern = re.compile(r'[\u4e00-\u9fa5]')
+        cleaned_aliases = [_clean_movie_title(alias) for alias in all_raw_aliases]
+        data["aliases_cn"] = [alias for alias in cleaned_aliases if alias and chinese_char_pattern.search(alias)]
         
-        data["aliases_cn"] = list(dict.fromkeys(data["aliases_cn"])) # 去重
+        # 2. 去重
+        data["aliases_cn"] = list(dict.fromkeys(data["aliases_cn"]))
         return data
 
     @property

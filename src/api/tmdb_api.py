@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 
 import aiomysql
 import httpx
@@ -13,6 +14,26 @@ from ..database import get_db_pool
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _clean_movie_title(title: Optional[str]) -> Optional[str]:
+    """
+    从标题中移除 "剧场版" 或 "The Movie" 等词语。
+    """
+    if not title:
+        return None
+    # A list of phrases to remove, case-insensitively
+    phrases_to_remove = ["劇場版", "the movie"]
+    
+    cleaned_title = title
+    for phrase in phrases_to_remove:
+        # This regex removes the phrase, optional surrounding whitespace, and an optional trailing colon.
+        cleaned_title = re.sub(r'\s*' + re.escape(phrase) + r'\s*:?', '', cleaned_title, flags=re.IGNORECASE)
+
+    # Clean up any double spaces that might result from the removal and leading/trailing separators
+    cleaned_title = re.sub(r'\s{2,}', ' ', cleaned_title).strip().strip(':- ')
+    
+    return cleaned_title
 
 
 async def _get_robust_image_base_url(pool: aiomysql.Pool) -> str:
@@ -109,12 +130,14 @@ class TMDBAlternativeTitles(BaseModel):
 class TMDBTVDetails(BaseModel):
     id: int
     name: str
+    original_language: str
     original_name: str
     alternative_titles: Optional[TMDBAlternativeTitles] = None
     external_ids: Optional[TMDBExternalIDs] = None
 
 class TMDBMovieDetails(BaseModel):
     id: int
+    original_language: str
     title: str
     original_title: str
     alternative_titles: Optional[TMDBAlternativeTitles] = None
@@ -243,24 +266,55 @@ async def get_tmdb_details(
         details_response.raise_for_status()
         details_json = details_response.json()
 
+        # Initialize variables
+        name_en = None
+        name_jp = None
+        name_romaji = None
+        aliases_cn = []
+        
+        # Get base details
         if media_type == "tv":
             details = TMDBTVDetails.model_validate(details_json)
-            name_en = details.original_name
-            name_romaji = None # TMDB doesn't provide this directly
+            main_title_cn = details.name
+            original_title = details.original_name
+            original_language = details.original_language
         else: # movie
             details = TMDBMovieDetails.model_validate(details_json)
-            name_en = details.original_title
-            name_romaji = None
+            main_title_cn = details.title
+            original_title = details.original_title
+            original_language = details.original_language
 
-        aliases_cn = []
+        # Process alternative titles for more accurate names
         if details.alternative_titles:
+            found_titles = {}
             for alt_title in details.alternative_titles.titles:
-                if alt_title.iso_3166_1 == "CN":
+                # Chinese Aliases
+                if alt_title.iso_3166_1 in ["CN", "HK", "TW"]:
                     aliases_cn.append(alt_title.title)
+                # Japanese Title
+                elif alt_title.iso_3166_1 == "JP":
+                    if alt_title.type == "Romaji":
+                        if 'romaji' not in found_titles: found_titles['romaji'] = alt_title.title
+                    else:
+                        if 'jp' not in found_titles: found_titles['jp'] = alt_title.title
+                # English Title (prefer US, then GB)
+                elif alt_title.iso_3166_1 == "US":
+                    if 'en' not in found_titles: found_titles['en'] = alt_title.title
+                elif alt_title.iso_3166_1 == "GB" and 'en' not in found_titles:
+                    found_titles['en'] = alt_title.title
+            
+            name_en, name_jp, name_romaji = found_titles.get('en'), found_titles.get('jp'), found_titles.get('romaji')
+
+        if not name_en and original_language == 'en': name_en = original_title
+        if not name_jp and original_language == 'ja': name_jp = original_title
+        if main_title_cn: aliases_cn.append(main_title_cn)
         
+        cleaned_aliases_cn = [_clean_movie_title(alias) for alias in aliases_cn if alias]
+
         return {
             "id": details.id,
-            "name_en": name_en,
-            "name_romaji": name_romaji,
-            "aliases_cn": list(dict.fromkeys(aliases_cn)) # Deduplicate
+            "name_en": _clean_movie_title(name_en),
+            "name_jp": _clean_movie_title(name_jp),
+            "name_romaji": _clean_movie_title(name_romaji),
+            "aliases_cn": list(dict.fromkeys(cleaned_aliases_cn)) # Deduplicate
         }
