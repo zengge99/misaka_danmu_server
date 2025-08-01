@@ -269,6 +269,19 @@ async def init_db_tables(app: FastAPI):
               INDEX `idx_absolute_episode` (`tmdb_tv_id`, `tmdb_episode_group_id`, `absolute_episode_number`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
+            # 新增：创建定时任务表
+            await cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `scheduled_tasks` (
+              `id` VARCHAR(100) NOT NULL,
+              `name` VARCHAR(255) NOT NULL,
+              `job_type` VARCHAR(50) NOT NULL,
+              `cron_expression` VARCHAR(100) NOT NULL,
+              `is_enabled` BOOLEAN NOT NULL DEFAULT TRUE,
+              `last_run_at` TIMESTAMP NULL,
+              `next_run_at` TIMESTAMP NULL,
+              PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
             print("数据表检查完成。")
 
             # --- 步骤 3.2: 为已存在的表运行 schema 迁移检查 ---

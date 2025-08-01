@@ -474,7 +474,32 @@ async def _process_single_batch_match(item: DandanBatchMatchRequestItem, pool: a
     if not parsed_info:
         return DandanMatchResponse(isMatched=False)
 
-    results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"], parsed_info.get("season"))
+    # --- 步骤 1: 尝试 TMDB 精确匹配 ---
+    potential_animes = await crud.find_animes_for_matching(pool, parsed_info["title"])
+    for anime in potential_animes:
+        if anime.get("tmdb_id") and anime.get("tmdb_episode_group_id"):
+            tmdb_results = await crud.find_episode_via_tmdb_mapping(
+                pool,
+                tmdb_id=anime["tmdb_id"],
+                group_id=anime["tmdb_episode_group_id"],
+                custom_season=parsed_info.get("season"),
+                custom_episode=parsed_info["episode"]
+            )
+            if tmdb_results:
+                # TMDB 映射是高置信度的，直接取第一个结果
+                res = tmdb_results[0]
+                dandan_type = DANDAN_TYPE_MAPPING.get(res.get('type'), "other")
+                dandan_type_desc = DANDAN_TYPE_DESC_MAPPING.get(res.get('type'), "其他")
+                match = DandanMatchInfo(
+                    episodeId=res['episodeId'], animeId=res['animeId'], animeTitle=res['animeTitle'],
+                    episodeTitle=res['episodeTitle'], type=dandan_type, typeDescription=dandan_type_desc,
+                )
+                return DandanMatchResponse(isMatched=True, matches=[match])
+
+    # --- 步骤 2: 回退到旧的模糊搜索逻辑 ---
+    results = await crud.search_episodes_in_library(
+        pool, parsed_info["title"], parsed_info["episode"], parsed_info.get("season")
+    )
 
     # 优先处理被精确标记的源
     favorited_results = [r for r in results if r.get('isFavorited')]
@@ -523,6 +548,7 @@ async def match_single_file(
 ):
     """
     通过文件名匹配弹幕库。此接口不使用文件Hash。
+    优先使用 TMDB 映射进行精确匹配，失败则回退到标题模糊搜索。
     """
     logger.info(f"收到 /match 请求, 文件名: '{request.fileName}'")
     parsed_info = _parse_filename_for_match(request.fileName)
@@ -532,8 +558,40 @@ async def match_single_file(
         logger.info(f"发送 /match 响应 (解析失败): {response.model_dump_json(indent=2)}")
         return response
 
-    results = await crud.search_episodes_in_library(pool, parsed_info["title"], parsed_info["episode"], parsed_info.get("season"))
-    logger.info(f"数据库为 '{parsed_info['title']}' (季:{parsed_info.get('season')} 集:{parsed_info.get('episode')}) 搜索到 {len(results)} 条记录")
+    # --- 步骤 1: 尝试 TMDB 精确匹配 ---
+    potential_animes = await crud.find_animes_for_matching(pool, parsed_info["title"])
+    logger.info(f"为标题 '{parsed_info['title']}' 找到 {len(potential_animes)} 个可能的库内作品进行TMDB匹配。")
+
+    for anime in potential_animes:
+        if anime.get("tmdb_id") and anime.get("tmdb_episode_group_id"):
+            logger.info(f"正在为作品 ID {anime['anime_id']} (TMDB ID: {anime['tmdb_id']}) 尝试 TMDB 映射匹配...")
+            tmdb_results = await crud.find_episode_via_tmdb_mapping(
+                pool,
+                tmdb_id=anime["tmdb_id"],
+                group_id=anime["tmdb_episode_group_id"],
+                custom_season=parsed_info.get("season"),
+                custom_episode=parsed_info["episode"]
+            )
+            if tmdb_results:
+                logger.info(f"TMDB 映射匹配成功，找到 {len(tmdb_results)} 个结果。")
+                # TMDB 映射是高置信度的，直接取第一个结果（已按收藏和源排序）
+                res = tmdb_results[0]
+                dandan_type = DANDAN_TYPE_MAPPING.get(res.get('type'), "other")
+                dandan_type_desc = DANDAN_TYPE_DESC_MAPPING.get(res.get('type'), "其他")
+                match = DandanMatchInfo(
+                    episodeId=res['episodeId'], animeId=res['animeId'], animeTitle=res['animeTitle'],
+                    episodeTitle=res['episodeTitle'], type=dandan_type, typeDescription=dandan_type_desc,
+                )
+                response = DandanMatchResponse(isMatched=True, matches=[match])
+                logger.info(f"发送 /match 响应 (TMDB 映射匹配): {response.model_dump_json(indent=2)}")
+                return response
+
+    # --- 步骤 2: 回退到旧的模糊搜索逻辑 ---
+    logger.info("TMDB 映射匹配失败或无可用映射，回退到标题模糊搜索。")
+    results = await crud.search_episodes_in_library(
+        pool, parsed_info["title"], parsed_info["episode"], parsed_info.get("season")
+    )
+    logger.info(f"模糊搜索为 '{parsed_info['title']}' (季:{parsed_info.get('season')} 集:{parsed_info.get('episode')}) 找到 {len(results)} 条记录")
     
     # 新增：对结果进行严格的标题过滤，避免模糊匹配带来的问题
     normalized_search_title = parsed_info["title"].replace("：", ":").replace(" ", "")

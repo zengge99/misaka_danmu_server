@@ -1,6 +1,7 @@
 fastapi
 uvicorn[standard]
 aiomysql
+apscheduler
 pydantic-settings
 httpx
 # 使用固定的 passlib 和 bcrypt 版本以避免兼容性问题

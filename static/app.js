@@ -71,6 +71,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const taskManagerView = document.getElementById('task-manager-view');
     const taskListUl = document.getElementById('task-list');
+    const taskManagerSubNav = taskManagerView.querySelector('.settings-sub-nav');
+    const taskManagerSubViews = taskManagerView.querySelectorAll('.settings-subview');
+    const scheduledTasksTableBody = document.querySelector('#scheduled-tasks-table tbody');
+    const addScheduledTaskBtn = document.getElementById('add-scheduled-task-btn');
+    const scheduledTaskModal = document.getElementById('scheduled-task-modal');
+    const scheduledTaskForm = document.getElementById('scheduled-task-form');
+    const scheduledTaskModalCloseBtn = document.getElementById('scheduled-task-modal-close-btn');
+    const scheduledTaskModalTitle = document.getElementById('scheduled-task-modal-title');
 
     const tokenManagerView = document.getElementById('token-manager-view');
     const tokenTableBody = document.querySelector('#token-table tbody');
@@ -339,6 +347,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Listener for the new "Clear All Cache" button in the edit view
         document.getElementById('clear-all-cache-in-edit-btn').addEventListener('click', handleClearCache);
         reassociateSearchInput.addEventListener('input', handleReassociateSearch);
+        // New listeners for scheduled tasks
+        taskManagerSubNav.addEventListener('click', handleTaskManagerSubNav);
+        addScheduledTaskBtn.addEventListener('click', handleOpenScheduledTaskModal);
+        scheduledTaskModalCloseBtn.addEventListener('click', () => scheduledTaskModal.classList.add('hidden'));
+        scheduledTaskForm.addEventListener('submit', handleScheduledTaskFormSubmit);
     }
 
     // --- Event Handlers ---
@@ -400,7 +413,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (viewId === 'sources-view') {
                 loadScraperSettings();
             } else if (viewId === 'task-manager-view') {
-                loadAndRenderTasks(); // Load immediately on view switch
+                // When switching to task manager, activate the first sub-navigation tab by default
+                const firstSubNavBtn = taskManagerSubNav.querySelector('.sub-nav-btn');
+                if (firstSubNavBtn) {
+                    firstSubNavBtn.click();
+                }
             } else if (viewId === 'token-manager-view') {
                 loadAndRenderTokens();
                 loadCustomDomain();
@@ -2242,6 +2259,128 @@ document.addEventListener('DOMContentLoaded', () => {
             bangumiAuthStateUnauthenticated.innerHTML = `<p class="error">获取授权状态失败: ${error.message}</p>`;
             bangumiAuthStateAuthenticated.classList.add('hidden');
             bangumiAuthStateUnauthenticated.classList.remove('hidden');
+        }
+    }
+
+    // --- Scheduled Tasks ---
+    function handleTaskManagerSubNav(e) {
+        const subNavBtn = e.target.closest('.sub-nav-btn');
+        if (!subNavBtn) return;
+
+        const subViewId = subNavBtn.getAttribute('data-subview');
+        if (!subViewId) return;
+
+        taskManagerSubNav.querySelectorAll('.sub-nav-btn').forEach(btn => btn.classList.remove('active'));
+        subNavBtn.classList.add('active');
+
+        taskManagerSubViews.forEach(view => view.classList.add('hidden'));
+        const targetSubView = document.getElementById(subViewId);
+        if (targetSubView) {
+            targetSubView.classList.remove('hidden');
+        }
+
+        if (subViewId === 'running-tasks-subview') {
+            loadAndRenderTasks();
+        } else if (subViewId === 'scheduled-tasks-subview') {
+            loadAndRenderScheduledTasks();
+        }
+    }
+
+    async function loadAndRenderScheduledTasks() {
+        if (!scheduledTasksTableBody) return;
+        scheduledTasksTableBody.innerHTML = '<tr><td colspan="7">加载中...</td></tr>';
+        try {
+            const tasks = await apiFetch('/api/ui/scheduled-tasks');
+            renderScheduledTasks(tasks);
+        } catch (error) {
+            scheduledTasksTableBody.innerHTML = `<tr><td colspan="7" class="error">加载失败: ${error.message}</td></tr>`;
+        }
+    }
+
+    function renderScheduledTasks(tasks) {
+        scheduledTasksTableBody.innerHTML = '';
+        if (tasks.length === 0) {
+            scheduledTasksTableBody.innerHTML = '<tr><td colspan="7">没有定时任务。</td></tr>';
+            return;
+        }
+
+        tasks.forEach(task => {
+            const row = scheduledTasksTableBody.insertRow();
+            row.insertCell().textContent = task.name;
+            row.insertCell().textContent = task.job_type === 'tmdb_auto_map' ? 'TMDB自动映射' : task.job_type;
+            row.insertCell().textContent = task.cron_expression;
+            row.insertCell().textContent = task.is_enabled ? '✅' : '❌';
+            row.insertCell().textContent = task.last_run_at ? new Date(task.last_run_at).toLocaleString() : '从未';
+            row.insertCell().textContent = task.next_run_at ? new Date(task.next_run_at).toLocaleString() : 'N/A';
+
+            const actionsCell = row.insertCell();
+            actionsCell.className = 'actions-cell';
+            const wrapper = document.createElement('div');
+            wrapper.className = 'action-buttons-wrapper';
+
+            const runBtn = document.createElement('button');
+            runBtn.className = 'action-btn'; runBtn.title = '立即运行'; runBtn.textContent = '▶️';
+            runBtn.addEventListener('click', () => handleScheduledTaskAction('run', task.id));
+            wrapper.appendChild(runBtn);
+
+            const editBtn = document.createElement('button');
+            editBtn.className = 'action-btn'; editBtn.title = '编辑'; editBtn.textContent = '✏️';
+            editBtn.addEventListener('click', () => handleOpenScheduledTaskModal(task));
+            wrapper.appendChild(editBtn);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'action-btn'; deleteBtn.title = '删除'; deleteBtn.textContent = '🗑️';
+            deleteBtn.addEventListener('click', () => handleScheduledTaskAction('delete', task.id));
+            wrapper.appendChild(deleteBtn);
+
+            actionsCell.appendChild(wrapper);
+        });
+    }
+
+    function handleOpenScheduledTaskModal(task = null) {
+        scheduledTaskForm.reset();
+        if (task && typeof task.id !== 'undefined') {
+            scheduledTaskModalTitle.textContent = '编辑定时任务';
+            document.getElementById('scheduled-task-id').value = task.id;
+            document.getElementById('scheduled-task-name').value = task.name;
+            document.getElementById('scheduled-task-type').value = task.job_type;
+            document.getElementById('scheduled-task-cron').value = task.cron_expression;
+            document.getElementById('scheduled-task-enabled').checked = task.is_enabled;
+        } else {
+            scheduledTaskModalTitle.textContent = '添加定时任务';
+            document.getElementById('scheduled-task-id').value = '';
+        }
+        scheduledTaskModal.classList.remove('hidden');
+    }
+
+    async function handleScheduledTaskFormSubmit(e) {
+        e.preventDefault();
+        const id = document.getElementById('scheduled-task-id').value;
+        const payload = {
+            name: document.getElementById('scheduled-task-name').value,
+            job_type: document.getElementById('scheduled-task-type').value,
+            cron_expression: document.getElementById('scheduled-task-cron').value,
+            is_enabled: document.getElementById('scheduled-task-enabled').checked,
+        };
+        const url = id ? `/api/ui/scheduled-tasks/${id}` : '/api/ui/scheduled-tasks';
+        const method = id ? 'PUT' : 'POST';
+
+        try {
+            await apiFetch(url, { method, body: JSON.stringify(payload) });
+            scheduledTaskModal.classList.add('hidden');
+            loadAndRenderScheduledTasks();
+        } catch (error) {
+            alert(`保存失败: ${error.message}`);
+        }
+    }
+
+    async function handleScheduledTaskAction(action, taskId) {
+        if (action === 'delete' && confirm('确定要删除这个定时任务吗？')) {
+            await apiFetch(`/api/ui/scheduled-tasks/${taskId}`, { method: 'DELETE' });
+            loadAndRenderScheduledTasks();
+        } else if (action === 'run') {
+            await apiFetch(`/api/ui/scheduled-tasks/${taskId}/run`, { method: 'POST' });
+            alert('任务已触发运行，请稍后刷新查看运行时间。');
         }
     }
 

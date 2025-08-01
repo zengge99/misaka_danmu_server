@@ -163,6 +163,74 @@ async def search_animes_for_dandan(pool: aiomysql.Pool, keyword: str) -> List[Di
             await cursor.execute(query_like, tuple(like_params))
             return await cursor.fetchall()
 
+async def find_animes_for_matching(pool: aiomysql.Pool, title: str) -> List[Dict[str, Any]]:
+    """
+    为匹配流程查找可能的番剧，并返回其核心ID以供TMDB映射使用。
+    此搜索是特意设计得比较宽泛的。
+    """
+    query_template = """
+        SELECT DISTINCT
+            a.id as anime_id,
+            m.tmdb_id,
+            m.tmdb_episode_group_id
+        FROM anime a
+        LEFT JOIN anime_metadata m ON a.id = m.anime_id
+        LEFT JOIN anime_aliases al ON a.id = al.anime_id
+        WHERE {title_condition}
+        ORDER BY LENGTH(a.title) ASC
+        LIMIT 5;
+    """
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            # 回退到对主标题和所有别名进行LIKE搜索
+            normalized_like_title = f"%{title.replace('：', ':').replace(' ', '')}%"
+            like_conditions = [
+                "REPLACE(REPLACE(a.title, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.name_en, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.name_jp, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.name_romaji, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.alias_cn_1, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.alias_cn_2, '：', ':'), ' ', '') LIKE %s",
+                "REPLACE(REPLACE(al.alias_cn_3, '：', ':'), ' ', '') LIKE %s",
+            ]
+            title_condition_like = f"({' OR '.join(like_conditions)})"
+            query_like = query_template.format(title_condition=title_condition_like)
+            like_params = [normalized_like_title] * len(like_conditions)
+            await cursor.execute(query_like, tuple(like_params))
+            return await cursor.fetchall()
+
+async def find_episode_via_tmdb_mapping(
+    pool: aiomysql.Pool, tmdb_id: str, group_id: str, custom_season: Optional[int], custom_episode: int
+) -> List[Dict[str, Any]]:
+    """通过TMDB映射表查找本地分集。可以根据自定义季/集或绝对集数进行匹配。"""
+    base_query = """
+        SELECT
+            a.id AS animeId, a.title AS animeTitle, a.type, a.image_url AS imageUrl, a.created_at AS startDate,
+            e.id AS episodeId, e.title AS episodeTitle, sc.display_order, s.is_favorited AS isFavorited,
+            (SELECT COUNT(DISTINCT e_count.id) FROM anime_sources s_count JOIN episode e_count ON s_count.id = e_count.source_id WHERE s_count.anime_id = a.id) as totalEpisodeCount,
+            m.bangumi_id AS bangumiId
+        FROM tmdb_episode_mapping tm
+        JOIN anime_metadata am ON tm.tmdb_tv_id = am.tmdb_id AND tm.tmdb_episode_group_id = am.tmdb_episode_group_id
+        JOIN anime a ON am.anime_id = a.id
+        JOIN anime_sources s ON a.id = s.anime_id
+        JOIN episode e ON s.id = e.source_id AND e.episode_index = tm.absolute_episode_number
+        JOIN scrapers sc ON s.provider_name = sc.provider_name
+        LEFT JOIN anime_metadata m ON a.id = m.anime_id
+        WHERE tm.tmdb_tv_id = %s AND tm.tmdb_episode_group_id = %s
+    """
+    params = [tmdb_id, group_id]
+    if custom_season is not None:
+        base_query += " AND tm.custom_season_number = %s AND tm.custom_episode_number = %s"
+        params.extend([custom_season, custom_episode])
+    else:
+        base_query += " AND tm.absolute_episode_number = %s"
+        params.append(custom_episode)
+    base_query += " ORDER BY s.is_favorited DESC, sc.display_order ASC"
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute(base_query, tuple(params))
+            return await cursor.fetchall()
+
 async def get_anime_details_for_dandan(pool: aiomysql.Pool, anime_id: int) -> Optional[Dict[str, Any]]:
     """获取番剧的详细信息及其所有分集，用于dandanplay API。"""
     async with pool.acquire() as conn:

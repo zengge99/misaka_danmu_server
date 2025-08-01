@@ -12,6 +12,7 @@ from .api.tmdb_api import router as tmdb_router
 from .dandan_api import dandan_router
 from .task_manager import TaskManager
 from .scraper_manager import ScraperManager
+from .scheduler import SchedulerManager
 from .config import settings
 from . import crud, security
 from .log_manager import setup_logging
@@ -77,6 +78,9 @@ async def startup_event():
     await create_initial_admin_user(app)
     # 启动缓存清理后台任务
     app.state.cleanup_task = asyncio.create_task(cleanup_task(app))
+    # 创建并启动定时任务调度器
+    app.state.scheduler_manager = SchedulerManager(pool)
+    await app.state.scheduler_manager.start()
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -92,6 +96,8 @@ async def shutdown_event():
         await app.state.scraper_manager.close_all()
     if hasattr(app.state, "task_manager"):
         await app.state.task_manager.stop()
+    if hasattr(app.state, "scheduler_manager"):
+        await app.state.scheduler_manager.stop()
 
 # 挂载静态文件目录
 # 注意：这应该在项目根目录运行，以便能找到 'static' 文件夹

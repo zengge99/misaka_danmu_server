@@ -332,9 +332,29 @@
                         <!-- 弹幕列表将在这里动态生成 -->
                     </div>
                     <div id="task-manager-view" class="content-view hidden">
-                        <h2>任务管理器</h2>
-                        <ul id="task-list">
-                        </ul>
+                        <div class="settings-sub-nav">
+                            <button class="sub-nav-btn active" data-subview="running-tasks-subview">运行中任务</button>
+                            <button class="sub-nav-btn" data-subview="scheduled-tasks-subview">定时任务</button>
+                        </div>
+
+                        <div id="running-tasks-subview" class="settings-subview">
+                            <h2>运行中任务</h2>
+                            <ul id="task-list"></ul>
+                        </div>
+
+                        <div id="scheduled-tasks-subview" class="settings-subview hidden">
+                            <div class="library-header">
+                                <h2>定时任务</h2>
+                                <button id="add-scheduled-task-btn">添加定时任务</button>
+                            </div>
+                            <p>定时任务用于自动执行维护操作，例如自动更新和映射TMDB数据。使用标准的Cron表达式格式。</p>
+                            <table id="scheduled-tasks-table">
+                                <thead>
+                                    <tr><th>名称</th><th>类型</th><th>Cron表达式</th><th>状态</th><th>上次运行</th><th>下次运行</th><th>操作</th></tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
                     </div>
                     <div id="token-manager-view" class="content-view hidden">
                         <div class="library-header">
@@ -472,6 +492,38 @@
                     </div>
                 </main>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal for adding/editing scheduled tasks -->
+    <div id="scheduled-task-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2 id="scheduled-task-modal-title">添加定时任务</h2>
+            <form id="scheduled-task-form">
+                <input type="hidden" id="scheduled-task-id">
+                <div class="form-row">
+                    <label for="scheduled-task-name">任务名称</label>
+                    <input type="text" id="scheduled-task-name" placeholder="例如：每日TMDB更新" required>
+                </div>
+                <div class="form-row">
+                    <label for="scheduled-task-type">任务类型</label>
+                    <select id="scheduled-task-type" required>
+                        <option value="tmdb_auto_map">TMDB自动映射与更新</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label for="scheduled-task-cron">Cron表达式</label>
+                    <input type="text" id="scheduled-task-cron" placeholder="例如：0 2 * * * (每天凌晨2点)" required>
+                </div>
+                <div class="form-row">
+                    <label for="scheduled-task-enabled">是否启用</label>
+                    <input type="checkbox" id="scheduled-task-enabled" checked>
+                </div>
+                <div class="form-actions">
+                    <button type="submit">保存</button>
+                    <button type="button" id="scheduled-task-modal-close-btn">取消</button>
+                </div>
+            </form>
         </div>
     </div>
 

@@ -15,6 +15,7 @@ from .. import crud, models, security
 from ..log_manager import get_logs
 from ..task_manager import TaskManager
 from ..scraper_manager import ScraperManager
+from ..scheduler import SchedulerManager
 from .tmdb_api import get_tmdb_client
 from ..config import settings
 from ..config import settings
@@ -48,6 +49,10 @@ async def get_scraper_manager(request: Request) -> ScraperManager:
 async def get_task_manager(request: Request) -> TaskManager:
     """依赖项：从应用状态获取任务管理器"""
     return request.app.state.task_manager
+
+async def get_scheduler_manager(request: Request) -> SchedulerManager:
+    """依赖项：从应用状态获取 Scheduler 管理器"""
+    return request.app.state.scheduler_manager
 
 async def update_tmdb_mappings(
     pool: aiomysql.Pool,
@@ -722,6 +727,71 @@ async def logout():
     """
     return
 
+
+# --- Scheduled Tasks API ---
+
+class ScheduledTaskCreate(models.BaseModel):
+    name: str
+    job_type: str
+    cron_expression: str
+    is_enabled: bool = True
+
+class ScheduledTaskUpdate(models.BaseModel):
+    name: str
+    cron_expression: str
+    is_enabled: bool
+
+class ScheduledTaskInfo(ScheduledTaskCreate):
+    id: str
+    last_run_at: Optional[datetime] = None
+    next_run_at: Optional[datetime] = None
+
+@router.get("/scheduled-tasks", response_model=List[ScheduledTaskInfo], summary="获取所有定时任务")
+async def get_scheduled_tasks(
+    current_user: models.User = Depends(security.get_current_user),
+    scheduler: SchedulerManager = Depends(get_scheduler_manager)
+):
+    tasks = await scheduler.get_all_tasks()
+    return [ScheduledTaskInfo.model_validate(t) for t in tasks]
+
+@router.post("/scheduled-tasks", response_model=ScheduledTaskInfo, status_code=201, summary="创建定时任务")
+async def create_scheduled_task(
+    task_data: ScheduledTaskCreate,
+    current_user: models.User = Depends(security.get_current_user),
+    scheduler: SchedulerManager = Depends(get_scheduler_manager)
+):
+    try:
+        new_task = await scheduler.add_task(task_data.name, task_data.job_type, task_data.cron_expression, task_data.is_enabled)
+        return ScheduledTaskInfo.model_validate(new_task)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"创建定时任务失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="创建定时任务时发生内部错误")
+
+@router.put("/scheduled-tasks/{task_id}", response_model=ScheduledTaskInfo, summary="更新定时任务")
+async def update_scheduled_task(
+    task_id: str,
+    task_data: ScheduledTaskUpdate,
+    current_user: models.User = Depends(security.get_current_user),
+    scheduler: SchedulerManager = Depends(get_scheduler_manager)
+):
+    updated_task = await scheduler.update_task(task_id, task_data.name, task_data.cron_expression, task_data.is_enabled)
+    if not updated_task:
+        raise HTTPException(status_code=404, detail="找不到指定的任务ID")
+    return ScheduledTaskInfo.model_validate(updated_task)
+
+@router.delete("/scheduled-tasks/{task_id}", status_code=204, summary="删除定时任务")
+async def delete_scheduled_task(task_id: str, current_user: models.User = Depends(security.get_current_user), scheduler: SchedulerManager = Depends(get_scheduler_manager)):
+    await scheduler.delete_task(task_id)
+
+@router.post("/scheduled-tasks/{task_id}/run", status_code=202, summary="立即运行一次定时任务")
+async def run_scheduled_task_now(task_id: str, current_user: models.User = Depends(security.get_current_user), scheduler: SchedulerManager = Depends(get_scheduler_manager)):
+    try:
+        await scheduler.run_task_now(task_id)
+        return {"message": "任务已触发运行"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @auth_router.put("/users/me/password", status_code=status.HTTP_204_NO_CONTENT, summary="修改当前用户密码")
 async def change_current_user_password(
