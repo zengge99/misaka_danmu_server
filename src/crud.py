@@ -1079,3 +1079,88 @@ async def delete_bangumi_auth(pool: aiomysql.Pool, user_id: int) -> bool:
         async with conn.cursor() as cursor:
             affected_rows = await cursor.execute("DELETE FROM bangumi_auth WHERE user_id = %s", (user_id,))
             return affected_rows > 0
+
+# --- Scheduled Tasks ---
+
+async def get_animes_with_tmdb_id(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
+    """获取所有已关联TMDB ID的电视节目。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("""
+                SELECT a.id as anime_id, a.title, m.tmdb_id, m.tmdb_episode_group_id
+                FROM anime a
+                JOIN anime_metadata m ON a.id = m.anime_id
+                WHERE a.type = 'tv_series' AND m.tmdb_id IS NOT NULL AND m.tmdb_id != ''
+            """)
+            return await cursor.fetchall()
+
+async def update_anime_tmdb_group_id(pool: aiomysql.Pool, anime_id: int, group_id: str):
+    """更新一个作品的TMDB剧集组ID。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "UPDATE anime_metadata SET tmdb_episode_group_id = %s WHERE anime_id = %s",
+                (group_id, anime_id)
+            )
+
+async def update_anime_aliases_if_empty(pool: aiomysql.Pool, anime_id: int, aliases: Dict[str, Any]):
+    """如果本地别名字段为空，则使用提供的别名进行更新。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("SELECT name_en, name_jp, name_romaji, alias_cn_1, alias_cn_2, alias_cn_3 FROM anime_aliases WHERE anime_id = %s", (anime_id,))
+            current = await cursor.fetchone()
+            if not current: return
+
+            updates, params = [], []
+            if not current.get('name_en') and aliases.get('name_en'):
+                updates.append("name_en = %s"); params.append(aliases['name_en'])
+            if not current.get('name_jp') and aliases.get('name_jp'):
+                updates.append("name_jp = %s"); params.append(aliases['name_jp'])
+            if not current.get('name_romaji') and aliases.get('name_romaji'):
+                updates.append("name_romaji = %s"); params.append(aliases['name_romaji'])
+            
+            cn_aliases = aliases.get('aliases_cn', [])
+            if not current.get('alias_cn_1') and len(cn_aliases) > 0:
+                updates.append("alias_cn_1 = %s"); params.append(cn_aliases[0])
+            if not current.get('alias_cn_2') and len(cn_aliases) > 1:
+                updates.append("alias_cn_2 = %s"); params.append(cn_aliases[1])
+            if not current.get('alias_cn_3') and len(cn_aliases) > 2:
+                updates.append("alias_cn_3 = %s"); params.append(cn_aliases[2])
+
+            if updates:
+                query = f"UPDATE anime_aliases SET {', '.join(updates)} WHERE anime_id = %s"
+                params.append(anime_id)
+                await cursor.execute(query, tuple(params))
+                logging.info(f"为作品 ID {anime_id} 更新了 {len(updates)} 个别名字段。")
+
+async def get_scheduled_tasks(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("SELECT id, name, job_type, cron_expression, is_enabled, last_run_at, next_run_at FROM scheduled_tasks ORDER BY name")
+            return await cursor.fetchall()
+
+async def get_scheduled_task(pool: aiomysql.Pool, task_id: str) -> Optional[Dict[str, Any]]:
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("SELECT id, name, job_type, cron_expression, is_enabled, last_run_at, next_run_at FROM scheduled_tasks WHERE id = %s", (task_id,))
+            return await cursor.fetchone()
+
+async def create_scheduled_task(pool: aiomysql.Pool, task_id: str, name: str, job_type: str, cron: str, is_enabled: bool):
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("INSERT INTO scheduled_tasks (id, name, job_type, cron_expression, is_enabled) VALUES (%s, %s, %s, %s, %s)", (task_id, name, job_type, cron, is_enabled))
+
+async def update_scheduled_task(pool: aiomysql.Pool, task_id: str, name: str, cron: str, is_enabled: bool):
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("UPDATE scheduled_tasks SET name = %s, cron_expression = %s, is_enabled = %s WHERE id = %s", (name, cron, is_enabled, task_id))
+
+async def delete_scheduled_task(pool: aiomysql.Pool, task_id: str):
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("DELETE FROM scheduled_tasks WHERE id = %s", (task_id,))
+
+async def update_scheduled_task_run_times(pool: aiomysql.Pool, task_id: str, last_run: Optional[datetime], next_run: Optional[datetime]):
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("UPDATE scheduled_tasks SET last_run_at = %s, next_run_at = %s WHERE id = %s", (last_run, next_run, task_id))

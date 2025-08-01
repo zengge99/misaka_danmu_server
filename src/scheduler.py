@@ -179,6 +179,10 @@ class SchedulerManager:
                 except Exception as e:
                     logger.error(f"加载定时任务 '{task['name']}' (ID: {task['id']}) 失败: {e}")
 
+    async def get_all_tasks(self) -> List[Dict[str, Any]]:
+        """从数据库获取所有定时任务的列表。"""
+        return await crud.get_scheduled_tasks(self.pool)
+
     async def add_task(self, name: str, job_type: str, cron: str, is_enabled: bool) -> Dict[str, Any]:
         if not (job_func := self._job_functions.get(job_type)): raise ValueError(f"未知的任务类型: {job_type}")
         task_id = str(uuid4())
