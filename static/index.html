@@ -458,6 +458,54 @@
         </div>
     </div>
 
+    <!-- HTML Templates for dynamic content -->
+    <template id="search-result-item-template">
+        <li>
+            <div class="result-item-left">
+                <input type="checkbox">
+                <img class="poster" src="/static/placeholder.png" referrerpolicy="no-referrer" alt="poster">
+                <div class="info">
+                    <p class="title"></p>
+                    <p class="meta"></p>
+                </div>
+            </div>
+            <button>导入弹幕</button>
+        </li>
+    </template>
+
+    <template id="generic-search-result-item-template">
+        <li>
+            <div class="result-item-left">
+                <img class="poster" src="/static/placeholder.png" referrerpolicy="no-referrer" alt="poster">
+                <div class="info">
+                    <p class="title"></p>
+                    <p class="meta"></p>
+                </div>
+            </div>
+            <button>选择</button>
+        </li>
+    </template>
+
+    <template id="egid-selection-item-template">
+        <li style="cursor: pointer;">
+            <div class="info">
+                <p class="title"></p>
+                <p class="meta"></p>
+            </div>
+        </li>
+    </template>
+
+    <template id="egid-season-group-template">
+        <div class="egid-season-group">
+            <h4></h4>
+            <ul></ul>
+        </div>
+    </template>
+
+    <template id="egid-episode-item-template">
+        <li></li>
+    </template>
+
     <script src="/static/app.js"></script>
 </body>
 </html>

@@ -958,41 +958,25 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(loadAndRenderTasks, 800);
 
     // --- Rendering Functions ---
-
     function renderSearchResults(results) {
         resultsList.innerHTML = '';
         if (results.length === 0) {
             resultsList.innerHTML = '<li>没有符合筛选条件的结果。</li>';
             return;
         }
+        const template = document.getElementById('search-result-item-template');
+
         results.forEach(item => {
-            const li = document.createElement('li');
+            const clone = template.content.cloneNode(true);
             
-            const leftContainer = document.createElement('div');
-            leftContainer.className = 'result-item-left';
-            
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = item.mediaId;
-            leftContainer.appendChild(checkbox);
+            clone.querySelector('input[type="checkbox"]').value = item.mediaId;
 
-            const posterImg = document.createElement('img');
-            posterImg.className = 'poster';
+            const posterImg = clone.querySelector('.poster');
             posterImg.src = item.imageUrl || '/static/placeholder.png';
-            posterImg.referrerPolicy = 'no-referrer';
             posterImg.alt = item.title;
-            leftContainer.appendChild(posterImg);
 
-            const infoDiv = document.createElement('div');
-            infoDiv.className = 'info';
-
-            const titleP = document.createElement('p');
-            titleP.className = 'title';
-            titleP.textContent = item.title;
-            infoDiv.appendChild(titleP);
-
-            const metaP = document.createElement('p');
-            metaP.className = 'meta';
+            clone.querySelector('.title').textContent = item.title;
+            
             let metaText = `源: ${item.provider} | 类型: ${item.type} | 年份: ${item.year || 'N/A'}`;
             if (item.type === 'tv_series' && item.episodeCount) {
                 metaText += ` | 总集数: ${item.episodeCount}`;
@@ -1000,18 +984,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.currentEpisodeIndex) {
                 metaText += ` | 当前集: ${item.currentEpisodeIndex}`;
             }
-            metaP.textContent = metaText;
-            infoDiv.appendChild(metaP);
-            leftContainer.appendChild(infoDiv);
+            clone.querySelector('.meta').textContent = metaText;
 
-            li.appendChild(leftContainer);
-
-            const importBtn = document.createElement('button');
-            importBtn.textContent = '导入弹幕';
+            const importBtn = clone.querySelector('button');
             importBtn.addEventListener('click', () => handleImportClick(importBtn, item));
 
-            li.appendChild(importBtn);
-            resultsList.appendChild(li);
+            resultsList.appendChild(clone);
         });
     }
 
@@ -1330,43 +1308,28 @@ document.addEventListener('DOMContentLoaded', () => {
             bangumiSearchResultsList.innerHTML = '<li>未找到匹配项。</li>';
             return;
         }
+        const template = document.getElementById('generic-search-result-item-template');
     
         results.forEach(result => {
-            const li = document.createElement('li');
+            const clone = template.content.cloneNode(true);
             
-            // 创建左侧容器 (海报 + 信息)
-            const leftContainer = document.createElement('div');
-            leftContainer.className = 'result-item-left';
-
-            // 创建并添加海报图片
-            const posterImg = document.createElement('img');
-            posterImg.className = 'poster';
+            const posterImg = clone.querySelector('.poster');
             posterImg.src = result.image_url || '/static/placeholder.png';
-            posterImg.referrerPolicy = 'no-referrer';
             posterImg.alt = result.name;
-            leftContainer.appendChild(posterImg);
 
-            // 创建信息div
-            const infoDiv = document.createElement('div');
-            infoDiv.className = 'info';
+            clone.querySelector('.title').textContent = result.name;
             const detailsText = result.details ? `${result.details} / ID: ${result.id}` : `ID: ${result.id}`;
-            infoDiv.innerHTML = `<p class="title">${result.name}</p><p class="meta">${detailsText}</p>`;
-            leftContainer.appendChild(infoDiv);
+            clone.querySelector('.meta').textContent = detailsText;
 
-            li.appendChild(leftContainer);
-
-            // 创建选择按钮
-            const selectBtn = document.createElement('button');
-            selectBtn.textContent = '选择';
+            const selectBtn = clone.querySelector('button');
             selectBtn.addEventListener('click', () => {
                 _currentSearchSelectionData = result; // 存储完整结果
                 handleBackToEditAnime(); // 返回编辑视图
                 // 延迟应用，确保视图已切换
                 setTimeout(applySearchSelectionData, 50);
             });
-            li.appendChild(selectBtn);
 
-            bangumiSearchResultsList.appendChild(li);
+            bangumiSearchResultsList.appendChild(clone);
         });
     }
 
@@ -1416,29 +1379,19 @@ document.addEventListener('DOMContentLoaded', () => {
             tmdbSearchResultsList.innerHTML = '<li>未找到匹配项。</li>';
             return;
         }
+        const template = document.getElementById('generic-search-result-item-template');
 
         results.forEach(result => {
-            const li = document.createElement('li');
-            
-            const leftContainer = document.createElement('div');
-            leftContainer.className = 'result-item-left';
+            const clone = template.content.cloneNode(true);
 
-            const posterImg = document.createElement('img');
-            posterImg.className = 'poster';
+            const posterImg = clone.querySelector('.poster');
             posterImg.src = result.image_url || '/static/placeholder.png';
-            posterImg.referrerPolicy = 'no-referrer';
             posterImg.alt = result.name;
-            leftContainer.appendChild(posterImg);
 
-            const infoDiv = document.createElement('div');
-            infoDiv.className = 'info';
-            infoDiv.innerHTML = `<p class="title">${result.name}</p><p class="meta">ID: ${result.id}</p>`;
-            leftContainer.appendChild(infoDiv);
+            clone.querySelector('.title').textContent = result.name;
+            clone.querySelector('.meta').textContent = `ID: ${result.id}`;
 
-            li.appendChild(leftContainer);
-
-            const selectBtn = document.createElement('button');
-            selectBtn.textContent = '选择';
+            const selectBtn = clone.querySelector('button');
             selectBtn.addEventListener('click', async () => {
                 const mediaType = document.getElementById('edit-anime-type').value === 'movie' ? 'movie' : 'tv';
                 try {
@@ -1450,9 +1403,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert(`获取TMDB详情失败: ${error.message}`);
                 }
             });
-            li.appendChild(selectBtn);
 
-            tmdbSearchResultsList.appendChild(li);
+            tmdbSearchResultsList.appendChild(clone);
         });
     }
 
@@ -1592,17 +1544,14 @@ document.addEventListener('DOMContentLoaded', () => {
             egidSelectionList.innerHTML = '<li>未找到任何剧集组。</li>';
             return;
         }
+        const template = document.getElementById('egid-selection-item-template');
         groups.forEach(group => {
-            const li = document.createElement('li');
+            const clone = template.content.cloneNode(true);
+            const li = clone.querySelector('li');
             li.dataset.groupId = group.id;
-            li.style.cursor = 'pointer';
-            li.innerHTML = `
-                <div class="info">
-                    <p class="title">${group.name}</p>
-                    <p class="meta">${group.description || '无描述'} (${group.group_count} 组, ${group.episode_count} 集)</p>
-                </div>
-            `;
-            egidSelectionList.appendChild(li);
+            clone.querySelector('.title').textContent = group.name;
+            clone.querySelector('.meta').textContent = `${group.description || '无描述'} (${group.group_count} 组, ${group.episode_count} 集)`;
+            egidSelectionList.appendChild(clone);
         });
     }
 
@@ -1633,12 +1582,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderEgidEpisodesModal(groups) {
         egidEpisodesListContainer.innerHTML = '';
+        const groupTemplate = document.getElementById('egid-season-group-template');
+        const episodeTemplate = document.getElementById('egid-episode-item-template');
+
         groups.forEach(group => {
-            const groupDiv = document.createElement('div');
-            groupDiv.className = 'egid-season-group';
-            let episodesHtml = group.episodes.map(ep => `<li>S${ep.season_number}E${ep.episode_number}: ${ep.name}</li>`).join('');
-            groupDiv.innerHTML = `<h4>${group.name} (Order: ${group.order})</h4><ul>${episodesHtml}</ul>`;
-            egidEpisodesListContainer.appendChild(groupDiv);
+            const groupClone = groupTemplate.content.cloneNode(true);
+            groupClone.querySelector('h4').textContent = `${group.name} (Order: ${group.order})`;
+            const ul = groupClone.querySelector('ul');
+
+            group.episodes.forEach(ep => {
+                const episodeClone = episodeTemplate.content.cloneNode(true);
+                const li = episodeClone.querySelector('li');
+                li.textContent = `S${ep.season_number}E${ep.episode_number}: ${ep.name}`;
+                ul.appendChild(li);
+            });
+            egidEpisodesListContainer.appendChild(groupClone);
         });
     }
 
