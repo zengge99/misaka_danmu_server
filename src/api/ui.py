@@ -398,10 +398,13 @@ async def clear_all_caches(
 @router.get("/tasks", response_model=List[models.TaskInfo], summary="获取所有后台任务的状态")
 async def get_all_tasks(
     current_user: models.User = Depends(security.get_current_user),
-    task_manager: TaskManager = Depends(get_task_manager)
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    search: Optional[str] = Query(None, description="按标题搜索"),
+    status: Optional[str] = Query("incomplete", description="按状态过滤: all, in_progress, completed, incomplete")
 ):
-    """获取当前所有（排队中、运行中、已完成）后台任务的列表和状态。"""
-    return task_manager.get_all_tasks()
+    """获取后台任务的列表和状态，支持搜索和过滤。"""
+    tasks = await crud.get_tasks_from_history(pool, search, status)
+    return [models.TaskInfo.model_validate(t) for t in tasks]
 
 @router.get("/tokens", response_model=List[models.ApiTokenInfo], summary="获取所有弹幕API Token")
 async def get_all_api_tokens(

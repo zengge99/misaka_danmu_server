@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List
 from uuid import uuid4
 
-from . import models
+from . import models, crud
 
 logger = logging.getLogger(__name__)
 
@@ -20,22 +20,11 @@ class Task:
         self.task_id = task_id
         self.title = title
         self.coro_factory = coro_factory
-        self.status: TaskStatus = TaskStatus.PENDING
-        self.progress: int = 0
-        self.description: str = "等待执行..."
-
-    def to_info(self) -> models.TaskInfo:
-        return models.TaskInfo(
-            task_id=self.task_id,
-            title=self.title,
-            status=self.status,
-            progress=self.progress,
-            description=self.description,
-        )
+        # 状态现在由数据库管理
 
 class TaskManager:
-    def __init__(self):
-        self._tasks: Dict[str, Task] = {}
+    def __init__(self, pool: aiomysql.Pool):
+        self._pool = pool
         self._queue: asyncio.Queue = asyncio.Queue()
         self._worker_task: asyncio.Task | None = None
 
@@ -61,9 +50,11 @@ class TaskManager:
         while True:
             task: Task = await self._queue.get()
             logger.info(f"开始执行任务 '{task.title}' (ID: {task.task_id})")
-            task.status = TaskStatus.RUNNING
-            task.progress = 0
-            task.description = "正在初始化..."
+            
+            await crud.update_task_progress_in_history(
+                self._pool, task.task_id, TaskStatus.RUNNING, 0, "正在初始化..."
+            )
+            
             try:
                 # 创建一个回调函数，该函数将由任务内部调用以更新其进度
                 progress_callback = self.get_progress_callback(task.task_id)
@@ -71,39 +62,40 @@ class TaskManager:
                 # 调用它以获取真正的、可等待的协程
                 actual_coroutine = task.coro_factory(progress_callback)
                 await actual_coroutine
-                task.status = TaskStatus.COMPLETED
-                task.progress = 100
-                task.description = "任务成功完成"
+                
+                await crud.finalize_task_in_history(
+                    self._pool, task.task_id, TaskStatus.COMPLETED, "任务成功完成"
+                )
                 logger.info(f"任务 '{task.title}' (ID: {task.task_id}) 已成功完成。")
             except Exception:
-                task.status = TaskStatus.FAILED
-                task.description = "任务执行失败"
+                error_message = "任务执行失败"
+                await crud.finalize_task_in_history(
+                    self._pool, task.task_id, TaskStatus.FAILED, error_message
+                )
                 logger.error(f"任务 '{task.title}' (ID: {task.task_id}) 执行失败: {traceback.format_exc()}")
             finally:
                 self._queue.task_done()
 
     async def submit_task(self, coro_factory: Callable[[Callable], Coroutine], title: str) -> str:
-        """提交一个新任务到队列。"""
+        """提交一个新任务到队列，并在数据库中创建记录。"""
         task_id = str(uuid4())
         task = Task(task_id, title, coro_factory)
-        self._tasks[task_id] = task
+        
+        await crud.create_task_in_history(
+            self._pool, task_id, title, TaskStatus.PENDING, "等待执行..."
+        )
+        
         await self._queue.put(task)
         logger.info(f"任务 '{title}' 已提交，ID: {task_id}")
         return task_id
 
-    def update_task_progress(self, task_id: str, progress: int, description: str):
-        """由任务本身调用的回调函数，用于更新进度。"""
-        if task := self._tasks.get(task_id):
-            task.progress = int(progress)
-            task.description = description
-
-    def get_all_tasks(self) -> List[models.TaskInfo]:
-        """获取所有任务的当前状态。"""
-        # 返回一个按提交顺序（大致）的列表
-        return [task.to_info() for task in self._tasks.values()]
-
     def get_progress_callback(self, task_id: str) -> Callable:
         """为特定任务创建一个回调闭包。"""
         def callback(progress: int, description: str):
-            self.update_task_progress(task_id, progress, description)
+            # 这是一个“即发即忘”的调用，以避免阻塞正在运行的任务
+            asyncio.create_task(
+                crud.update_task_progress_in_history(
+                    self._pool, task_id, TaskStatus.RUNNING, int(progress), description
+                )
+            )
         return callback

@@ -1164,3 +1164,53 @@ async def update_scheduled_task_run_times(pool: aiomysql.Pool, task_id: str, las
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("UPDATE scheduled_tasks SET last_run_at = %s, next_run_at = %s WHERE id = %s", (last_run, next_run, task_id))
+
+# --- Task History ---
+
+async def create_task_in_history(pool: aiomysql.Pool, task_id: str, title: str, status: str, description: str):
+    """在 task_history 表中创建一条新的任务记录。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "INSERT INTO task_history (id, title, status, description) VALUES (%s, %s, %s, %s)",
+                (task_id, title, status, description)
+            )
+
+async def update_task_progress_in_history(pool: aiomysql.Pool, task_id: str, status: str, progress: int, description: str):
+    """更新任务历史记录中的进度和状态。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "UPDATE task_history SET status = %s, progress = %s, description = %s WHERE id = %s",
+                (status, progress, description, task_id)
+            )
+
+async def finalize_task_in_history(pool: aiomysql.Pool, task_id: str, status: str, description: str):
+    """标记任务为最终状态（完成或失败）并记录完成时间。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "UPDATE task_history SET status = %s, description = %s, progress = 100, finished_at = NOW() WHERE id = %s",
+                (status, description, task_id)
+            )
+
+async def get_tasks_from_history(pool: aiomysql.Pool, search_term: Optional[str], status_filter: str) -> List[Dict[str, Any]]:
+    """从数据库获取任务历史记录，支持搜索和过滤。"""
+    query = "SELECT id as task_id, title, status, progress, description FROM task_history"
+    conditions, params = [], []
+
+    if search_term:
+        conditions.append("title LIKE %s")
+        params.append(f"%{search_term}%")
+
+    if status_filter == 'in_progress': conditions.append("status IN ('排队中', '运行中')")
+    elif status_filter == 'completed': conditions.append("status = '已完成'")
+    elif status_filter == 'incomplete': conditions.append("status != '已完成'")
+
+    if conditions: query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY created_at DESC LIMIT 100"
+
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute(query, tuple(params))
+            return await cursor.fetchall()

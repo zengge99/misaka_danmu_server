@@ -809,6 +809,12 @@ header {
     transition: width 0.3s ease-in-out;
 }
 
+.library-header .view-controls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
 /* New controls for views like task manager */
 .view-controls {
     display: flex;

@@ -338,13 +338,16 @@
                         </div>
 
                         <div id="running-tasks-subview" class="settings-subview">
-                            <div class="view-controls">
-                                <input type="text" id="running-tasks-search-input" placeholder="按任务标题搜索...">
-                                <div id="running-tasks-filter-buttons" class="filter-buttons">
-                                    <button class="filter-btn" data-status-filter="all">全部</button>
-                                    <button class="filter-btn" data-status-filter="in_progress">进行中</button>
-                                    <button class="filter-btn" data-status-filter="completed">已完成</button>
-                                    <button class="filter-btn active" data-status-filter="incomplete">未完成</button>
+                            <div class="library-header">
+                                <h2>运行中任务</h2>
+                                <div class="view-controls">
+                                    <input type="text" id="running-tasks-search-input" placeholder="按任务标题搜索...">
+                                    <div id="running-tasks-filter-buttons" class="filter-buttons">
+                                        <button class="filter-btn" data-status-filter="all">全部</button>
+                                        <button class="filter-btn" data-status-filter="in_progress">进行中</button>
+                                        <button class="filter-btn" data-status-filter="completed">已完成</button>
+                                        <button class="filter-btn active" data-status-filter="incomplete">未完成</button>
+                                    </div>
                                 </div>
                             </div>
                             <ul id="task-list"></ul>

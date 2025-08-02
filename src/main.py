@@ -72,7 +72,7 @@ async def startup_event():
     app.state.scraper_manager = ScraperManager(pool)
     await app.state.scraper_manager.load_and_sync_scrapers()
     # 创建并启动任务管理器
-    app.state.task_manager = TaskManager()
+    app.state.task_manager = TaskManager(pool)
     app.state.task_manager.start()
     # 创建初始管理员用户（如果需要）
     await create_initial_admin_user(app)

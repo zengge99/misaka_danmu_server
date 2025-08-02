@@ -125,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let logRefreshInterval = null;
     let currentEpisodes = []; // 用于存储当前分集列表的上下文
     let originalSearchResults = []; // 用于存储原始搜索结果以进行前端过滤
-    let allRunningTasks = []; // 用于存储所有运行中任务以进行前端过滤
     let _currentSearchSelectionData = null; // 用于存储搜索选择的数据，以供“应用”按钮使用
 
     // --- Core Functions ---
@@ -238,10 +237,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Task Polling ---
     async function loadAndRenderTasks() {
-        if (!token || taskManagerView.classList.contains('hidden')) return;
+        const runningTasksView = document.getElementById('running-tasks-subview');
+        if (!token || !runningTasksView || runningTasksView.classList.contains('hidden')) return;
         try {
-            allRunningTasks = await apiFetch('/api/ui/tasks');
-            applyTaskFilters();
+            const tasks = await apiFetch('/api/ui/tasks');
+            renderTasks(tasks);
         } catch (error) {
             console.error("刷新任务列表失败:", error.message);
             taskListUl.innerHTML = `<li class="error">加载任务失败: ${error.message}</li>`;
@@ -1001,8 +1001,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Debounce function to prevent rapid API calls on input
+    let taskLoadTimeout;
+    function loadAndRenderTasksWithDebounce() {
+        clearTimeout(taskLoadTimeout);
+        taskLoadTimeout = setTimeout(loadAndRenderTasks, 300);
+    }
+
     // Start polling tasks when the app is loaded and user is logged in
-    setInterval(loadAndRenderTasks, 800);
+    setInterval(loadAndRenderTasks, 2000); // Refresh every 2 seconds
 
     // --- Rendering Functions ---
     function renderSearchResults(results) {
