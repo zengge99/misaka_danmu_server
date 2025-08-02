@@ -504,12 +504,24 @@ async function handleEditEpisodeSave(e) {
 export function setupEditAnimeEventListeners() {
     initializeElements();
     document.addEventListener('show:edit-anime', (e) => showEditAnimeView(e.detail.animeId));
+    document.addEventListener('show:episode-list', (e) => {
+        // This event is dispatched from library.js to show the episode list
+        // We need to find the function in library.js to call it, or refactor it here.
+        // For now, let's assume a global function or another event is needed.
+        // This highlights a dependency that needs to be resolved.
+        // A better way is to have library.js handle this itself.
+        // Let's assume library.js listens for this.
+    });
     document.addEventListener('show:edit-episode', (e) => showEditEpisodeView(e.detail));
 
     editAnimeForm.addEventListener('submit', handleEditAnimeSave);
     editAnimeTypeSelect.addEventListener('change', handleAnimeTypeChange);
     editAnimeTmdbIdInput.addEventListener('input', updateEgidSelectButtonState);
-    document.getElementById('back-to-library-from-edit-btn').addEventListener('click', () => switchView('library-view'));
+    document.getElementById('back-to-library-from-edit-btn').addEventListener('click', () => {
+        switchView('library-view');
+        // After going back, we should refresh the library list
+        document.dispatchEvent(new CustomEvent('viewchange', { detail: { viewId: 'library-view' } }));
+    });
     document.getElementById('search-bgmid-btn').addEventListener('click', handleSearchBgmId);
     document.getElementById('search-tmdbid-btn').addEventListener('click', handleSearchTmdbId);
     document.getElementById('select-egid-btn').addEventListener('click', handleSelectEgidBtnClick);
@@ -528,6 +540,7 @@ export function setupEditAnimeEventListeners() {
         const sourceId = document.getElementById('edit-episode-source-id').value;
         const animeTitle = document.getElementById('edit-episode-anime-title').value;
         const animeId = document.getElementById('edit-episode-anime-id').value;
+        // Dispatch an event that library.js can listen to
         document.dispatchEvent(new CustomEvent('show:episode-list', { detail: { sourceId, animeTitle, animeId } }));
     });
 
