@@ -337,7 +337,7 @@ class BilibiliScraper(BaseScraper):
             response.raise_for_status()
             
             response_json = response.json()
-            self.logger.debug(f"Bilibili: 收到原始JSON响应: {json.dumps(response_json, indent=2, ensure_ascii=False)}")
+            self.logger.info(f"Bilibili: 收到原始JSON响应: {json.dumps(response_json, indent=2, ensure_ascii=False)}")
             
             api_result = BiliApiResult.model_validate(response_json)
 
