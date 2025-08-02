@@ -343,6 +343,7 @@ class BilibiliScraper(BaseScraper):
 
             if api_result.code == 0 and api_result.data and api_result.data.result:
                 self.logger.info(f"Bilibili: API调用成功，开始处理返回的 {len(api_result.data.result)} 个结果组。")
+                self.logger.debug(f"Bilibili: 搜索结果组内容: {json.dumps([g.model_dump(exclude_none=True) for g in api_result.data.result], indent=2, ensure_ascii=False)}")
                 for group in api_result.data.result:
                     self.logger.debug(f"Bilibili: 正在处理结果组: {group.result_type}")
                     if group.result_type in ["media_bangumi", "media_ft"] and group.data:
