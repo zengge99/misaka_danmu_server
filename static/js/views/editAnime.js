@@ -427,8 +427,7 @@ async function handleReassociateSourcesClick() {
 function renderReassociateTargets(animes, sourceAnimeId) {
     const tableBody = document.querySelector('#reassociate-target-table tbody');
     tableBody.innerHTML = '';
-    const potentialTargets = animes.filter(anime => anime.animeId !== sourceAnimeId);
-    if (potentialTargets.length === 0) {
+    const potentialTargets = animes.filter(anime => anime.animeId !== sourceAnimeId);    if (potentialTargets.length === 0) {
         tableBody.innerHTML = '<tr><td colspan="2">没有其他可用的目标作品。</td></tr>';
         return;
     }
@@ -437,7 +436,7 @@ function renderReassociateTargets(animes, sourceAnimeId) {
         row.dataset.title = anime.title.toLowerCase();
         row.innerHTML = `
             <td><strong>${anime.title}</strong> (ID: ${anime.animeId}, 季: ${anime.season}, 类型: ${anime.type})</td>
-            <td class="actions-cell"><button class="associate-btn">关联到此</button></td>
+            <td><button class="associate-btn">关联到此</button></td>
         `;
         row.querySelector('.associate-btn').addEventListener('click', () => handleReassociateConfirm(sourceAnimeId, anime.animeId, anime.title));
     });
@@ -504,14 +503,6 @@ async function handleEditEpisodeSave(e) {
 export function setupEditAnimeEventListeners() {
     initializeElements();
     document.addEventListener('show:edit-anime', (e) => showEditAnimeView(e.detail.animeId));
-    document.addEventListener('show:episode-list', (e) => {
-        // This event is dispatched from library.js to show the episode list
-        // We need to find the function in library.js to call it, or refactor it here.
-        // For now, let's assume a global function or another event is needed.
-        // This highlights a dependency that needs to be resolved.
-        // A better way is to have library.js handle this itself.
-        // Let's assume library.js listens for this.
-    });
     document.addEventListener('show:edit-episode', (e) => showEditEpisodeView(e.detail));
 
     editAnimeForm.addEventListener('submit', handleEditAnimeSave);

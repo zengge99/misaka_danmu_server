@@ -338,7 +338,8 @@ async def get_tmdb_details(
                 elif alt_title.iso_3166_1 == "JP":
                     if alt_title.type == "Romaji":
                         if 'romaji' not in found_titles: found_titles['romaji'] = alt_title.title
-                    else:
+                    # Only consider titles with an empty type as the primary Japanese title
+                    elif not alt_title.type:
                         if 'jp' not in found_titles: found_titles['jp'] = alt_title.title
                 # English Title (prefer US, then GB)
                 elif alt_title.iso_3166_1 == "US":

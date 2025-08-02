@@ -328,4 +328,8 @@ export function setupLibraryEventListeners() {
             loadLibrary();
         }
     });
+
+    document.addEventListener('show:episode-list', (e) => {
+        showEpisodeListView(e.detail.sourceId, e.detail.animeTitle, e.detail.animeId);
+    });
 }

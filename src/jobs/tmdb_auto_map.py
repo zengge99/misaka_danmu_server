@@ -86,7 +86,7 @@ class TmdbAutoMapJob(BaseJob):
                 elif alt_title.get('iso_3166_1') == "JP":
                     if alt_title.get('type') == "Romaji":
                         if 'romaji' not in found_titles: found_titles['romaji'] = alt_title.get('title')
-                    else:
+                    elif not alt_title.get('type'):
                         if 'jp' not in found_titles: found_titles['jp'] = alt_title.get('title')
                 elif alt_title.get('iso_3166_1') == "US":
                     if 'en' not in found_titles: found_titles['en'] = alt_title.get('title')
