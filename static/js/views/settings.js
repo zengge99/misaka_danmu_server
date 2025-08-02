@@ -1,5 +1,6 @@
 import { apiFetch } from '../api.js';
 
+// DOM Elements
 let settingsSubNav, settingsSubViews;
 let passwordChangeMessage;
 let bangumiAuthStateUnauthenticated, bangumiAuthStateAuthenticated, bangumiUserNickname, bangumiUserId, bangumiAuthorizedAt, bangumiExpiresAt, bangumiUserAvatar, bangumiLoginBtn, bangumiLogoutBtn;
@@ -36,9 +37,7 @@ function handleSettingsSubNav(e) {
 
     settingsSubViews.forEach(view => view.classList.add('hidden'));
     const targetSubView = document.getElementById(subViewId);
-    if (targetSubView) {
-        targetSubView.classList.remove('hidden');
-    }
+    if (targetSubView) targetSubView.classList.remove('hidden');
 
     if (subViewId === 'bangumi-settings-subview') loadBangumiAuthState();
     if (subViewId === 'tmdb-settings-subview') loadTmdbSettings();
@@ -78,11 +77,82 @@ async function handleChangePassword(e) {
     }
 }
 
-async function loadBangumiAuthState() { /* ... */ }
-async function handleBangumiLogin() { /* ... */ }
-async function handleBangumiLogout() { /* ... */ }
-async function loadTmdbSettings() { /* ... */ }
-async function handleSaveTmdbSettings(e) { /* ... */ }
+async function loadBangumiAuthState() {
+    try {
+        const state = await apiFetch('/api/bgm/auth/state');
+        if (state.is_authenticated) {
+            bangumiUserNickname.textContent = state.nickname;
+            bangumiUserId.textContent = state.bangumi_user_id || 'N/A';
+            bangumiAuthorizedAt.textContent = state.authorized_at ? new Date(state.authorized_at).toLocaleString() : 'N/A';
+            bangumiExpiresAt.textContent = state.expires_at ? new Date(state.expires_at).toLocaleString() : '永不（或未知）';
+            bangumiUserAvatar.src = state.avatar_url || '/static/placeholder.png';
+            bangumiAuthStateAuthenticated.classList.remove('hidden');
+            bangumiAuthStateUnauthenticated.classList.add('hidden');
+        } else {
+            bangumiAuthStateAuthenticated.classList.add('hidden');
+            bangumiAuthStateUnauthenticated.classList.remove('hidden');
+        }
+    } catch (error) {
+        bangumiAuthStateUnauthenticated.innerHTML = `<p class="error">获取授权状态失败: ${error.message}</p>`;
+        bangumiAuthStateAuthenticated.classList.add('hidden');
+        bangumiAuthStateUnauthenticated.classList.remove('hidden');
+    }
+}
+
+async function handleBangumiLogin() {
+    try {
+        const { url } = await apiFetch('/api/bgm/auth/url');
+        window.open(url, 'BangumiAuth', 'width=600,height=700');
+    } catch (error) {
+        alert(`启动 Bangumi 授权失败: ${error.message}`);
+    }
+}
+
+async function handleBangumiLogout() {
+    if (confirm("确定要注销 Bangumi 授权吗？")) {
+        try {
+            await apiFetch('/api/bgm/auth', { method: 'DELETE' });
+            loadBangumiAuthState();
+        } catch (error) {
+            alert(`注销失败: ${error.message}`);
+        }
+    }
+}
+
+async function loadTmdbSettings() {
+    tmdbSaveMessage.textContent = '';
+    try {
+        const data = await apiFetch('/api/ui/config/tmdb');
+        document.getElementById('tmdb-api-key').value = data.tmdb_api_key || '';
+        document.getElementById('tmdb-api-base-url').value = data.tmdb_api_base_url || '';
+        document.getElementById('tmdb-image-base-url').value = data.tmdb_image_base_url || '';
+    } catch (error) {
+        tmdbSaveMessage.textContent = `加载TMDB配置失败: ${error.message}`;
+    }
+}
+
+async function handleSaveTmdbSettings(e) {
+    e.preventDefault();
+    const payload = {
+        tmdb_api_key: document.getElementById('tmdb-api-key').value.trim(),
+        tmdb_api_base_url: document.getElementById('tmdb-api-base-url').value.trim(),
+        tmdb_image_base_url: document.getElementById('tmdb-image-base-url').value.trim(),
+    };
+    const saveBtn = e.target.querySelector('button[type="submit"]');
+    saveBtn.disabled = true;
+    tmdbSaveMessage.textContent = '保存中...';
+    tmdbSaveMessage.className = 'message';
+    try {
+        await apiFetch('/api/ui/config/tmdb', { method: 'PUT', body: JSON.stringify(payload) });
+        tmdbSaveMessage.textContent = 'TMDB 配置保存成功！';
+        tmdbSaveMessage.classList.add('success');
+    } catch (error) {
+        tmdbSaveMessage.textContent = `保存失败: ${error.message}`;
+        tmdbSaveMessage.classList.add('error');
+    } finally {
+        saveBtn.disabled = false;
+    }
+}
 
 export function setupSettingsEventListeners() {
     initializeElements();
