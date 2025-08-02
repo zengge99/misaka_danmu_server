@@ -10,4 +10,6 @@ passlib>=1.7.4
 bcrypt==4.0.1
 python-jose[cryptography]
 python-multipart
-protobuf
+# protobuf v4.x 引入了不兼容的变更，可能导致预编译的 _pb2.py 文件解析失败
+# 将其固定到 v3.x 的最后一个稳定版本以确保兼容性
+protobuf==3.20.3
