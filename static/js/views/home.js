@@ -30,6 +30,9 @@ function setupEventListeners() {
         const formatted = ` S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
         insertAtCursor(document.getElementById('search-keyword'), formatted);
     });
+    document.querySelectorAll('input[name="bulk-import-mode"]').forEach(radio => {
+        radio.addEventListener('change', handleBulkImportModeChange);
+    });
 
     // Bulk Import View
     document.getElementById('cancel-bulk-import-btn').addEventListener('click', () => switchView('home-view'));
@@ -51,6 +54,11 @@ function setupEventListeners() {
         document.getElementById('final-import-tmdb-id').value = e.detail.id || '';
         switchView('bulk-import-view'); // Switch back to the bulk import view
     });
+}
+
+function handleBulkImportModeChange(e) {
+    const unifiedFields = document.getElementById('unified-import-fields');
+    unifiedFields.classList.toggle('hidden', e.target.value !== 'unified');
 }
 
 function insertAtCursor(inputField, textToInsert) {
@@ -338,17 +346,8 @@ async function handleBulkImport() {
     const selectedMediaIds = new Set(Array.from(selectedCheckboxes).map(cb => cb.value));
     itemsForBulkImport = originalSearchResults.filter(item => selectedMediaIds.has(item.mediaId));
 
-    const uniqueTitles = new Set(itemsForBulkImport.map(item => item.title));
-
-    if (uniqueTitles.size === 1) {
-        // All titles are the same, import directly
-        if (confirm(`确定要将 ${itemsForBulkImport.length} 个条目作为同一作品 "${itemsForBulkImport[0].title}" 导入吗？`)) {
-            _performDirectBulkImport(itemsForBulkImport, itemsForBulkImport[0].title);
-        }
-    } else {
-        // Titles are different, show confirmation view
-        _showBulkImportView(itemsForBulkImport);
-    }
+    // Always show the bulk import view
+    _showBulkImportView(itemsForBulkImport);
 }
 
 function _showBulkImportView(items) {
@@ -365,12 +364,29 @@ function _showBulkImportView(items) {
         });
         listEl.appendChild(li);
     });
-    // Set the first item's title as the default
-    document.getElementById('final-import-name').value = items[0].title;
+
+    const uniqueTitles = new Set(items.map(item => item.title));
+    const unifiedModeRadio = document.querySelector('input[name="bulk-import-mode"][value="unified"]');
+    const separateModeRadio = document.querySelector('input[name="bulk-import-mode"][value="separate"]');
+    const unifiedFields = document.getElementById('unified-import-fields');
+    const infoParagraph = document.querySelector('#bulk-import-view .form-card p');
+
+    if (uniqueTitles.size === 1) {
+        infoParagraph.textContent = `您选择了 ${items.length} 个标题相同的条目。请确认导入模式。`;
+        unifiedModeRadio.checked = true;
+        unifiedFields.classList.remove('hidden');
+        document.getElementById('final-import-name').value = items[0].title;
+    } else {
+        infoParagraph.textContent = `检测到您选择的媒体标题不一致。请指定导入模式。`;
+        separateModeRadio.checked = true;
+        unifiedFields.classList.add('hidden');
+        document.getElementById('final-import-name').value = items[0].title; // Still set a default
+    }
+
     document.getElementById('final-import-tmdb-id').value = '';
 }
 
-async function _performDirectBulkImport(items, finalTitle, finalTmdbId = null) {
+async function _performSeparateBulkImport(items) {
     const bulkImportBtn = document.getElementById('bulk-import-btn');
     bulkImportBtn.disabled = true;
     bulkImportBtn.textContent = '批量导入中...';
@@ -383,13 +399,51 @@ async function _performDirectBulkImport(items, finalTitle, finalTmdbId = null) {
                     body: JSON.stringify({
                         provider: item.provider, media_id: item.mediaId, anime_title: item.title,
                         type: item.type, season: item.season, image_url: item.imageUrl, douban_id: item.douban_id,
+                        current_episode_index: item.currentEpisodeIndex, tmdb_id: null
+                    }),
+                });
+                console.log(`提交独立导入任务 ${item.title} (源: ${item.provider}) 成功: ${data.message}`);
+            } catch (error) {
+                if (error.message && error.message.includes("该数据源已存在于弹幕库中")) {
+                     console.warn(`跳过已存在的源: ${item.title} (源: ${item.provider})`);
+                } else {
+                    console.error(`提交独立导入任务 ${item.title} (源: ${item.provider}) 失败: ${error.message || error}`);
+                }
+            }
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        alert("批量导入任务已提交，请在任务管理器中查看进度。");
+    } finally {
+        bulkImportBtn.disabled = false;
+        bulkImportBtn.textContent = '批量导入';
+        switchView('home-view');
+    }
+}
+
+async function _performUnifiedBulkImport(items, finalTitle, finalTmdbId = null) {
+    const bulkImportBtn = document.getElementById('bulk-import-btn');
+    bulkImportBtn.disabled = true;
+    bulkImportBtn.textContent = '批量导入中...';
+
+    try {
+        for (const item of items) {
+            try {
+                const data = await apiFetch('/api/ui/import', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        provider: item.provider, media_id: item.mediaId, anime_title: finalTitle,
+                        type: item.type, season: item.season, image_url: item.imageUrl, douban_id: item.douban_id,
                         current_episode_index: item.currentEpisodeIndex,
                         tmdb_id: finalTmdbId // Pass the final TMDB ID
                     }),
                 });
                 console.log(`提交导入任务 ${finalTitle} (源: ${item.provider}) 成功: ${data.message}`);
             } catch (error) {
-                console.error(`提交导入任务 ${finalTitle} (源: ${item.provider}) 失败: ${error.message || error}`);
+                if (error.message && error.message.includes("该数据源已存在于弹幕库中")) {
+                    console.warn(`跳过已存在的源: ${finalTitle} (源: ${item.provider})`);
+                } else {
+                    console.error(`提交导入任务 ${finalTitle} (源: ${item.provider}) 失败: ${error.message || error}`);
+                }
             }
             await new Promise(resolve => setTimeout(resolve, 200));
         }
@@ -402,14 +456,22 @@ async function _performDirectBulkImport(items, finalTitle, finalTmdbId = null) {
 }
 
 function handleConfirmBulkImport() {
-    const finalTitle = document.getElementById('final-import-name').value.trim();
-    const finalTmdbId = document.getElementById('final-import-tmdb-id').value.trim() || null;
-    if (!finalTitle) {
-        alert("最终导入名称不能为空。");
-        return;
-    }
-    if (itemsForBulkImport.length > 0) {
-        _performDirectBulkImport(itemsForBulkImport, finalTitle, finalTmdbId);
+    const importMode = document.querySelector('input[name="bulk-import-mode"]:checked').value;
+
+    if (importMode === 'unified') {
+        const finalTitle = document.getElementById('final-import-name').value.trim();
+        const finalTmdbId = document.getElementById('final-import-tmdb-id').value.trim() || null;
+        if (!finalTitle) {
+            alert("最终导入名称不能为空。");
+            return;
+        }
+        if (itemsForBulkImport.length > 0) {
+            _performUnifiedBulkImport(itemsForBulkImport, finalTitle, finalTmdbId);
+        }
+    } else { // 'separate' mode
+        if (itemsForBulkImport.length > 0 && confirm(`确定要将 ${itemsForBulkImport.length} 个条目作为独立作品分别导入吗？`)) {
+            _performSeparateBulkImport(itemsForBulkImport);
+        }
     }
 }
 

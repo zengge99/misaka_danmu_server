@@ -128,6 +128,14 @@
                             <ul id="bulk-import-list" class="results-list-style">
                                 <!-- Selected items will be populated here -->
                             </ul>
+                        <div class="form-row" style="margin-top: 20px;">
+                            <label>导入模式</label>
+                            <div class="radio-group">
+                                <label><input type="radio" name="bulk-import-mode" value="unified" checked> 统一导入为单个条目</label>
+                                <label><input type="radio" name="bulk-import-mode" value="separate"> 作为多个独立条目导入</label>
+                                </div>
+                            </div>
+                        <div id="unified-import-fields">
                             <div class="form-row" style="margin-top: 20px;">
                                 <label for="final-import-name">最终导入名称</label>
                                 <div class="input-with-icon">
@@ -138,6 +146,7 @@
                             <div class="form-row">
                                 <label for="final-import-tmdb-id">最终TMDB ID</label>
                                 <input type="text" id="final-import-tmdb-id" placeholder="从TMDB搜索后自动填充" disabled>
+                            </div>
                             </div>
                             <div class="form-actions">
                                 <button id="confirm-bulk-import-btn">确认导入</button>
