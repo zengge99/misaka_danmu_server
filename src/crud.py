@@ -1204,7 +1204,7 @@ async def get_tasks_from_history(pool: aiomysql.Pool, search_term: Optional[str]
         params.append(f"%{search_term}%")
 
     if status_filter == 'in_progress':
-        conditions.append("status = '运行中'")
+        conditions.append("status IN ('排队中', '运行中')")
     elif status_filter == 'completed':
         conditions.append("status = '已完成'")
 

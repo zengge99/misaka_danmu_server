@@ -3,7 +3,7 @@ import aiomysql
 import logging
 import traceback
 from enum import Enum
-from typing import Any, Callable, Coroutine, Dict, List
+from typing import Any, Callable, Coroutine, Dict, List, Tuple
 from uuid import uuid4
 
 from . import models, crud
@@ -21,7 +21,7 @@ class Task:
         self.task_id = task_id
         self.title = title
         self.coro_factory = coro_factory
-        # 状态现在由数据库管理
+        self.done_event = asyncio.Event()
 
 class TaskManager:
     def __init__(self, pool: aiomysql.Pool):
@@ -76,9 +76,10 @@ class TaskManager:
                 logger.error(f"任务 '{task.title}' (ID: {task.task_id}) 执行失败: {traceback.format_exc()}")
             finally:
                 self._queue.task_done()
+                task.done_event.set()
 
-    async def submit_task(self, coro_factory: Callable[[Callable], Coroutine], title: str) -> str:
-        """提交一个新任务到队列，并在数据库中创建记录。"""
+    async def submit_task(self, coro_factory: Callable[[Callable], Coroutine], title: str) -> Tuple[str, asyncio.Event]:
+        """提交一个新任务到队列，并在数据库中创建记录。返回任务ID和完成事件。"""
         task_id = str(uuid4())
         task = Task(task_id, title, coro_factory)
         
@@ -88,7 +89,7 @@ class TaskManager:
         
         await self._queue.put(task)
         logger.info(f"任务 '{title}' 已提交，ID: {task_id}")
-        return task_id
+        return task_id, task.done_event
 
     def get_progress_callback(self, task_id: str) -> Callable:
         """为特定任务创建一个回调闭包。"""

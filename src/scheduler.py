@@ -53,13 +53,16 @@ class SchedulerManager:
         return [{"type": job.job_type, "name": job.job_name} for job in self._job_classes.values()]
 
     def _create_job_runner(self, job_type: str) -> Callable:
-        """创建一个包装器，用于在 TaskManager 中运行任务。"""
+        """创建一个包装器，用于在 TaskManager 中运行任务，并等待其完成。"""
         job_class = self._job_classes[job_type]
         
         async def runner():
             job_instance = job_class(self.pool)
             task_coro_factory = lambda callback: job_instance.run(callback)
-            await self.task_manager.submit_task(task_coro_factory, job_instance.job_name)
+            task_id, done_event = await self.task_manager.submit_task(task_coro_factory, job_instance.job_name)
+            # The apscheduler job now waits for the actual task to complete.
+            await done_event.wait()
+            logger.info(f"定时任务的运行器已确认任务 '{job_instance.job_name}' (ID: {task_id}) 执行完毕。")
         
         return runner
 

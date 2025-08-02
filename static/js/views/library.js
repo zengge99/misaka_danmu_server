@@ -332,6 +332,11 @@ export function setupLibraryEventListeners() {
     });
 
     document.addEventListener('show:episode-list', (e) => {
-        showEpisodeListView(e.detail.sourceId, e.detail.animeTitle, e.detail.animeId);
+        // 从事件中获取的值可能是字符串（例如从input.value读取），
+        // 需要转换为数字以确保后续比较 (e.g., a.animeId === animeId) 的正确性。
+        const sourceId = parseInt(e.detail.sourceId, 10);
+        const animeId = parseInt(e.detail.animeId, 10);
+        const animeTitle = e.detail.animeTitle;
+        showEpisodeListView(sourceId, animeTitle, animeId);
     });
 }
