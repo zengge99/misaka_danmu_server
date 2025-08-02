@@ -356,6 +356,38 @@
                             </table>
                         </div>
                     </div>
+                    <div id="edit-scheduled-task-view" class="content-view hidden">
+                        <div class="view-header-flexible">
+                            <h2 id="edit-scheduled-task-title">添加定时任务</h2>
+                            <button id="back-to-tasks-from-edit-btn">&lt; 返回任务列表</button>
+                        </div>
+                        <div class="form-card">
+                            <form id="edit-scheduled-task-form">
+                                <input type="hidden" id="edit-scheduled-task-id">
+                                <div class="form-row">
+                                    <label for="edit-scheduled-task-name">任务名称</label>
+                                    <input type="text" id="edit-scheduled-task-name" placeholder="例如：每日TMDB更新" required>
+                                </div>
+                                <div class="form-row">
+                                    <label for="edit-scheduled-task-type">任务类型</label>
+                                    <select id="edit-scheduled-task-type" required>
+                                        <option value="tmdb_auto_map">TMDB自动映射与更新</option>
+                                    </select>
+                                </div>
+                                <div class="form-row">
+                                    <label for="edit-scheduled-task-cron">Cron表达式</label>
+                                    <input type="text" id="edit-scheduled-task-cron" placeholder="例如：0 2 * * * (每天凌晨2点)" required>
+                                </div>
+                                <div class="form-row">
+                                    <label for="edit-scheduled-task-enabled">是否启用</label>
+                                    <input type="checkbox" id="edit-scheduled-task-enabled" checked>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit">保存</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                     <div id="token-manager-view" class="content-view hidden">
                         <div class="library-header">
                             <h2>弹幕Token管理</h2>

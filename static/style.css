@@ -365,12 +365,6 @@ header {
     flex-grow: 0;
 }
 
-/* In .form-row, make checkboxes not grow */
-.form-row input[type="checkbox"] {
-    width: auto;
-    flex-grow: 0;
-}
-
 .form-actions {
     display: flex;
     justify-content: flex-end;
