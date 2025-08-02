@@ -76,6 +76,8 @@ class ImportRequest(BaseModel):
     media_id: str = Field(..., description="数据源中的媒体ID (e.g., tencent的cid)")
     anime_title: str = Field(..., description="要存储在数据库中的番剧标题")
     type: str = Field(..., description="媒体类型, e.g., 'tv_series', 'movie'")
+    season: Optional[int] = Field(1, description="季度数，默认为1")
+    tmdb_id: Optional[str] = Field(None, description="关联的TMDB ID (可选)")
     image_url: Optional[str] = Field(None, description="封面图片URL")
     douban_id: Optional[str] = None
     current_episode_index: Optional[int] = Field(None, description="如果搜索时指定了集数，则只导入此分集")

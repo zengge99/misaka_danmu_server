@@ -302,9 +302,15 @@ function renderTmdbSearchResults(results) {
             const mediaType = document.getElementById('edit-anime-type').value === 'movie' ? 'movie' : 'tv';
             try {
                 const details = await apiFetch(`/api/tmdb/details/${mediaType}/${result.id}`);
-                _currentSearchSelectionData = details;
-                handleBackToEditAnime();
-                setTimeout(applySearchSelectionData, 50);
+                if (tmdbSearchView.dataset.source === 'bulk-import') {
+                    // If the search was triggered from the bulk import view
+                    document.dispatchEvent(new CustomEvent('tmdb-search:selected-for-bulk', { detail: details }));
+                } else {
+                    // Default behavior for editing a single anime
+                    _currentSearchSelectionData = details;
+                    handleBackToEditAnime();
+                    setTimeout(applySearchSelectionData, 50);
+                }
             } catch (error) {
                 alert(`获取TMDB详情失败: ${error.message}`);
             }
@@ -504,6 +510,14 @@ export function setupEditAnimeEventListeners() {
     initializeElements();
     document.addEventListener('show:edit-anime', (e) => showEditAnimeView(e.detail.animeId));
     document.addEventListener('show:edit-episode', (e) => showEditEpisodeView(e.detail));
+
+    // Listen for search request from bulk import view
+    document.addEventListener('show:tmdb-search-for-bulk', (e) => {
+        switchView('tmdb-search-view');
+        tmdbSearchView.dataset.source = 'bulk-import'; // Set context
+        document.getElementById('tmdb-search-keyword').value = e.detail.keyword;
+        document.getElementById('tmdb-search-view-title').textContent = `为批量导入搜索 TMDB ID`;
+    });
 
     editAnimeForm.addEventListener('submit', handleEditAnimeSave);
     editAnimeTypeSelect.addEventListener('change', handleAnimeTypeChange);

@@ -1,10 +1,12 @@
 import { apiFetch } from '../api.js';
-import { toggleLoader } from '../ui.js';
+import { toggleLoader, switchView } from '../ui.js';
 
 let logRefreshInterval = null;
 let originalSearchResults = [];
+let itemsForBulkImport = [];
 
 function setupEventListeners() {
+    // Home View
     document.getElementById('search-form').addEventListener('submit', handleSearch);
     document.getElementById('test-match-form').addEventListener('submit', handleTestMatch);
     document.getElementById('clear-cache-btn').addEventListener('click', handleClearCache);
@@ -14,9 +16,20 @@ function setupEventListeners() {
     document.getElementById('filter-btn-tv_series').addEventListener('click', handleTypeFilterClick);
     document.getElementById('results-filter-input').addEventListener('input', applyFiltersAndRender);
 
+    // Bulk Import View
+    document.getElementById('cancel-bulk-import-btn').addEventListener('click', () => switchView('home-view'));
+    document.getElementById('confirm-bulk-import-btn').addEventListener('click', handleConfirmBulkImport);
+    document.getElementById('search-tmdb-for-bulk-btn').addEventListener('click', handleBulkTmdbSearch);
+
     // Listen to global events
     document.addEventListener('logrefresh:start', startLogRefresh);
     document.addEventListener('logrefresh:stop', stopLogRefresh);
+    document.addEventListener('tmdb-search:selected-for-bulk', (e) => {
+        // Listen for the event dispatched from editAnime.js
+        document.getElementById('final-import-name').value = e.detail.name_en || e.detail.name_jp || '';
+        document.getElementById('final-import-tmdb-id').value = e.detail.id || '';
+        switchView('bulk-import-view'); // Switch back to the bulk import view
+    });
 }
 
 function startLogRefresh() {
@@ -51,12 +64,41 @@ async function handleSearch(e) {
 
     try {
         const data = await apiFetch(`/api/ui/search/provider?keyword=${encodeURIComponent(keyword)}`);
-        displayResults(data.results);
+        const processedResults = data.results.map(item => ({
+            ...item,
+            season: parseTitleForSeason(item.title)
+        }));
+        displayResults(processedResults);
     } catch (error) {
         alert(`搜索失败: ${(error.message || error)}`);
     } finally {
         toggleLoader(false);
     }
+}
+
+function parseTitleForSeason(title) {
+    if (!title) return 1;
+
+    const patterns = [
+        /(?:S|Season)\s*(\d+)/i,
+        /第\s*([一二三四五六七八九十\d]+)\s*[季部]/,
+        /第\s*([一二三四五六七八九十\d]+)\s*(?:部分|篇|章|幕)/,
+    ];
+
+    const chineseNumMap = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
+
+    for (const pattern of patterns) {
+        const match = title.match(pattern);
+        if (match && match[1]) {
+            const numStr = match[1];
+            if (numStr.match(/^\d+$/)) {
+                return parseInt(numStr, 10);
+            } else if (chineseNumMap[numStr]) {
+                return chineseNumMap[numStr];
+            }
+        }
+    }
+    return 1; // Default to season 1
 }
 
 function displayResults(results) {
@@ -146,6 +188,7 @@ async function handleImportClick(button, item) {
                 media_id: item.mediaId,
                 anime_title: item.title,
                 type: item.type,
+                season: item.season, // Pass detected season
                 image_url: item.imageUrl,
                 douban_id: item.douban_id,
                 current_episode_index: item.currentEpisodeIndex,
@@ -205,35 +248,65 @@ async function handleClearCache() {
 async function handleBulkImport() {
     const resultsList = document.getElementById('results-list');
     const selectedCheckboxes = resultsList.querySelectorAll('input[type="checkbox"]:checked');
-    const selectedMediaIds = new Set(Array.from(selectedCheckboxes).map(checkbox => checkbox.value));
-
-    if (selectedMediaIds.size === 0) {
+    if (selectedCheckboxes.length === 0) {
         alert("请选择要导入的媒体。");
         return;
     }
 
-    if (!confirm(`确定要批量导入 ${selectedMediaIds.size} 个媒体吗？`)) return;
-    
+    const selectedMediaIds = new Set(Array.from(selectedCheckboxes).map(cb => cb.value));
+    itemsForBulkImport = originalSearchResults.filter(item => selectedMediaIds.has(item.mediaId));
+
+    const uniqueTitles = new Set(itemsForBulkImport.map(item => item.title));
+
+    if (uniqueTitles.size === 1) {
+        // All titles are the same, import directly
+        if (confirm(`确定要将 ${itemsForBulkImport.length} 个条目作为同一作品 "${itemsForBulkImport[0].title}" 导入吗？`)) {
+            _performDirectBulkImport(itemsForBulkImport, itemsForBulkImport[0].title);
+        }
+    } else {
+        // Titles are different, show confirmation view
+        _showBulkImportView(itemsForBulkImport);
+    }
+}
+
+function _showBulkImportView(items) {
+    switchView('bulk-import-view');
+    const listEl = document.getElementById('bulk-import-list');
+    listEl.innerHTML = '';
+    items.forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = `${item.title} (源: ${item.provider}, 类型: ${item.type}, 季: ${item.season})`;
+        li.style.cursor = 'pointer';
+        li.addEventListener('click', () => {
+            document.getElementById('final-import-name').value = item.title;
+        });
+        listEl.appendChild(li);
+    });
+    // Set the first item's title as the default
+    document.getElementById('final-import-name').value = items[0].title;
+    document.getElementById('final-import-tmdb-id').value = '';
+}
+
+async function _performDirectBulkImport(items, finalTitle, finalTmdbId = null) {
     const bulkImportBtn = document.getElementById('bulk-import-btn');
     bulkImportBtn.disabled = true;
     bulkImportBtn.textContent = '批量导入中...';
 
-    const itemsToImport = originalSearchResults.filter(item => selectedMediaIds.has(item.mediaId));
-
     try {
-        for (const item of itemsToImport) {
+        for (const item of items) {
             try {
                 const data = await apiFetch('/api/ui/import', {
                     method: 'POST',
                     body: JSON.stringify({
                         provider: item.provider, media_id: item.mediaId, anime_title: item.title,
-                        type: item.type, image_url: item.imageUrl, douban_id: item.douban_id,
+                        type: item.type, season: item.season, image_url: item.imageUrl, douban_id: item.douban_id,
                         current_episode_index: item.currentEpisodeIndex,
+                        tmdb_id: finalTmdbId // Pass the final TMDB ID
                     }),
                 });
-                console.log(`提交导入任务 ${item.title} 成功: ${data.message}`);
+                console.log(`提交导入任务 ${finalTitle} (源: ${item.provider}) 成功: ${data.message}`);
             } catch (error) {
-                console.error(`提交导入任务 ${item.title} 失败: ${error.message || error}`);
+                console.error(`提交导入任务 ${finalTitle} (源: ${item.provider}) 失败: ${error.message || error}`);
             }
             await new Promise(resolve => setTimeout(resolve, 200));
         }
@@ -241,6 +314,27 @@ async function handleBulkImport() {
     } finally {
         bulkImportBtn.disabled = false;
         bulkImportBtn.textContent = '批量导入';
+        switchView('home-view'); // Go back to home view after completion
+    }
+}
+
+function handleConfirmBulkImport() {
+    const finalTitle = document.getElementById('final-import-name').value.trim();
+    const finalTmdbId = document.getElementById('final-import-tmdb-id').value.trim() || null;
+    if (!finalTitle) {
+        alert("最终导入名称不能为空。");
+        return;
+    }
+    if (itemsForBulkImport.length > 0) {
+        _performDirectBulkImport(itemsForBulkImport, finalTitle, finalTmdbId);
+    }
+}
+
+function handleBulkTmdbSearch() {
+    const finalName = document.getElementById('final-import-name').value.trim();
+    if (finalName) {
+        // Dispatch event to be caught by editAnime.js to show the TMDB search view
+        document.dispatchEvent(new CustomEvent('show:tmdb-search-for-bulk', { detail: { keyword: finalName } }));
     }
 }
 

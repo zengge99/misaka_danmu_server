@@ -104,6 +104,33 @@
                             <pre id="test-match-results">测试结果将显示在这里。</pre>
                         </div>
                     </div>
+                    <div id="bulk-import-view" class="content-view hidden">
+                        <div class="view-header-flexible">
+                            <h2>批量导入确认</h2>
+                            <button id="cancel-bulk-import-btn">&lt; 返回主页</button>
+                        </div>
+                        <div class="form-card">
+                            <p>检测到您选择的媒体标题不一致。请指定一个统一的名称用于导入，或从TMDB搜索。</p>
+                            <h3>已选择的条目</h3>
+                            <ul id="bulk-import-list" class="results-list-style">
+                                <!-- Selected items will be populated here -->
+                            </ul>
+                            <div class="form-row" style="margin-top: 20px;">
+                                <label for="final-import-name">最终导入名称</label>
+                                <div class="input-with-icon">
+                                    <input type="text" id="final-import-name" required>
+                                    <button type="button" id="search-tmdb-for-bulk-btn" class="icon-btn" title="从TMDB搜索">🔍</button>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <label for="final-import-tmdb-id">最终TMDB ID</label>
+                                <input type="text" id="final-import-tmdb-id" placeholder="从TMDB搜索后自动填充" disabled>
+                            </div>
+                            <div class="form-actions">
+                                <button id="confirm-bulk-import-btn">确认导入</button>
+                            </div>
+                        </div>
+                    </div>
                     <div id="library-view" class="content-view hidden">
                         <div class="library-header">
                             <h2>弹幕库</h2>

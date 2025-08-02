@@ -336,12 +336,12 @@ async def fetch_comments(pool: aiomysql.Pool, episode_id: int) -> List[Dict[str,
             await cursor.execute(query, (episode_id,))
             return await cursor.fetchall()
 
-async def get_or_create_anime(pool: aiomysql.Pool, title: str, media_type: str, image_url: Optional[str]) -> int:
+async def get_or_create_anime(pool: aiomysql.Pool, title: str, media_type: str, season: int, image_url: Optional[str]) -> int:
     """通过标题查找番剧，如果不存在则创建。如果存在但缺少海报，则更新海报。返回其ID。"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             # 1. 检查番剧是否已存在
-            await cursor.execute("SELECT id, image_url FROM anime WHERE title = %s", (title, ))
+            await cursor.execute("SELECT id, image_url FROM anime WHERE title = %s AND season = %s", (title, season))
             result = await cursor.fetchone()
             if result:
                 anime_id = result[0]
@@ -356,8 +356,8 @@ async def get_or_create_anime(pool: aiomysql.Pool, title: str, media_type: str, 
                 await conn.begin()
                 # 2.1 插入主表
                 await cursor.execute(
-                    "INSERT INTO anime (title, type, image_url, created_at) VALUES (%s, %s, %s, %s)",
-                    (title, media_type, image_url, datetime.now())
+                    "INSERT INTO anime (title, type, season, image_url, created_at) VALUES (%s, %s, %s, %s, %s)",
+                    (title, media_type, season, image_url, datetime.now())
                 )
                 anime_id = cursor.lastrowid
                 # 2.2 插入元数据表
@@ -846,6 +846,19 @@ async def update_douban_id_if_not_exists(pool: aiomysql.Pool, anime_id: int, dou
             await cursor.execute(
                 "UPDATE anime_metadata SET douban_id = %s WHERE anime_id = %s AND (douban_id IS NULL OR douban_id = '')",
                 (douban_id, anime_id)
+            )
+
+async def update_tmdb_id_if_not_exists(pool: aiomysql.Pool, anime_id: int, tmdb_id: str):
+    """如果一个作品记录没有TMDB ID，则更新它。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "INSERT IGNORE INTO anime_metadata (anime_id) VALUES (%s)",
+                (anime_id,)
+            )
+            await cursor.execute(
+                "UPDATE anime_metadata SET tmdb_id = %s WHERE anime_id = %s AND (tmdb_id IS NULL OR tmdb_id = '')",
+                (tmdb_id, anime_id)
             )
 
 async def check_source_exists_by_media_id(pool: aiomysql.Pool, provider: str, media_id: str) -> bool:
