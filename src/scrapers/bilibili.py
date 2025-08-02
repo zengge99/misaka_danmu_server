@@ -1,8 +1,9 @@
 import asyncio
 import logging
 import re
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 from urllib.parse import urlencode
+from datetime import datetime
 
 import aiomysql
 import httpx
@@ -18,7 +19,7 @@ class BiliSearchMedia(BaseModel):
     season_id: Optional[int] = None
     title: str
     pubtime: Optional[int] = 0
-    pubdate: Optional[str] = None
+    pubdate: Union[str, int, None] = None
     season_type_name: Optional[str] = Field(None, alias="season_type_name")
     ep_size: Optional[int] = None
     bvid: Optional[str] = None
@@ -129,12 +130,16 @@ class BilibiliScraper(BaseScraper):
                             if not media_id: continue
 
                             year = None
-                            if item.pubdate:
-                                try: year = int(item.pubdate[:4])
-                                except: pass
-                            elif item.pubtime:
-                                try: year = datetime.fromtimestamp(item.pubtime).year
-                                except: pass
+                            try:
+                                if item.pubdate:
+                                    if isinstance(item.pubdate, int):
+                                        year = datetime.fromtimestamp(item.pubdate).year
+                                    elif isinstance(item.pubdate, str) and len(item.pubdate) >= 4:
+                                        year = int(item.pubdate[:4])
+                                elif item.pubtime:
+                                    year = datetime.fromtimestamp(item.pubtime).year
+                            except (ValueError, TypeError, OSError):
+                                pass
 
                             results.append(models.ProviderSearchInfo(
                                 provider=self.provider_name,
