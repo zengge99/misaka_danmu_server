@@ -211,6 +211,30 @@ async def init_db_tables(app: FastAPI):
               UNIQUE INDEX `idx_token_unique` (`token` ASC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
+            # 创建 token_access_logs 表
+            await cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `token_access_logs` (
+              `id` BIGINT NOT NULL AUTO_INCREMENT,
+              `token_id` INT NOT NULL,
+              `ip_address` VARCHAR(45) NOT NULL,
+              `user_agent` TEXT NULL,
+              `access_time` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              `status` ENUM('allowed', 'denied_expired', 'denied_disabled', 'denied_ua') NOT NULL,
+              `remark` VARCHAR(255) NULL,
+              PRIMARY KEY (`id`),
+              INDEX `idx_token_id_time` (`token_id` ASC, `access_time` DESC)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
+            # 创建 ua_rules 表
+            await cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `ua_rules` (
+              `id` INT NOT NULL AUTO_INCREMENT,
+              `ua_string` VARCHAR(255) NOT NULL,
+              `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              UNIQUE INDEX `idx_ua_string_unique` (`ua_string` ASC)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
             # 创建 Bangumi 授权信息表
             await cursor.execute("""
             CREATE TABLE IF NOT EXISTS `bangumi_auth` (
@@ -424,6 +448,16 @@ async def init_db_tables(app: FastAPI):
                 else:
                     raise
 
+            # 迁移检查：为 api_tokens 表添加 expires_at
+            try:
+                await cursor.execute("ALTER TABLE `api_tokens` ADD COLUMN `expires_at` TIMESTAMP NULL DEFAULT NULL AFTER `is_enabled`;")
+                print("'api_tokens' 表 'expires_at' 字段添加完成。")
+            except aiomysql.OperationalError as e:
+                if e.args[0] == 1060: # Duplicate column name
+                    pass
+                else:
+                    raise
+
             # 迁移检查：移除所有 created_at 和 fetched_at 的默认值
             tables_with_timestamps = ['anime', 'users', 'anime_sources', 'episode']
             for table in tables_with_timestamps:
@@ -483,8 +517,9 @@ async def _init_default_config(cursor: aiomysql.Cursor):
         ('custom_api_domain', '', '用于拼接弹幕API地址的自定义域名。'),
         ('jwt_expire_minutes', str(settings.jwt.access_token_expire_minutes), 'JWT令牌的有效期（分钟）。-1 表示永不过期。'),
         ('tmdb_api_key', '', '用于访问 The Movie Database API 的密钥。'),
-        ('tmdb_api_base_url', 'https://api.themoviedb.org', 'TMDB API 的基础域名 (不含 /3)。'),
-        ('tmdb_image_base_url', 'https://image.tmdb.org/t/p/w500', 'TMDB 图片服务的基础 URL。')
+        ('tmdb_api_base_url', 'https://api.themoviedb.org', 'TMDB API 的基础域名。'),
+        ('tmdb_image_base_url', 'https://image.tmdb.org/t/p/w500', 'TMDB 图片服务的基础 URL。'),
+        ('ua_filter_mode', 'off', 'UA过滤模式: off, blacklist, whitelist')
     ]
     # 使用 INSERT IGNORE 来避免因主键冲突而报错
     query = "INSERT IGNORE INTO config (config_key, config_value, description) VALUES (%s, %s, %s)"

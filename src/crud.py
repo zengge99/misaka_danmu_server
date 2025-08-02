@@ -972,21 +972,36 @@ async def get_all_api_tokens(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
     """获取所有 API Token。"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            await cursor.execute("SELECT id, name, token, is_enabled, created_at FROM api_tokens ORDER BY created_at DESC")
+            await cursor.execute("SELECT id, name, token, is_enabled, expires_at, created_at FROM api_tokens ORDER BY created_at DESC")
             return await cursor.fetchall()
 
 async def get_api_token_by_id(pool: aiomysql.Pool, token_id: int) -> Optional[Dict[str, Any]]:
     """通过ID获取一个 API Token。"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            await cursor.execute("SELECT id, name, token, is_enabled, created_at FROM api_tokens WHERE id = %s", (token_id,))
+            await cursor.execute("SELECT id, name, token, is_enabled, expires_at, created_at FROM api_tokens WHERE id = %s", (token_id,))
             return await cursor.fetchone()
 
-async def create_api_token(pool: aiomysql.Pool, name: str, token: str) -> int:
+async def get_api_token_by_token_str(pool: aiomysql.Pool, token_str: str) -> Optional[Dict[str, Any]]:
+    """通过token字符串获取一个 API Token。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("SELECT id, name, token, is_enabled, expires_at, created_at FROM api_tokens WHERE token = %s", (token_str,))
+            return await cursor.fetchone()
+
+async def create_api_token(pool: aiomysql.Pool, name: str, token: str, validity_period: str) -> int:
     """创建一个新的 API Token。"""
+    expires_at = None
+    if validity_period != "permanent":
+        days = int(validity_period.replace('d', ''))
+        expires_at = datetime.now(timezone.utc) + timedelta(days=days)
+
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
-            await cursor.execute("INSERT INTO api_tokens (name, token) VALUES (%s, %s)", (name, token))
+            await cursor.execute(
+                "INSERT INTO api_tokens (name, token, expires_at) VALUES (%s, %s, %s)",
+                (name, token, expires_at)
+            )
             return cursor.lastrowid
 
 async def delete_api_token(pool: aiomysql.Pool, token_id: int) -> bool:
@@ -1003,12 +1018,56 @@ async def toggle_api_token(pool: aiomysql.Pool, token_id: int) -> bool:
             affected_rows = await cursor.execute("UPDATE api_tokens SET is_enabled = NOT is_enabled WHERE id = %s", (token_id,))
             return affected_rows > 0
 
-async def validate_api_token(pool: aiomysql.Pool, token: str) -> bool:
-    """验证一个 API Token 是否有效且已启用。"""
+async def validate_api_token(pool: aiomysql.Pool, token: str) -> Optional[Dict[str, Any]]:
+    """验证一个 API Token 是否有效且已启用。如果有效，返回token信息，否则返回None。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute(
+                "SELECT id, expires_at FROM api_tokens WHERE token = %s AND is_enabled = TRUE",
+                (token,)
+            )
+            token_info = await cursor.fetchone()
+            if not token_info:
+                return None
+            
+            if token_info['expires_at'] and token_info['expires_at'].replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+                return None # Token has expired
+
+            return token_info
+
+# --- UA Filter and Log Services ---
+
+async def get_ua_rules(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("SELECT id, ua_string, created_at FROM ua_rules ORDER BY created_at DESC")
+            return await cursor.fetchall()
+
+async def add_ua_rule(pool: aiomysql.Pool, ua_string: str) -> int:
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
-            await cursor.execute("SELECT 1 FROM api_tokens WHERE token = %s AND is_enabled = TRUE", (token,))
-            return await cursor.fetchone() is not None
+            await cursor.execute("INSERT INTO ua_rules (ua_string) VALUES (%s)", (ua_string,))
+            return cursor.lastrowid
+
+async def delete_ua_rule(pool: aiomysql.Pool, rule_id: int) -> bool:
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            affected_rows = await cursor.execute("DELETE FROM ua_rules WHERE id = %s", (rule_id,))
+            return affected_rows > 0
+
+async def create_token_access_log(pool: aiomysql.Pool, token_id: int, ip_address: str, user_agent: Optional[str], status: str, remark: Optional[str] = None):
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "INSERT INTO token_access_logs (token_id, ip_address, user_agent, status, remark) VALUES (%s, %s, %s, %s, %s)",
+                (token_id, ip_address, user_agent, status, remark)
+            )
+
+async def get_token_access_logs(pool: aiomysql.Pool, token_id: int) -> List[Dict[str, Any]]:
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("SELECT ip_address, user_agent, access_time, status, remark FROM token_access_logs WHERE token_id = %s ORDER BY access_time DESC LIMIT 200", (token_id,))
+            return await cursor.fetchall()
 
 async def toggle_source_favorite_status(pool: aiomysql.Pool, source_id: int) -> bool:
     """切换一个数据源的精确标记状态。一个作品只能有一个精确标记的源。"""

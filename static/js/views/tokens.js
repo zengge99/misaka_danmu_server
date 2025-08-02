@@ -4,6 +4,9 @@ import { switchView } from '../ui.js';
 // DOM Elements
 let tokenManagerView, tokenTableBody, addTokenBtn, addTokenView, addTokenForm;
 let customDomainInput, saveDomainBtn, domainSaveMessage;
+let uaFilterModeSelect, saveUaModeBtn, manageUaListBtn, uaModeSaveMessage;
+let uaSettingsView, uaRulesTableBody, addUaRuleForm;
+let tokenLogView, tokenLogTableBody, tokenLogViewTitle;
 
 function initializeElements() {
     tokenManagerView = document.getElementById('token-manager-view');
@@ -11,9 +14,23 @@ function initializeElements() {
     addTokenBtn = document.getElementById('add-token-btn');
     addTokenView = document.getElementById('add-token-view');
     addTokenForm = document.getElementById('add-token-form');
+
     customDomainInput = document.getElementById('custom-domain-input');
     saveDomainBtn = document.getElementById('save-domain-btn');
     domainSaveMessage = document.getElementById('domain-save-message');
+
+    uaFilterModeSelect = document.getElementById('ua-filter-mode');
+    saveUaModeBtn = document.getElementById('save-ua-mode-btn');
+    manageUaListBtn = document.getElementById('manage-ua-list-btn');
+    uaModeSaveMessage = document.getElementById('ua-mode-save-message');
+
+    uaSettingsView = document.getElementById('ua-settings-view');
+    uaRulesTableBody = document.querySelector('#ua-rules-table tbody');
+    addUaRuleForm = document.getElementById('add-ua-rule-form');
+
+    tokenLogView = document.getElementById('token-log-view');
+    tokenLogTableBody = document.querySelector('#token-log-table tbody');
+    tokenLogViewTitle = document.getElementById('token-log-view-title');
 }
 
 async function loadAndRenderTokens() {
@@ -36,15 +53,22 @@ function renderTokens(tokens) {
 
     tokens.forEach(token => {
         const row = tokenTableBody.insertRow();
+        const expiresText = token.expires_at ? `有效期至: ${new Date(token.expires_at).toLocaleString()}` : '永久有效';
         const enabledText = token.is_enabled ? '禁用' : '启用';
         row.innerHTML = `
-            <td>${token.name}</td>
-            <td><span class="token-value">${token.token}</span></td>
+            <td>${token.name}<br><small>${expiresText}</small></td>
+            <td>
+                <span class="token-value">
+                    <span class="token-text token-hidden" data-token-value="${token.token}">************</span>
+                    <span class="token-visibility-toggle" data-action="toggle-visibility" title="显示/隐藏">👁️</span>
+                </span>
+            </td>
             <td class="token-status ${token.is_enabled ? '' : 'disabled'}">${token.is_enabled ? '✅' : '❌'}</td>
             <td>${new Date(token.created_at).toLocaleString()}</td>
             <td class="actions-cell">
                 <div class="action-buttons-wrapper">
                     <button class="action-btn" data-action="copy" data-token-id="${token.id}" data-token-value="${token.token}" title="复制链接">📋</button>
+                    <button class="action-btn" data-action="view-log" data-token-id="${token.id}" data-token-name="${token.name}" title="查看日志">📜</button>
                     <button class="action-btn" data-action="toggle" data-token-id="${token.id}" title="${enabledText}">${token.is_enabled ? '⏸️' : '▶️'}</button>
                     <button class="action-btn" data-action="delete" data-token-id="${token.id}" title="删除">🗑️</button>
                 </div>
@@ -59,7 +83,7 @@ async function handleTokenAction(e) {
 
     const action = button.dataset.action;
     const tokenId = parseInt(button.dataset.tokenId, 10);
-    const tokenValue = button.dataset.tokenValue;
+    const tokenValue = button.dataset.tokenValue || button.closest('tr').querySelector('.token-text').dataset.tokenValue;
 
     if (action === 'copy') {
         const domain = customDomainInput.value.trim();
@@ -106,6 +130,18 @@ async function handleTokenAction(e) {
                 alert(`删除失败: ${error.message}`);
             }
         }
+    } else if (action === 'toggle-visibility') {
+        const tokenTextSpan = button.previousElementSibling;
+        if (tokenTextSpan.classList.contains('token-hidden')) {
+            tokenTextSpan.textContent = tokenTextSpan.dataset.tokenValue;
+            tokenTextSpan.classList.remove('token-hidden');
+        } else {
+            tokenTextSpan.textContent = '************';
+            tokenTextSpan.classList.add('token-hidden');
+        }
+    } else if (action === 'view-log') {
+        const tokenName = button.dataset.tokenName;
+        showTokenLogView(tokenId, tokenName);
     }
 }
 
@@ -113,6 +149,7 @@ async function handleAddTokenSave(e) {
     e.preventDefault();
     const nameInput = document.getElementById('add-token-name');
     const name = nameInput.value.trim();
+    const validity = document.getElementById('add-token-validity').value;
     if (!name) {
         alert('名称不能为空。');
         return;
@@ -125,7 +162,7 @@ async function handleAddTokenSave(e) {
     try {
         await apiFetch('/api/ui/tokens', {
             method: 'POST',
-            body: JSON.stringify({ name: name }),
+            body: JSON.stringify({ name: name, validity_period: validity }),
         });
         document.getElementById('back-to-tokens-from-add-btn').click();
         loadAndRenderTokens();
@@ -175,23 +212,140 @@ async function handleSaveDomain() {
     }
 }
 
+async function loadUaFilterMode() {
+    uaModeSaveMessage.textContent = '';
+    try {
+        const data = await apiFetch('/api/ui/config/ua_filter_mode');
+        uaFilterModeSelect.value = data.value || 'off';
+    } catch (error) {
+        uaModeSaveMessage.textContent = `加载UA过滤模式失败: ${error.message}`;
+    }
+}
+
+async function handleSaveUaMode() {
+    const mode = uaFilterModeSelect.value;
+    uaModeSaveMessage.textContent = '保存中...';
+    uaModeSaveMessage.className = 'message';
+    try {
+        await apiFetch('/api/ui/config/ua_filter_mode', {
+            method: 'PUT',
+            body: JSON.stringify({ value: mode })
+        });
+        uaModeSaveMessage.textContent = '模式保存成功！';
+        uaModeSaveMessage.classList.add('success');
+    } catch (error) {
+        uaModeSaveMessage.textContent = `保存失败: ${error.message}`;
+        uaModeSaveMessage.classList.add('error');
+    }
+}
+
+async function loadAndRenderUaRules() {
+    uaRulesTableBody.innerHTML = '<tr><td colspan="3">加载中...</td></tr>';
+    try {
+        const rules = await apiFetch('/api/ui/ua-rules');
+        uaRulesTableBody.innerHTML = '';
+        if (rules.length === 0) {
+            uaRulesTableBody.innerHTML = '<tr><td colspan="3">名单为空。</td></tr>';
+            return;
+        }
+        rules.forEach(rule => {
+            const row = uaRulesTableBody.insertRow();
+            row.innerHTML = `
+                <td>${rule.ua_string}</td>
+                <td>${new Date(rule.created_at).toLocaleString()}</td>
+                <td class="actions-cell">
+                    <button class="action-btn" data-rule-id="${rule.id}" title="删除">🗑️</button>
+                </td>
+            `;
+        });
+    } catch (error) {
+        uaRulesTableBody.innerHTML = `<tr class="error"><td colspan="3">加载失败: ${error.message}</td></tr>`;
+    }
+}
+
+async function handleAddUaRule(e) {
+    e.preventDefault();
+    const input = document.getElementById('add-ua-string');
+    const uaString = input.value.trim();
+    if (!uaString) return;
+    try {
+        await apiFetch('/api/ui/ua-rules', {
+            method: 'POST',
+            body: JSON.stringify({ ua_string: uaString })
+        });
+        input.value = '';
+        loadAndRenderUaRules();
+    } catch (error) {
+        alert(`添加失败: ${error.message}`);
+    }
+}
+
+async function handleDeleteUaRule(e) {
+    const button = e.target.closest('.action-btn');
+    if (!button) return;
+    const ruleId = parseInt(button.dataset.ruleId, 10);
+    if (confirm('确定要删除这条UA规则吗？')) {
+        try {
+            await apiFetch(`/api/ui/ua-rules/${ruleId}`, { method: 'DELETE' });
+            loadAndRenderUaRules();
+        } catch (error) {
+            alert(`删除失败: ${error.message}`);
+        }
+    }
+}
+
+async function showTokenLogView(tokenId, tokenName) {
+    switchView('token-log-view');
+    tokenLogViewTitle.textContent = `Token访问日志: ${tokenName}`;
+    tokenLogTableBody.innerHTML = '<tr><td colspan="5">加载中...</td></tr>';
+    try {
+        const logs = await apiFetch(`/api/ui/tokens/${tokenId}/logs`);
+        tokenLogTableBody.innerHTML = '';
+        if (logs.length === 0) {
+            tokenLogTableBody.innerHTML = '<tr><td colspan="5">此Token没有访问记录。</td></tr>';
+            return;
+        }
+        logs.forEach(log => {
+            const row = tokenLogTableBody.insertRow();
+            row.innerHTML = `
+                <td>${new Date(log.access_time).toLocaleString()}</td>
+                <td>${log.ip_address}</td>
+                <td>${log.status}</td>
+                <td>${log.remark || ''}</td>
+                <td>${log.user_agent}</td>
+            `;
+        });
+    } catch (error) {
+        tokenLogTableBody.innerHTML = `<tr class="error"><td colspan="5">加载日志失败: ${error.message}</td></tr>`;
+    }
+}
+
 export function setupTokensEventListeners() {
     initializeElements();
     addTokenBtn.addEventListener('click', () => {
         switchView('add-token-view');
         addTokenForm.reset();
     });
-    document.getElementById('back-to-tokens-from-add-btn').addEventListener('click', () => {
-        switchView('token-manager-view');
-    });
+    document.getElementById('back-to-tokens-from-add-btn').addEventListener('click', () => switchView('token-manager-view'));
+    document.getElementById('back-to-tokens-from-ua-btn').addEventListener('click', () => switchView('token-manager-view'));
+    document.getElementById('back-to-tokens-from-log-btn').addEventListener('click', () => switchView('token-manager-view'));
+
     addTokenForm.addEventListener('submit', handleAddTokenSave);
     saveDomainBtn.addEventListener('click', handleSaveDomain);
     tokenTableBody.addEventListener('click', handleTokenAction);
+    saveUaModeBtn.addEventListener('click', handleSaveUaMode);
+    manageUaListBtn.addEventListener('click', () => {
+        switchView('ua-settings-view');
+        loadAndRenderUaRules();
+    });
+    addUaRuleForm.addEventListener('submit', handleAddUaRule);
+    uaRulesTableBody.addEventListener('click', handleDeleteUaRule);
 
     document.addEventListener('viewchange', (e) => {
         if (e.detail.viewId === 'token-manager-view') {
             loadAndRenderTokens();
             loadCustomDomain();
+            loadUaFilterMode();
         }
     });
 }

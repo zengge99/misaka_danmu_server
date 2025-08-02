@@ -173,10 +173,25 @@ class ApiTokenInfo(BaseModel):
     name: str
     token: str
     is_enabled: bool
+    expires_at: Optional[datetime] = None
     created_at: datetime
 
 class ApiTokenCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=50, description="Token的描述性名称")
+    validity_period: str = Field("permanent", description="有效期: permanent, 1d, 7d, 30d, 180d, 365d")
+
+# --- UA Filter Models ---
+class UaRule(BaseModel):
+    id: int
+    ua_string: str
+    created_at: datetime
+
+class TokenAccessLog(BaseModel):
+    access_time: datetime
+    ip_address: str
+    status: str
+    remark: Optional[str] = None
+    user_agent: Optional[str] = None
 
 # --- 用户和认证模型 ---
 class UserBase(BaseModel):

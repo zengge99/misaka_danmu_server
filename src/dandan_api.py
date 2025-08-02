@@ -328,16 +328,46 @@ def _parse_filename_for_match(filename: str) -> Optional[Dict[str, Any]]:
 
 async def get_token_from_path(
     token: str = Path(..., description="路径中的API授权令牌"),
-    pool: aiomysql.Pool = Depends(get_db_pool)
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    request: Request = None,
 ):
     """
     一个 FastAPI 依赖项，用于验证路径中的 token。
     这是为 dandanplay 客户端设计的特殊鉴权方式。
+    此函数现在还负责UA过滤和访问日志记录。
     """
-    is_valid = await crud.validate_api_token(pool, token)
-    if not is_valid:
-        # dandanplay 客户端期望收到 403 Forbidden
+    # 1. 验证 token 是否存在、启用且未过期
+    token_info = await crud.validate_api_token(pool, token)
+    if not token_info:
+        # 尝试记录失败的访问
+        token_record = await crud.get_api_token_by_token_str(pool, token)
+        if token_record:
+            is_expired = token_record.get('expires_at') and token_record['expires_at'].replace(tzinfo=timezone.utc) < datetime.now(timezone.utc)
+            status = 'denied_expired' if is_expired else 'denied_disabled'
+            await crud.create_token_access_log(pool, token_record['id'], request.client.host, request.headers.get("user-agent"), status)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid API token")
+
+    # 2. UA 过滤
+    ua_filter_mode = await crud.get_config_value(pool, 'ua_filter_mode', 'off')
+    user_agent = request.headers.get("user-agent", "")
+
+    if ua_filter_mode != 'off':
+        ua_rules = await crud.get_ua_rules(pool)
+        ua_list = [rule['ua_string'] for rule in ua_rules]
+        
+        is_matched = any(rule in user_agent for rule in ua_list)
+
+        if ua_filter_mode == 'blacklist' and is_matched:
+            await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'denied_ua', remark="UA matched blacklist")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User-Agent is blacklisted")
+        
+        if ua_filter_mode == 'whitelist' and not is_matched:
+            await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'denied_ua', remark="UA not in whitelist")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User-Agent not in whitelist")
+
+    # 3. 记录成功访问
+    await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'allowed')
+
     return token
 
 @implementation_router.get(

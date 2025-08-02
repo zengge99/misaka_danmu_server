@@ -425,7 +425,9 @@ async def create_new_api_token(
     # 生成一个由大小写字母和数字组成的20位随机字符串
     alphabet = string.ascii_letters + string.digits
     new_token_str = ''.join(secrets.choice(alphabet) for _ in range(20))
-    token_id = await crud.create_api_token(pool, token_data.name, new_token_str)
+    token_id = await crud.create_api_token(
+        pool, token_data.name, new_token_str, token_data.validity_period
+    )
     # 重新从数据库获取以包含所有字段
     new_token = await crud.get_api_token_by_id(pool, token_id) # 假设这个函数存在
     return models.ApiTokenInfo.model_validate(new_token)
@@ -478,6 +480,51 @@ async def update_config_item(
     
     await crud.update_config_value(pool, config_key, value)
     logger.info(f"用户 '{current_user.username}' 更新了配置项 '{config_key}'。")
+
+@router.get("/ua-rules", response_model=List[models.UaRule], summary="获取所有UA规则")
+async def get_ua_rules(
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    rules = await crud.get_ua_rules(pool)
+    return [models.UaRule.model_validate(r) for r in rules]
+
+class UaRuleCreate(models.BaseModel):
+    ua_string: str
+
+@router.post("/ua-rules", response_model=models.UaRule, status_code=201, summary="添加UA规则")
+async def add_ua_rule(
+    rule_data: UaRuleCreate,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    try:
+        rule_id = await crud.add_ua_rule(pool, rule_data.ua_string)
+        # This is a bit inefficient but ensures we return the full object
+        rules = await crud.get_ua_rules(pool)
+        new_rule = next((r for r in rules if r['id'] == rule_id), None)
+        return models.UaRule.model_validate(new_rule)
+    except aiomysql.IntegrityError:
+        raise HTTPException(status_code=409, detail="该UA规则已存在。")
+
+@router.delete("/ua-rules/{rule_id}", status_code=204, summary="删除UA规则")
+async def delete_ua_rule(
+    rule_id: int,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    deleted = await crud.delete_ua_rule(pool, rule_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="找不到指定的规则ID。")
+
+@router.get("/tokens/{token_id}/logs", response_model=List[models.TokenAccessLog], summary="获取Token的访问日志")
+async def get_token_logs(
+    token_id: int,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    logs = await crud.get_token_access_logs(pool, token_id)
+    return [models.TokenAccessLog.model_validate(log) for log in logs]
 
 @router.get(
     "/comment/{episode_id}",

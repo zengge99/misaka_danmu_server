@@ -459,6 +459,21 @@
                             </div>
                             <p id="domain-save-message" class="message"></p>
                         </div>
+                        <div class="ua-filter-section">
+                            <h3>全局 User-Agent 过滤</h3>
+                            <p>对所有通过Token的访问请求进行UA过滤。模式为 "off" 时不过滤。</p>
+                            <div class="form-row">
+                                <label for="ua-filter-mode">过滤模式</label>
+                                <select id="ua-filter-mode">
+                                    <option value="off">关闭 (Off)</option>
+                                    <option value="blacklist">黑名单 (Blacklist)</option>
+                                    <option value="whitelist">白名单 (Whitelist)</option>
+                                </select>
+                                <button id="save-ua-mode-btn">保存模式</button>
+                                <button id="manage-ua-list-btn">管理名单</button>
+                            </div>
+                            <p id="ua-mode-save-message" class="message"></p>
+                        </div>
                         <table id="token-table">
                             <thead>
                                 <tr>
@@ -476,6 +491,17 @@
                             <div class="form-row">
                                 <label for="add-token-name">名称</label>
                                 <input type="text" id="add-token-name" placeholder="例如：我的dandanplay客户端" required>
+                            </div>
+                            <div class="form-row">
+                                <label for="add-token-validity">有效期</label>
+                                <select id="add-token-validity">
+                                    <option value="permanent" selected>永久</option>
+                                    <option value="1d">1 天</option>
+                                    <option value="7d">7 天</option>
+                                    <option value="30d">30 天</option>
+                                    <option value="180d">6 个月</option>
+                                    <option value="365d">1 年</option>
+                                </select>
                             </div>
                             <div class="form-actions">
                                 <button type="submit">保存</button>
@@ -496,6 +522,35 @@
                         <ul id="sources-list">
                             <!-- 爬虫源将在这里动态生成 -->
                         </ul>
+                    </div>
+                    <div id="ua-settings-view" class="content-view hidden">
+                        <div class="view-header-flexible">
+                            <h2>管理UA名单</h2>
+                            <button id="back-to-tokens-from-ua-btn">&lt; 返回Token管理</button>
+                        </div>
+                        <div class="form-card">
+                            <form id="add-ua-rule-form">
+                                <div class="form-row">
+                                    <label for="add-ua-string">添加UA字符串</label>
+                                    <input type="text" id="add-ua-string" placeholder="输入要匹配的UA关键字" required>
+                                    <button type="submit">添加</button>
+                                </div>
+                            </form>
+                            <table id="ua-rules-table">
+                                <thead><tr><th>UA字符串</th><th>创建时间</th><th>操作</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div id="token-log-view" class="content-view hidden">
+                        <div class="view-header-flexible">
+                            <h2 id="token-log-view-title">Token访问日志</h2>
+                            <button id="back-to-tokens-from-log-btn">&lt; 返回Token管理</button>
+                        </div>
+                        <table id="token-log-table">
+                            <thead><tr><th>访问时间</th><th>IP地址</th><th>状态</th><th>备注</th><th>User-Agent</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
                     <div id="settings-view" class="content-view hidden">
                         <h2>设置</h2>
