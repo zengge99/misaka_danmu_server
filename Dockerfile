@@ -5,6 +5,10 @@ FROM python:3.10-slim
 # 设置时区为亚洲/上海，以确保日志等时间正确显示
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
+# 强制 Protocol Buffers 使用纯 Python 实现。
+# 这可以避免其 C++ 后端在某些 Docker 环境中因 locale 或其他环境问题而导致的解析错误，
+# 例如 'Couldn't parse file content!' 或 'invalid UTF-8 data'。
+ENV PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 ENV TZ=Asia/Shanghai
 
 # 设置工作目录
