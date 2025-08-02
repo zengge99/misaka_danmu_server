@@ -215,7 +215,21 @@ class BilibiliScraper(BaseScraper):
         # 步骤 1: 优先尝试访问首页，模拟真实浏览器行为以获取完整的会话cookie
         try:
             self.logger.debug("Bilibili: 正在尝试从首页 (www.bilibili.com) 获取 cookie...")
-            await self._request_with_rate_limit("GET", "https://www.bilibili.com/")
+            # 模仿C#代码，为首页请求构造更真实的浏览器头，以模拟直接导航
+            homepage_headers = {
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                "Sec-CH-UA": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                "Sec-CH-UA-Mobile": "?0",
+                "Sec-CH-UA-Platform": '"Windows"',
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-User": "?1",
+                "Upgrade-Insecure-Requests": "1",
+                "Referer": "" # 覆盖客户端默认的Referer，因为直接访问首页时不应有Referer
+            }
+            await self._request_with_rate_limit("GET", "https://www.bilibili.com/", headers=homepage_headers)
             if "buvid3" in self.client.cookies:
                 self.logger.info("Bilibili: 已成功从首页获取 buvid3 cookie。")
                 return
