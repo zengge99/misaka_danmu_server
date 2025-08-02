@@ -14,29 +14,25 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\ndm.proto\x12\"biliproto.community.service.dm.v1\x1a\x04Flag.proto\x1a\x0fDanmakuElem.proto\"y\n\x10DmSegMobileReply\x12C\n\x05\x65lems\x18\x01 \x03(\x0b\x32\x34.biliproto.community.service.dm.v1.DanmakuElem\x12\r\n\x05state\x18\x02 \x01(\x05\x12\x17\n\x03\x61if\x18\x03 \x01(\x0b\x32\n.DmAiFlagb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\ndm.proto\x12\"biliproto.community.service.dm.v1\"\xde\x02\n\x0b\x44\x61nmakuElem\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x10\n\x08progress\x18\x02 \x01(\x05\x12\x0c\n\x04mode\x18\x03 \x01(\x05\x12\x10\n\x08\x66ontsize\x18\x04 \x01(\x05\x12\r\n\x05\x63olor\x18\x05 \x01(\r\x12\x0f\n\x07midHash\x18\x06 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x07 \x01(\t\x12\r\n\x05\x63time\x18\x08 \x01(\x03\x12\x0e\n\x06weight\x18\t \x01(\x05\x12\x0e\n\x06\x61\x63tion\x18\n \x01(\t\x12\x0c\n\x04pool\x18\x0b \x01(\x05\x12\x0e\n\x06idStr\x18\x0c \x01(\t\x12\x0c\n\x04\x61ttr\x18\r \x01(\x05\x12\x11\n\tanimation\x18\x0e \x01(\t\x12\x10\n\x08like_num\x18\x0f \x01(\r\x12\x10\n\x08\x63olor_v2\x18\x10 \x01(\t\x12\x12\n\ndm_type_v2\x18\x11 \x01(\r\"*\n\x04\x46lag\x12\r\n\x05value\x18\x01 \x01(\x05\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\"\xaa\x01\n\x10\x44mSegMobileReply\x12\x43\n\x05\x65lems\x18\x01 \x03(\x0b\x32\x34.biliproto.community.service.dm.v1.DanmakuElem\x12\r\n\x05state\x18\x02 \x01(\x05\x12\x42\n\x13\x61i_flag_for_summary\x18\x03 \x01(\x0b\x32%.biliproto.community.service.dm.v1.Flagb\x06proto3')
 
 
-_FLAG_DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nFlag.proto\"*\n\x04\x46lag\x12\r\n\x05value\x18\x01 \x01(\x05\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\tb\x06proto3')
-_DANMAKUELEM_DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x44\x61nmakuElem.proto\x12\"biliproto.community.service.dm.v1\"\x9c\x02\n\x0b\x44\x61nmakuElem\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x10\n\x08progress\x18\x02 \x01(\x05\x12\x0c\n\x04mode\x18\x03 \x01(\x05\x12\x10\n\x08\x66ontsize\x18\x04 \x01(\x05\x12\r\n\x05\x63olor\x18\x05 \x01(\r\x12\x0f\n\x07midHash\x18\x06 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x07 \x01(\t\x12\r\n\x05\x63time\x18\x08 \x01(\x03\x12\x0e\n\x06weight\x18\t \x01(\x05\x12\x0e\n\x06\x61\x63tion\x18\n \x01(\t\x12\x0c\n\x04pool\x18\x0b \x01(\x05\x12\x0e\n\x06idStr\x18\x0c \x01(\t\x12\x0c\n\x04\x61ttr\x18\r \x01(\x05\x12\x11\n\tanimation\x18\x0e \x01(\t\x12\x10\n\x08like_num\x18\x0f \x01(\r\x12\x10\n\x08\x63olor_v2\x18\x10 \x01(\t\x12\x12\n\ndm_type_v2\x18\x11 \x01(\r')
-
-_sym_db.RegisterFileDescriptor(_FLAG_DESCRIPTOR)
-_sym_db.RegisterFileDescriptor(_DANMAKUELEM_DESCRIPTOR)
-
+_DANMAKUELEM = DESCRIPTOR.message_types_by_name['DanmakuElem']
+_FLAG = DESCRIPTOR.message_types_by_name['Flag']
 _DMSEGMOBILEREPLY = DESCRIPTOR.message_types_by_name['DmSegMobileReply']
-Flag = _reflection.GeneratedProtocolMessageType('Flag', (_message.Message,), {
-  'DESCRIPTOR' : _FLAG_DESCRIPTOR.message_types_by_name['Flag'],
-  '__module__' : 'Flag_pb2'
-  # @@protoc_insertion_point(class_scope:Flag)
-  })
-_sym_db.RegisterMessage(Flag)
-
 DanmakuElem = _reflection.GeneratedProtocolMessageType('DanmakuElem', (_message.Message,), {
-  'DESCRIPTOR' : _DANMAKUELEM_DESCRIPTOR.message_types_by_name['DanmakuElem'],
+  'DESCRIPTOR' : _DANMAKUELEM,
   '__module__' : 'dm_pb2'
   # @@protoc_insertion_point(class_scope:biliproto.community.service.dm.v1.DanmakuElem)
   })
 _sym_db.RegisterMessage(DanmakuElem)
+
+Flag = _reflection.GeneratedProtocolMessageType('Flag', (_message.Message,), {
+  'DESCRIPTOR' : _FLAG,
+  '__module__' : 'dm_pb2'
+  # @@protoc_insertion_point(class_scope:biliproto.community.service.dm.v1.Flag)
+  })
+_sym_db.RegisterMessage(Flag)
 
 DmSegMobileReply = _reflection.GeneratedProtocolMessageType('DmSegMobileReply', (_message.Message,), {
   'DESCRIPTOR' : _DMSEGMOBILEREPLY,
@@ -46,6 +42,14 @@ DmSegMobileReply = _reflection.GeneratedProtocolMessageType('DmSegMobileReply', 
 _sym_db.RegisterMessage(DmSegMobileReply)
 
 if _descriptor._USE_C_DESCRIPTORS == False:
-  _DMSEGMOBILEREPLY.fields_by_name['elems'].message_type = DanmakuElem
-  _DMSEGMOBILEREPLY.fields_by_name['aif'].message_type = Flag
+
+  DESCRIPTOR._options = None
+  _DMSEGMOBILEREPLY.fields_by_name['elems'].message_type = _DANMAKUELEM
+  _DMSEGMOBILEREPLY.fields_by_name['ai_flag_for_summary'].message_type = _FLAG
+  _DANMAKUELEM._serialized_start=51
+  _DANMAKUELEM._serialized_end=401
+  _FLAG._serialized_start=403
+  _FLAG._serialized_end=445
+  _DMSEGMOBILEREPLY._serialized_start=448
+  _DMSEGMOBILEREPLY._serialized_end=618
 # @@protoc_insertion_point(module_scope)
