@@ -5,6 +5,11 @@ let logRefreshInterval = null;
 let originalSearchResults = [];
 let itemsForBulkImport = [];
 
+const typeMap = {
+    'tv_series': '电视节目',
+    'movie': '电影/剧场版'
+};
+
 function setupEventListeners() {
     // Home View
     document.getElementById('search-form').addEventListener('submit', handleSearch);
@@ -185,7 +190,8 @@ function renderSearchResults(results) {
         leftContainer.appendChild(posterImg);
         const infoDiv = document.createElement('div');
         infoDiv.className = 'info';
-        infoDiv.innerHTML = `<p class="title">${item.title}</p><p class="meta">源: ${item.provider} | 类型: ${item.type} | 年份: ${item.year || 'N/A'}</p>`;
+        const displayType = typeMap[item.type] || item.type;
+        infoDiv.innerHTML = `<p class="title">${item.title}</p><p class="meta">源: ${item.provider} | 类型: ${displayType} | 年份: ${item.year || 'N/A'}</p>`;
         leftContainer.appendChild(infoDiv);
         const importBtn = document.createElement('button');
         importBtn.textContent = '导入弹幕';
@@ -297,7 +303,8 @@ function _showBulkImportView(items) {
     listEl.innerHTML = '';
     items.forEach(item => {
         const li = document.createElement('li');
-        li.textContent = `${item.title} (源: ${item.provider}, 类型: ${item.type}, 季: ${item.season})`;
+        const displayType = typeMap[item.type] || item.type;
+        li.textContent = `${item.title} (源: ${item.provider}, 类型: ${displayType}, 季: ${item.season})`;
         li.style.cursor = 'pointer';
         li.addEventListener('click', () => {
             document.getElementById('final-import-name').value = item.title;
