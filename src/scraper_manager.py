@@ -1,6 +1,7 @@
 import asyncio
 import importlib
 import inspect
+import logging
 import aiomysql
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -54,12 +55,16 @@ class ScraperManager:
         for file in scrapers_dir.glob("*.py"):
             if file.name.startswith("_") or file.name == "base.py": continue
             module_name = f".scrapers.{file.stem}"
-            module = importlib.import_module(module_name, package="src")
-            for name, obj in inspect.getmembers(module, inspect.isclass):
-                if issubclass(obj, BaseScraper) and obj is not BaseScraper:
-                    provider_name = obj.provider_name # 直接访问类属性，避免实例化
-                    discovered_providers.append(provider_name)
-                    scraper_classes[provider_name] = obj
+            try:
+                module = importlib.import_module(module_name, package="src")
+                for name, obj in inspect.getmembers(module, inspect.isclass):
+                    if issubclass(obj, BaseScraper) and obj is not BaseScraper:
+                        provider_name = obj.provider_name # 直接访问类属性，避免实例化
+                        discovered_providers.append(provider_name)
+                        scraper_classes[provider_name] = obj
+            except Exception as e:
+                # 使用标准日志记录器
+                logging.getLogger(__name__).error(f"加载爬虫模块 {module_name} 失败，已跳过。错误: {e}", exc_info=True)
         
         await crud.sync_scrapers_to_db(self.pool, discovered_providers)
         settings = await crud.get_all_scraper_settings(self.pool)
