@@ -264,7 +264,7 @@ class BilibiliScraper(BaseScraper):
         
         # New WBI signing logic
         search_params = {"keyword": keyword}
-        base_url = "https://api.bilibili.com/x/web-interface/wbi/search/default"
+        base_url = "https://api.bilibili.com/x/web-interface/wbi/search/all/v2"
         mixin_key = await self._get_wbi_mixin_key()
         signed_params = self._get_wbi_signed_params(search_params, mixin_key)
         url = f"{base_url}?{urlencode(signed_params)}"
