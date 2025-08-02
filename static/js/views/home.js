@@ -15,6 +15,9 @@ function setupEventListeners() {
     document.getElementById('filter-btn-movie').addEventListener('click', handleTypeFilterClick);
     document.getElementById('filter-btn-tv_series').addEventListener('click', handleTypeFilterClick);
     document.getElementById('results-filter-input').addEventListener('input', applyFiltersAndRender);
+    document.getElementById('enable-episode-search').addEventListener('change', (e) => {
+        document.getElementById('episode-search-inputs').classList.toggle('hidden', !e.target.checked);
+    });
 
     // Bulk Import View
     document.getElementById('cancel-bulk-import-btn').addEventListener('click', () => switchView('home-view'));
@@ -62,8 +65,21 @@ async function refreshServerLogs() {
 
 async function handleSearch(e) {
     e.preventDefault();
-    const keyword = document.getElementById('search-keyword').value;
-    if (!keyword) return;
+    let keyword = document.getElementById('search-keyword').value.trim();
+    if (!keyword) {
+        alert('请输入搜索关键词。');
+        return;
+    }
+
+    const enableEpisodeSearch = document.getElementById('enable-episode-search').checked;
+    const season = document.getElementById('search-season').value;
+    const episode = document.getElementById('search-episode').value;
+
+    // 如果启用了精确搜索，并且填写了季和集，则拼接字符串
+    // 同时检查原始关键词中是否已包含 SXXEXX 格式，避免重复拼接
+    if (enableEpisodeSearch && season && episode && !/S\d+E\d+/i.test(keyword)) {
+        keyword = `${keyword} S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
+    }
 
     document.getElementById('results-list').innerHTML = '';
     toggleLoader(true);

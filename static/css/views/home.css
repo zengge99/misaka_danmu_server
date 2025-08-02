@@ -7,6 +7,25 @@
     flex-grow: 1;
 }
 
+.advanced-search-controls {
+    margin-top: 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.advanced-search-controls label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+}
+
+#episode-search-inputs input {
+    width: 80px;
+    margin-left: 5px;
+}
+
 #log-output, #test-match-results {
     background-color: #282c34;
     color: #abb2bf;

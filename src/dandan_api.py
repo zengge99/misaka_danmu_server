@@ -337,6 +337,9 @@ async def get_token_from_path(
     此函数现在还负责UA过滤和访问日志记录。
     """
     # 1. 验证 token 是否存在、启用且未过期
+    request_path = request.url.path
+    log_path = re.sub(r'^/api/[^/]+', '', request_path) # 从路径中移除 /api/{token} 部分
+
     token_info = await crud.validate_api_token(pool, token)
     if not token_info:
         # 尝试记录失败的访问
@@ -344,7 +347,7 @@ async def get_token_from_path(
         if token_record:
             is_expired = token_record.get('expires_at') and token_record['expires_at'].replace(tzinfo=timezone.utc) < datetime.now(timezone.utc)
             status = 'denied_expired' if is_expired else 'denied_disabled'
-            await crud.create_token_access_log(pool, token_record['id'], request.client.host, request.headers.get("user-agent"), status, path=request.url.path)
+            await crud.create_token_access_log(pool, token_record['id'], request.client.host, request.headers.get("user-agent"), status, path=log_path)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid API token")
 
     # 2. UA 过滤
@@ -358,15 +361,15 @@ async def get_token_from_path(
         is_matched = any(rule in user_agent for rule in ua_list)
 
         if ua_filter_mode == 'blacklist' and is_matched:
-            await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'denied_ua_blacklist', path=request.url.path)
+            await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'denied_ua_blacklist', path=log_path)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User-Agent is blacklisted")
         
         if ua_filter_mode == 'whitelist' and not is_matched:
-            await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'denied_ua_whitelist', path=request.url.path)
+            await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'denied_ua_whitelist', path=log_path)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User-Agent not in whitelist")
 
     # 3. 记录成功访问
-    await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'allowed', path=request.url.path)
+    await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'allowed', path=log_path)
 
     return token
 
