@@ -9,7 +9,7 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError
 
 from .. import models
-from ..proto import dm_pb2
+from .proto import dm_pb2
 from .base import BaseScraper
 
 # --- Pydantic Models for Bilibili API ---
