@@ -282,6 +282,21 @@ async def init_db_tables(app: FastAPI):
               PRIMARY KEY (`id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
+            # 新增：创建任务历史表
+            await cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `task_history` (
+              `id` VARCHAR(100) NOT NULL,
+              `title` VARCHAR(255) NOT NULL,
+              `status` VARCHAR(20) NOT NULL,
+              `progress` INT NOT NULL DEFAULT 0,
+              `description` TEXT NULL,
+              `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              `finished_at` TIMESTAMP NULL,
+              PRIMARY KEY (`id`),
+              INDEX `idx_created_at` (`created_at` DESC)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
             print("数据表检查完成。")
 
             # --- 步骤 3.2: 为已存在的表运行 schema 迁移检查 ---

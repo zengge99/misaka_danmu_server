@@ -1,4 +1,5 @@
 import asyncio
+import aiomysql
 import logging
 import traceback
 from enum import Enum

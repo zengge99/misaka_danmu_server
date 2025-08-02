@@ -235,19 +235,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Task Polling ---
-    async function loadAndRenderTasks() {
-        const runningTasksView = document.getElementById('running-tasks-subview');
-        if (!token || !runningTasksView || runningTasksView.classList.contains('hidden')) return;
-        try {
-            const tasks = await apiFetch('/api/ui/tasks');
-            renderTasks(tasks);
-        } catch (error) {
-            console.error("刷新任务列表失败:", error.message);
-            taskListUl.innerHTML = `<li class="error">加载任务失败: ${error.message}</li>`;
-        }
-    }
-
     // --- Event Listeners Setup ---
     function setupEventListeners() {
         // Forms
@@ -933,13 +920,50 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
-    // --- Task Manager View (Optimized Rendering) ---
-    function renderTasks(tasks) {
-        if (!taskListUl) return;
+
+    // --- Task Manager View ---
+    function handleTaskFilterClick(e) {
+        const btn = e.target.closest('.filter-btn');
+        if (!btn) return;
+
+        runningTasksFilterButtons.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        applyTaskFilters();
+    }
+
+    function applyTaskFilters() {
+        // This function now just triggers a reload from the API
+        loadAndRenderTasksWithDebounce();
+    }
+
+    async function loadAndRenderTasks() {
+        const runningTasksView = document.getElementById('running-tasks-subview');
+        if (!token || !runningTasksView || runningTasksView.classList.contains('hidden')) return;
+        
+        const searchTerm = runningTasksSearchInput.value;
+        const activeFilterBtn = runningTasksFilterButtons.querySelector('.filter-btn.active');
+        const statusFilter = activeFilterBtn ? activeFilterBtn.dataset.statusFilter : 'incomplete';
+
+        const params = new URLSearchParams();
+        if (searchTerm) params.append('search', searchTerm);
+        if (statusFilter) params.append('status', statusFilter);
+
+        try {
+            const tasks = await apiFetch(`/api/ui/tasks?${params.toString()}`);
+            renderTasks(tasks);
+        } catch (error) {
+            console.error("刷新任务列表失败:", error.message);
+            taskListUl.innerHTML = `<li class="error">加载任务失败: ${error.message}</li>`;
+        }
+    }
+
+    function renderTasks(tasksToRender) {
+        const runningTasksView = document.getElementById('running-tasks-subview');
+        if (!taskListUl || !runningTasksView || runningTasksView.classList.contains('hidden')) return;
 
         // If no tasks, show message and clear list
-        if (tasks.length === 0) {
-            taskListUl.innerHTML = '<li>当前没有任务。</li>';
+        if (tasksToRender.length === 0) {
+            taskListUl.innerHTML = '<li>没有符合条件的任务。</li>';
             return;
         }
 
