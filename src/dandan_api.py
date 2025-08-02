@@ -344,7 +344,7 @@ async def get_token_from_path(
         if token_record:
             is_expired = token_record.get('expires_at') and token_record['expires_at'].replace(tzinfo=timezone.utc) < datetime.now(timezone.utc)
             status = 'denied_expired' if is_expired else 'denied_disabled'
-            await crud.create_token_access_log(pool, token_record['id'], request.client.host, request.headers.get("user-agent"), status)
+            await crud.create_token_access_log(pool, token_record['id'], request.client.host, request.headers.get("user-agent"), status, path=request.url.path)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid API token")
 
     # 2. UA 过滤
@@ -358,15 +358,15 @@ async def get_token_from_path(
         is_matched = any(rule in user_agent for rule in ua_list)
 
         if ua_filter_mode == 'blacklist' and is_matched:
-            await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'denied_ua', remark="UA matched blacklist")
+            await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'denied_ua_blacklist', path=request.url.path)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User-Agent is blacklisted")
         
         if ua_filter_mode == 'whitelist' and not is_matched:
-            await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'denied_ua', remark="UA not in whitelist")
+            await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'denied_ua_whitelist', path=request.url.path)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User-Agent not in whitelist")
 
     # 3. 记录成功访问
-    await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'allowed')
+    await crud.create_token_access_log(pool, token_info['id'], request.client.host, user_agent, 'allowed', path=request.url.path)
 
     return token
 

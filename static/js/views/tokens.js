@@ -47,16 +47,17 @@ async function loadAndRenderTokens() {
 function renderTokens(tokens) {
     tokenTableBody.innerHTML = '';
     if (tokens.length === 0) {
-        tokenTableBody.innerHTML = '<tr><td colspan="5">没有创建任何Token。</td></tr>';
+        tokenTableBody.innerHTML = '<tr><td colspan="7">没有创建任何Token。</td></tr>';
         return;
     }
 
     tokens.forEach(token => {
         const row = tokenTableBody.insertRow();
-        const expiresText = token.expires_at ? `有效期至: ${new Date(token.expires_at).toLocaleString()}` : '永久有效';
+        const expiresText = token.expires_at ? new Date(token.expires_at).toLocaleString() : '永久有效';
         const enabledText = token.is_enabled ? '禁用' : '启用';
         row.innerHTML = `
-            <td>${token.name}<br><small>${expiresText}</small></td>
+            <td>${token.id}</td>
+            <td>${token.name}</td>
             <td>
                 <span class="token-value">
                     <span class="token-text token-hidden" data-token-value="${token.token}">************</span>
@@ -65,6 +66,7 @@ function renderTokens(tokens) {
             </td>
             <td class="token-status ${token.is_enabled ? '' : 'disabled'}">${token.is_enabled ? '✅' : '❌'}</td>
             <td>${new Date(token.created_at).toLocaleString()}</td>
+            <td>${expiresText}</td>
             <td class="actions-cell">
                 <div class="action-buttons-wrapper">
                     <button class="action-btn" data-action="copy" data-token-id="${token.id}" data-token-value="${token.token}" title="复制链接">📋</button>
@@ -78,10 +80,27 @@ function renderTokens(tokens) {
 }
 
 async function handleTokenAction(e) {
-    const button = e.target.closest('.action-btn');
-    if (!button) return;
+    const actionElement = e.target.closest('[data-action]');
+    if (!actionElement) return;
 
-    const action = button.dataset.action;
+    const action = actionElement.dataset.action;
+
+    // Handle visibility toggle separately as it's not a button
+    if (action === 'toggle-visibility') {
+        const tokenTextSpan = actionElement.previousElementSibling;
+        if (tokenTextSpan && tokenTextSpan.classList.contains('token-text')) {
+            if (tokenTextSpan.classList.contains('token-hidden')) {
+                tokenTextSpan.textContent = tokenTextSpan.dataset.tokenValue;
+                tokenTextSpan.classList.remove('token-hidden');
+            } else {
+                tokenTextSpan.textContent = '************';
+                tokenTextSpan.classList.add('token-hidden');
+            }
+        }
+        return; // Exit after handling visibility
+    }
+
+    const button = actionElement; // For all other actions, it should be a button
     const tokenId = parseInt(button.dataset.tokenId, 10);
     const tokenValue = button.dataset.tokenValue || button.closest('tr').querySelector('.token-text').dataset.tokenValue;
 
@@ -129,15 +148,6 @@ async function handleTokenAction(e) {
             } catch (error) {
                 alert(`删除失败: ${error.message}`);
             }
-        }
-    } else if (action === 'toggle-visibility') {
-        const tokenTextSpan = button.previousElementSibling;
-        if (tokenTextSpan.classList.contains('token-hidden')) {
-            tokenTextSpan.textContent = tokenTextSpan.dataset.tokenValue;
-            tokenTextSpan.classList.remove('token-hidden');
-        } else {
-            tokenTextSpan.textContent = '************';
-            tokenTextSpan.classList.add('token-hidden');
         }
     } else if (action === 'view-log') {
         const tokenName = button.dataset.tokenName;
@@ -311,7 +321,7 @@ async function showTokenLogView(tokenId, tokenName) {
                 <td>${new Date(log.access_time).toLocaleString()}</td>
                 <td>${log.ip_address}</td>
                 <td>${log.status}</td>
-                <td>${log.remark || ''}</td>
+                <td>${log.path || ''}</td>
                 <td>${log.user_agent}</td>
             `;
         });

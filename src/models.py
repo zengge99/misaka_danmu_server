@@ -190,7 +190,7 @@ class TokenAccessLog(BaseModel):
     access_time: datetime
     ip_address: str
     status: str
-    remark: Optional[str] = None
+    path: Optional[str] = None
     user_agent: Optional[str] = None
 
 # --- 用户和认证模型 ---

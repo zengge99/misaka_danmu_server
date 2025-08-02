@@ -1055,18 +1055,18 @@ async def delete_ua_rule(pool: aiomysql.Pool, rule_id: int) -> bool:
             affected_rows = await cursor.execute("DELETE FROM ua_rules WHERE id = %s", (rule_id,))
             return affected_rows > 0
 
-async def create_token_access_log(pool: aiomysql.Pool, token_id: int, ip_address: str, user_agent: Optional[str], status: str, remark: Optional[str] = None):
+async def create_token_access_log(pool: aiomysql.Pool, token_id: int, ip_address: str, user_agent: Optional[str], status: str, path: Optional[str] = None):
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute(
-                "INSERT INTO token_access_logs (token_id, ip_address, user_agent, status, remark) VALUES (%s, %s, %s, %s, %s)",
-                (token_id, ip_address, user_agent, status, remark)
+                "INSERT INTO token_access_logs (token_id, ip_address, user_agent, status, path) VALUES (%s, %s, %s, %s, %s)",
+                (token_id, ip_address, user_agent, status, path)
             )
 
 async def get_token_access_logs(pool: aiomysql.Pool, token_id: int) -> List[Dict[str, Any]]:
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            await cursor.execute("SELECT ip_address, user_agent, access_time, status, remark FROM token_access_logs WHERE token_id = %s ORDER BY access_time DESC LIMIT 200", (token_id,))
+            await cursor.execute("SELECT ip_address, user_agent, access_time, status, path FROM token_access_logs WHERE token_id = %s ORDER BY access_time DESC LIMIT 200", (token_id,))
             return await cursor.fetchall()
 
 async def toggle_source_favorite_status(pool: aiomysql.Pool, source_id: int) -> bool:

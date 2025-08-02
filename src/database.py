@@ -219,8 +219,8 @@ async def init_db_tables(app: FastAPI):
               `ip_address` VARCHAR(45) NOT NULL,
               `user_agent` TEXT NULL,
               `access_time` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              `status` ENUM('allowed', 'denied_expired', 'denied_disabled', 'denied_ua') NOT NULL,
-              `remark` VARCHAR(255) NULL,
+              `status` VARCHAR(50) NOT NULL,
+              `path` VARCHAR(512) NULL,
               PRIMARY KEY (`id`),
               INDEX `idx_token_id_time` (`token_id` ASC, `access_time` DESC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -454,6 +454,18 @@ async def init_db_tables(app: FastAPI):
                 print("'api_tokens' 表 'expires_at' 字段添加完成。")
             except aiomysql.OperationalError as e:
                 if e.args[0] == 1060: # Duplicate column name
+                    pass
+                else:
+                    raise
+
+            # 迁移检查：将 token_access_logs 的 remark 列修改为 path
+            try:
+                await cursor.execute("ALTER TABLE `token_access_logs` CHANGE COLUMN `remark` `path` VARCHAR(512) NULL DEFAULT NULL;")
+                print("'token_access_logs' 表 'remark' 列已成功修改为 'path'。")
+            except aiomysql.OperationalError as e:
+                # 1054: Unknown column 'remark' (说明已经是新版或从未有过此列)
+                # 1060: Duplicate column name 'path' (说明已存在path列)
+                if e.args[0] in [1054, 1060]:
                     pass
                 else:
                     raise
