@@ -62,6 +62,18 @@ class ScraperManager:
                         provider_name = obj.provider_name # 直接访问类属性，避免实例化
                         discovered_providers.append(provider_name)
                         scraper_classes[provider_name] = obj
+            except TypeError as e:
+                if "Couldn't parse file content!" in str(e):
+                    # 这是一个针对 protobuf 版本不兼容的特殊情况。
+                    error_msg = (
+                        f"加载爬虫模块 {module_name} 失败，疑似 protobuf 版本不兼容。 "
+                        f"请确保已将 'protobuf' 版本固定为 '3.20.3' (在 requirements.txt 中), "
+                        f"并且已经通过 'docker-compose build' 命令重新构建了您的 Docker 镜像。"
+                    )
+                    logging.getLogger(__name__).error(error_msg, exc_info=True)
+                else:
+                    # 正常处理其他 TypeError
+                    logging.getLogger(__name__).error(f"加载爬虫模块 {module_name} 失败，已跳过。错误: {e}", exc_info=True)
             except Exception as e:
                 # 使用标准日志记录器
                 logging.getLogger(__name__).error(f"加载爬虫模块 {module_name} 失败，已跳过。错误: {e}", exc_info=True)
