@@ -230,7 +230,16 @@ function renderSearchResults(results) {
         const infoDiv = document.createElement('div');
         infoDiv.className = 'info';
         const displayType = typeMap[item.type] || item.type;
-        let metaHtml = `<p class="title">${item.title}</p><p class="meta">源: ${item.provider} | 类型: ${displayType} | 年份: ${item.year || 'N/A'} | 总集数: ${item.episodeCount || '未知'}</p>`;
+        
+        const metaParts = [
+            `源: ${item.provider}`,
+            `类型: ${displayType}`,
+            `年份: ${item.year || 'N/A'}`
+        ];
+        if (item.type !== 'movie') {
+            metaParts.push(`总集数: ${item.episodeCount || '未知'}`);
+        }
+        let metaHtml = `<p class="title">${item.title}</p><p class="meta">${metaParts.join(' | ')}</p>`;
         
         if (item.currentEpisodeIndex) {
             metaHtml += `<p class="extra-meta">获取→ | 季: ${String(item.season).padStart(2, '0')} | 集: ${String(item.currentEpisodeIndex).padStart(2, '0')}</p>`;
