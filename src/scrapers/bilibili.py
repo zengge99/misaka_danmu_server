@@ -3,6 +3,7 @@ import logging
 import re
 import time
 import hashlib
+import json
 from urllib.parse import urlencode
 from typing import Any, Callable, Dict, List, Optional, Union
 from datetime import datetime
@@ -251,11 +252,14 @@ class BilibiliScraper(BaseScraper):
         return params
 
     async def search(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:
+        self.logger.info(f"Bilibili: 正在搜索 '{keyword}'...")
         cache_key = f"search_{self.provider_name}_{keyword}"
         cached_results = await self._get_from_cache(cache_key)
         if cached_results is not None:
+            self.logger.info(f"Bilibili: 从缓存中命中搜索结果 '{keyword}'")
             return [models.ProviderSearchInfo.model_validate(r) for r in cached_results]
 
+        self.logger.debug(f"Bilibili: 缓存未命中，正在从网络获取...")
         await self._ensure_session_cookie()
         
         # New WBI signing logic
@@ -264,19 +268,28 @@ class BilibiliScraper(BaseScraper):
         mixin_key = await self._get_wbi_mixin_key()
         signed_params = self._get_wbi_signed_params(search_params, mixin_key)
         url = f"{base_url}?{urlencode(signed_params)}"
+        self.logger.debug(f"Bilibili: 正在请求 URL: {url}")
         
         results = []
         try:
             response = await self.client.get(url)
+            self.logger.debug(f"Bilibili: 收到响应，状态码: {response.status_code}")
             response.raise_for_status()
-            api_result = BiliApiResult.model_validate(response.json())
+            
+            response_json = response.json()
+            self.logger.debug(f"Bilibili: 收到原始JSON响应: {json.dumps(response_json, indent=2, ensure_ascii=False)}")
+            
+            api_result = BiliApiResult.model_validate(response_json)
 
             if api_result.code == 0 and api_result.data and api_result.data.result:
+                self.logger.info(f"Bilibili: API调用成功，开始处理返回的 {len(api_result.data.result)} 个结果组。")
                 for group in api_result.data.result:
+                    self.logger.debug(f"Bilibili: 正在处理结果组: {group.result_type}")
                     if group.result_type in ["media_bangumi", "media_ft"] and group.data:
                         for item in group.data:
                             media_id = ""
                             media_type = "tv_series"
+                            self.logger.debug(f"Bilibili: 发现媒体: '{item.title}' (类型: {group.result_type})")
                             if group.result_type == "media_bangumi" and item.season_id:
                                 media_id = f"ss{item.season_id}"
                             elif group.result_type == "media_ft" and item.bvid:
@@ -308,9 +321,13 @@ class BilibiliScraper(BaseScraper):
                                 episodeCount=item.ep_size,
                                 currentEpisodeIndex=episode_info.get("episode") if episode_info else None
                             ))
+            else:
+                self.logger.warning(f"Bilibili: API返回错误。代码: {api_result.code}, 消息: '{api_result.message}'")
+
         except Exception as e:
             self.logger.error(f"Bilibili: 搜索 '{keyword}' 失败: {e}", exc_info=True)
 
+        self.logger.info(f"Bilibili: 搜索 '{keyword}' 完成，找到 {len(results)} 个有效结果。")
         await self._set_to_cache(cache_key, [r.model_dump() for r in results], 'search_ttl_seconds', 300)
         return results
 
