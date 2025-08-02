@@ -26,7 +26,8 @@ function setupEventListeners() {
     document.addEventListener('logrefresh:stop', stopLogRefresh);
     document.addEventListener('tmdb-search:selected-for-bulk', (e) => {
         // Listen for the event dispatched from editAnime.js
-        document.getElementById('final-import-name').value = e.detail.name_en || e.detail.name_jp || '';
+        const chineseName = e.detail.aliases_cn && e.detail.aliases_cn.length > 0 ? e.detail.aliases_cn[0] : null;
+        document.getElementById('final-import-name').value = chineseName || e.detail.name_en || e.detail.name_jp || '';
         document.getElementById('final-import-tmdb-id').value = e.detail.id || '';
         switchView('bulk-import-view'); // Switch back to the bulk import view
     });
