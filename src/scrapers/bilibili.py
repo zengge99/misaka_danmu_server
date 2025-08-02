@@ -93,13 +93,11 @@ class BiliSearchMedia(BaseModel):
     goto_url: Optional[str] = None
     cover: Optional[str] = None
 
-class BiliSearchGroup(BaseModel):
-    result_type: str = Field(alias="result_type")
-    data: Optional[List[BiliSearchMedia]] = None
-
+# This model is now for the typed search result
 class BiliSearchData(BaseModel):
-    result: Optional[List[BiliSearchGroup]] = None
+    result: Optional[List[BiliSearchMedia]] = None
 
+# This is the generic API result wrapper
 class BiliApiResult(BaseModel):
     code: int
     message: str
@@ -321,79 +319,95 @@ class BilibiliScraper(BaseScraper):
 
         self.logger.debug(f"Bilibili: 缓存未命中，正在从网络获取...")
         await self._ensure_session_cookie()
+
+        # We will search for both 'media_bangumi' (番剧) and 'media_ft' (影视) types
+        search_types = ["media_bangumi", "media_ft"]
+        tasks = [self._search_by_type(keyword, search_type, episode_info) for search_type in search_types]
         
-        # New WBI signing logic
-        search_params = {"keyword": keyword}
-        base_url = "https://api.bilibili.com/x/web-interface/wbi/search/all/v2"
+        # asyncio.gather will run the searches concurrently
+        results_from_all_types = await asyncio.gather(*tasks, return_exceptions=True)
+
+        all_results = []
+        for res in results_from_all_types:
+            if isinstance(res, Exception):
+                self.logger.error(f"Bilibili: A search sub-task failed: {res}", exc_info=True)
+            elif res:
+                all_results.extend(res)
+        
+        # Deduplicate results based on mediaId
+        final_results = []
+        seen_media_ids = set()
+        for item in all_results:
+            if item.mediaId not in seen_media_ids:
+                final_results.append(item)
+                seen_media_ids.add(item.mediaId)
+
+        self.logger.info(f"Bilibili: 搜索 '{keyword}' 完成，找到 {len(final_results)} 个有效结果。")
+        await self._set_to_cache(cache_key, [r.model_dump() for r in final_results], 'search_ttl_seconds', 300)
+        return final_results
+
+    async def _search_by_type(self, keyword: str, search_type: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:
+        """Helper function to search for a specific type on Bilibili."""
+        self.logger.debug(f"Bilibili: Searching for type '{search_type}' with keyword '{keyword}'")
+        
+        search_params = {"keyword": keyword, "search_type": search_type}
+        base_url = "https://api.bilibili.com/x/web-interface/wbi/search/type"
         mixin_key = await self._get_wbi_mixin_key()
         signed_params = self._get_wbi_signed_params(search_params, mixin_key)
         url = f"{base_url}?{urlencode(signed_params)}"
-        self.logger.debug(f"Bilibili: 正在请求 URL: {url}")
         
         results = []
         try:
             response = await self._request_with_rate_limit("GET", url)
-            self.logger.debug(f"Bilibili: 收到响应，状态码: {response.status_code}")
             response.raise_for_status()
             
             response_json = response.json()
-            self.logger.info(f"Bilibili: 收到原始JSON响应: {json.dumps(response_json, indent=2, ensure_ascii=False)}")
-            
+            self.logger.info(f"Bilibili: 收到 '{search_type}' 类型的原始JSON响应: {json.dumps(response_json, indent=2, ensure_ascii=False)}")
             api_result = BiliApiResult.model_validate(response_json)
 
             if api_result.code == 0 and api_result.data and api_result.data.result:
-                self.logger.info(f"Bilibili: API调用成功，开始处理返回的 {len(api_result.data.result)} 个结果组。")
-                self.logger.debug(f"Bilibili: 搜索结果组内容: {json.dumps([g.model_dump(exclude_none=True) for g in api_result.data.result], indent=2, ensure_ascii=False)}")
-                for group in api_result.data.result:
-                    self.logger.debug(f"Bilibili: 正在处理结果组: {group.result_type}")
-                    if group.result_type in ["media_bangumi", "media_ft"] and group.data:
-                        for item in group.data:
-                            media_id = ""
-                            # 默认类型为电视剧，因为番剧和大部分PGC内容都属于此类
-                            media_type = "tv_series" 
-                            self.logger.debug(f"Bilibili: 发现媒体: '{item.title}' (类型: {group.result_type})")
+                self.logger.info(f"Bilibili: API call for type '{search_type}' successful, found {len(api_result.data.result)} items.")
+                for item in api_result.data.result:
+                    media_id = ""
+                    media_type = "tv_series"
+                    
+                    if item.season_id:
+                        media_id = f"ss{item.season_id}"
+                        if item.season_type_name == "电影":
+                            media_type = "movie"
+                    elif item.bvid:
+                        media_id = f"bv{item.bvid}"
+                    
+                    if not media_id: continue
 
-                            # 修正：番剧(media_bangumi)和电影(media_ft)都使用 season_id
-                            if (group.result_type == "media_bangumi" or group.result_type == "media_ft") and item.season_id:
-                                media_id = f"ss{item.season_id}"
-                                if item.season_type_name == "电影":
-                                    media_type = "movie"
-                            # 保留对普通视频合集(UGC)的处理，它们可能在 media_ft 分类下并使用 bvid
-                            elif group.result_type == "media_ft" and item.bvid:
-                                media_id = f"bv{item.bvid}"
-                            
-                            if not media_id: continue
+                    year = None
+                    try:
+                        if item.pubdate:
+                            if isinstance(item.pubdate, int):
+                                year = datetime.fromtimestamp(item.pubdate).year
+                            elif isinstance(item.pubdate, str) and len(item.pubdate) >= 4:
+                                year = int(item.pubdate[:4])
+                        elif item.pubtime:
+                            year = datetime.fromtimestamp(item.pubtime).year
+                    except (ValueError, TypeError, OSError):
+                        pass
 
-                            year = None
-                            try:
-                                if item.pubdate:
-                                    if isinstance(item.pubdate, int):
-                                        year = datetime.fromtimestamp(item.pubdate).year
-                                    elif isinstance(item.pubdate, str) and len(item.pubdate) >= 4:
-                                        year = int(item.pubdate[:4])
-                                elif item.pubtime:
-                                    year = datetime.fromtimestamp(item.pubtime).year
-                            except (ValueError, TypeError, OSError):
-                                pass
-
-                            results.append(models.ProviderSearchInfo(
-                                provider=self.provider_name,
-                                mediaId=media_id,
-                                title=re.sub(r'<[^>]+>', '', item.title).replace(":", "："),
-                                type=media_type,
-                                year=year,
-                                imageUrl=item.cover,
-                                episodeCount=item.ep_size,
-                                currentEpisodeIndex=episode_info.get("episode") if episode_info else None
-                            ))
+                    results.append(models.ProviderSearchInfo(
+                        provider=self.provider_name,
+                        mediaId=media_id,
+                        title=re.sub(r'<[^>]+>', '', item.title).replace(":", "："),
+                        type=media_type,
+                        year=year,
+                        imageUrl=item.cover,
+                        episodeCount=item.ep_size,
+                        currentEpisodeIndex=episode_info.get("episode") if episode_info else None
+                    ))
             else:
-                self.logger.warning(f"Bilibili: API返回错误。代码: {api_result.code}, 消息: '{api_result.message}'")
+                self.logger.warning(f"Bilibili: API for type '{search_type}' returned error. Code: {api_result.code}, Message: '{api_result.message}'")
 
         except Exception as e:
-            self.logger.error(f"Bilibili: 搜索 '{keyword}' 失败: {e}", exc_info=True)
-
-        self.logger.info(f"Bilibili: 搜索 '{keyword}' 完成，找到 {len(results)} 个有效结果。")
-        await self._set_to_cache(cache_key, [r.model_dump() for r in results], 'search_ttl_seconds', 300)
+            self.logger.error(f"Bilibili: Search for type '{search_type}' failed: {e}", exc_info=True)
+        
         return results
 
     async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None, db_media_type: Optional[str] = None) -> List[models.ProviderEpisodeInfo]:
