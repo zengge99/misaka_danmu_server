@@ -168,7 +168,7 @@ class IqiyiScraper(BaseScraper):
                 results.append(models.ProviderSearchInfo(
                     provider=self.provider_name,
                     mediaId=link_id,
-                    title=album.album_title.replace(":", "："),
+                    title=re.sub(r'<[^>]+>', '', album.album_title).replace(":", "："),
                     type=media_type,
                     year=album.year,
                     imageUrl=album.album_img,

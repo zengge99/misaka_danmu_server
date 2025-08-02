@@ -349,14 +349,18 @@ class BilibiliScraper(BaseScraper):
                     if group.result_type in ["media_bangumi", "media_ft"] and group.data:
                         for item in group.data:
                             media_id = ""
-                            media_type = "tv_series"
+                            # 默认类型为电视剧，因为番剧和大部分PGC内容都属于此类
+                            media_type = "tv_series" 
                             self.logger.debug(f"Bilibili: 发现媒体: '{item.title}' (类型: {group.result_type})")
-                            if group.result_type == "media_bangumi" and item.season_id:
+
+                            # 修正：番剧(media_bangumi)和电影(media_ft)都使用 season_id
+                            if (group.result_type == "media_bangumi" or group.result_type == "media_ft") and item.season_id:
                                 media_id = f"ss{item.season_id}"
-                            elif group.result_type == "media_ft" and item.bvid:
-                                media_id = f"bv{item.bvid}"
                                 if item.season_type_name == "电影":
                                     media_type = "movie"
+                            # 保留对普通视频合集(UGC)的处理，它们可能在 media_ft 分类下并使用 bvid
+                            elif group.result_type == "media_ft" and item.bvid:
+                                media_id = f"bv{item.bvid}"
                             
                             if not media_id: continue
 
@@ -375,7 +379,7 @@ class BilibiliScraper(BaseScraper):
                             results.append(models.ProviderSearchInfo(
                                 provider=self.provider_name,
                                 mediaId=media_id,
-                                title=re.sub(r'<.*?>', '', item.title).replace(":", "："),
+                                title=re.sub(r'<[^>]+>', '', item.title).replace(":", "："),
                                 type=media_type,
                                 year=year,
                                 imageUrl=item.cover,

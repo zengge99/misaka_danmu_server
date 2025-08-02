@@ -143,8 +143,8 @@ class TencentScraper(BaseScraper):
                         continue
 
                     video_info = item.video_info
-                    # 清理标题中的HTML高亮标签 (如 <em>)，这是模仿C#参考代码中的逻辑
-                    cleaned_title = re.sub(r'<.*?>', '', video_info.title)
+                    # 清理标题中的HTML高亮标签 (如 <em>)
+                    cleaned_title = re.sub(r'<[^>]+>', '', video_info.title)
 
                     # 3. 相似度检查：确保搜索词与结果标题相关
                     # 归一化处理：转小写，移除空格
