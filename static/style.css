@@ -809,6 +809,18 @@ header {
     transition: width 0.3s ease-in-out;
 }
 
+/* New controls for views like task manager */
+.view-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.view-controls input[type="text"] {
+    max-width: 300px;
+}
+
 /* Search Result Filter Controls */
 #results-filter-controls {
     display: flex;

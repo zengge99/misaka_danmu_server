@@ -72,6 +72,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const taskManagerView = document.getElementById('task-manager-view');
     const taskListUl = document.getElementById('task-list');
     const taskManagerSubNav = taskManagerView.querySelector('.settings-sub-nav');
+    const runningTasksSearchInput = document.getElementById('running-tasks-search-input');
+    const runningTasksFilterButtons = document.getElementById('running-tasks-filter-buttons');
     const taskManagerSubViews = taskManagerView.querySelectorAll('.settings-subview');
     const scheduledTasksTableBody = document.querySelector('#scheduled-tasks-table tbody');
     const addScheduledTaskBtn = document.getElementById('add-scheduled-task-btn');
@@ -123,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let logRefreshInterval = null;
     let currentEpisodes = []; // 用于存储当前分集列表的上下文
     let originalSearchResults = []; // 用于存储原始搜索结果以进行前端过滤
+    let allRunningTasks = []; // 用于存储所有运行中任务以进行前端过滤
     let _currentSearchSelectionData = null; // 用于存储搜索选择的数据，以供“应用”按钮使用
 
     // --- Core Functions ---
@@ -237,10 +240,11 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadAndRenderTasks() {
         if (!token || taskManagerView.classList.contains('hidden')) return;
         try {
-            const tasks = await apiFetch('/api/ui/tasks');
-            renderTasks(tasks);
+            allRunningTasks = await apiFetch('/api/ui/tasks');
+            applyTaskFilters();
         } catch (error) {
-            console.error("刷新日志失败:", error.message);
+            console.error("刷新任务列表失败:", error.message);
+            taskListUl.innerHTML = `<li class="error">加载任务失败: ${error.message}</li>`;
         }
     }
 
@@ -349,6 +353,9 @@ document.addEventListener('DOMContentLoaded', () => {
         reassociateSearchInput.addEventListener('input', handleReassociateSearch);
         // New listeners for scheduled tasks
         taskManagerSubNav.addEventListener('click', handleTaskManagerSubNav);
+        // New listeners for running tasks filter
+        runningTasksSearchInput.addEventListener('input', applyTaskFilters);
+        runningTasksFilterButtons.addEventListener('click', handleTaskFilterClick);
         addScheduledTaskBtn.addEventListener('click', () => showEditScheduledTaskView());
         editScheduledTaskForm.addEventListener('submit', handleScheduledTaskFormSubmit);
         backToTasksFromEditBtn.addEventListener('click', () => {
@@ -943,7 +950,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const existingTaskElements = new Map([...taskListUl.querySelectorAll('.task-item')].map(el => [el.dataset.taskId, el]));
-        const incomingTaskIds = new Set(tasks.map(t => t.task_id));
+        const incomingTaskIds = new Set(tasksToRender.map(t => t.task_id));
 
         // Remove tasks that are no longer in the list (e.g., if backend state is cleared)
         for (const [taskId, element] of existingTaskElements.entries()) {
@@ -953,7 +960,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Update existing or add new tasks
-        tasks.forEach(task => {
+        tasksToRender.forEach(task => {
             const statusColor = {
                 "已完成": "var(--success-color)",
                 "失败": "var(--error-color)",
