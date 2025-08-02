@@ -1,8 +1,10 @@
 import asyncio
 import logging
 import re
-from typing import Any, Callable, Dict, List, Optional, Union
+import time
+import hashlib
 from urllib.parse import urlencode
+from typing import Any, Callable, Dict, List, Optional, Union
 from datetime import datetime
 
 import aiomysql
@@ -140,6 +142,21 @@ class BiliVideoViewResult(BaseModel):
 class BilibiliScraper(BaseScraper):
     provider_name = "bilibili"
 
+    # For WBI signing
+    _WBI_MIXIN_KEY_CACHE: Dict[str, Any] = {
+        "key": None,
+        "timestamp": 0,
+    }
+    _WBI_MIXIN_KEY_CACHE_TTL = 3600  # Cache for 1 hour
+
+    # From https://github.com/SocialSisterYi/bilibili-API-collect/blob/master/docs/misc/wbi.md
+    _WBI_MIXIN_KEY_TABLE = [
+        46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49,
+        33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40,
+        61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62,
+        11, 36, 20, 34, 44, 16, 52
+    ]
+
     def __init__(self, pool: aiomysql.Pool):
         super().__init__(pool)
         self.client = httpx.AsyncClient(
@@ -154,14 +171,84 @@ class BilibiliScraper(BaseScraper):
     async def close(self):
         await self.client.aclose()
 
-    async def _ensure_session_cookie(self):
-        if "buvid3" in self.client.cookies:
+    async def _ensure_session_cookie(self, force_refresh: bool = False):
+        """
+        确保客户端拥有有效的 buvid3 cookie。
+        使用 /getbuvid 接口获取，比访问首页更可靠。
+        :param force_refresh: 如果为 True，则无论 cookie 是否存在都强制刷新。
+        """
+        if not force_refresh and "buvid3" in self.client.cookies:
             return
         try:
-            await self.client.get("https://www.bilibili.com/")
-            self.logger.info("Bilibili: 成功获取会话Cookie (buvid3)。")
+            if force_refresh:
+                self.logger.info("Bilibili: 强制刷新会话Cookie (buvid3)...")
+            else:
+                self.logger.info("Bilibili: buvid3 cookie未找到，正在获取...")
+            
+            # 使用新的、更可靠的端点来获取 buvid3
+            await self.client.get("https://api.bilibili.com/x/web-frontend/getbuvid")
+            self.logger.info("Bilibili: 成功获取或刷新会话Cookie (buvid3)。")
         except Exception as e:
-            self.logger.warning(f"Bilibili: 获取会话Cookie失败: {e}")
+            self.logger.error(f"Bilibili: 获取/刷新会话Cookie失败: {e}", exc_info=True)
+
+    # --- WBI Signing Methods ---
+    async def _get_wbi_mixin_key(self) -> str:
+        now = int(time.time())
+        if self._WBI_MIXIN_KEY_CACHE.get("key") and (now - self._WBI_MIXIN_KEY_CACHE.get("timestamp", 0) < self._WBI_MIXIN_KEY_CACHE_TTL):
+            return self._WBI_MIXIN_KEY_CACHE["key"]
+
+        self.logger.info("Bilibili: WBI mixin key expired or not found, fetching new one...")
+
+        async def _fetch_key_data():
+            nav_resp = await self.client.get("https://api.bilibili.com/x/web-interface/nav")
+            nav_resp.raise_for_status()
+            return nav_resp.json().get("data", {})
+
+        try:
+            nav_data = await _fetch_key_data()
+        except Exception as e:
+            self.logger.warning(f"Bilibili: 第一次获取WBI密钥失败，可能由于cookie无效。正在刷新cookie后重试。错误: {e}")
+            await self._ensure_session_cookie(force_refresh=True)
+            try:
+                nav_data = await _fetch_key_data()
+            except Exception as e2:
+                self.logger.error(f"Bilibili: 刷新cookie后获取WBI密钥仍然失败: {e2}", exc_info=True)
+                return "dba4a5925b345b4598b7452c75070bca" # Fallback
+
+        try:
+            img_url = nav_data.get("wbi_img", {}).get("img_url", "")
+            sub_url = nav_data.get("wbi_img", {}).get("sub_url", "")
+            
+            img_key = img_url.split('/')[-1].split('.')[0]
+            sub_key = sub_url.split('/')[-1].split('.')[0]
+            
+            mixin_key = "".join([(img_key + sub_key)[i] for i in self._WBI_MIXIN_KEY_TABLE])
+            
+            self._WBI_MIXIN_KEY_CACHE["key"] = mixin_key
+            self._WBI_MIXIN_KEY_CACHE["timestamp"] = now
+            self.logger.info("Bilibili: Successfully fetched new WBI mixin key.")
+            return mixin_key
+        except Exception as e:
+            self.logger.error(f"Bilibili: Failed to get WBI mixin key: {e}", exc_info=True)
+            # Fallback to a known old key if fetching fails, might work for a while
+            return "dba4a5925b345b4598b7452c75070bca"
+
+    def _get_wbi_signed_params(self, params: Dict[str, Any], mixin_key: str) -> Dict[str, Any]:
+        # Add timestamp
+        params['wts'] = int(time.time())
+        
+        # Sort params
+        sorted_params = sorted(params.items())
+        
+        # Create query string
+        query = urlencode(sorted_params)
+        
+        # Calculate signature
+        signed_query = query + mixin_key
+        w_rid = hashlib.md5(signed_query.encode('utf-8')).hexdigest()
+        
+        params['w_rid'] = w_rid
+        return params
 
     async def search(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:
         cache_key = f"search_{self.provider_name}_{keyword}"
@@ -170,7 +257,13 @@ class BilibiliScraper(BaseScraper):
             return [models.ProviderSearchInfo.model_validate(r) for r in cached_results]
 
         await self._ensure_session_cookie()
-        url = f"https://api.bilibili.com/x/web-interface/search/all/v2?keyword={urlencode({'keyword': keyword})[8:]}"
+        
+        # New WBI signing logic
+        search_params = {"keyword": keyword}
+        base_url = "https://api.bilibili.com/x/web-interface/wbi/search/default"
+        mixin_key = await self._get_wbi_mixin_key()
+        signed_params = self._get_wbi_signed_params(search_params, mixin_key)
+        url = f"{base_url}?{urlencode(signed_params)}"
         
         results = []
         try:
