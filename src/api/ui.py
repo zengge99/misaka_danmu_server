@@ -150,7 +150,7 @@ async def search_anime_provider(
                     search_aliases.add(title_info['title'])
                 search_aliases.add(details.get('name') or details.get('title'))
                 search_aliases.add(details.get('original_name') or details.get('original_title'))
-                logger.info(f"TMDB辅助搜索成功，将使用以下别名进行搜索: {search_aliases}")
+                logger.info(f"TMDB辅助搜索成功，将使用以下别名进行过滤: {search_aliases}")
     except Exception as e:
         logger.warning(f"TMDB辅助搜索失败: {e}", exc_info=True)
 
