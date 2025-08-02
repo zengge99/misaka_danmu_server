@@ -89,7 +89,8 @@ class SchedulerManager:
                     runner = self._create_job_runner(task['job_type'])
                     job = self.scheduler.add_job(runner, CronTrigger.from_crontab(task['cron_expression']), id=task['id'], name=task['name'], replace_existing=True)
                     if not task['is_enabled']: self.scheduler.pause_job(task['id'])
-                    await crud.update_scheduled_task_run_times(self.pool, job.id, job.last_run_time, job.next_run_time)
+                    # When loading, the job object is new and has no last_run_time. We only need to update the next_run_time.
+                    await crud.update_scheduled_task_run_times(self.pool, job.id, task['last_run_at'], job.next_run_time)
                 except Exception as e:
                     logger.error(f"加载定时任务 '{task['name']}' (ID: {task['id']}) 失败: {e}")
 
