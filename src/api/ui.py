@@ -727,6 +727,14 @@ async def logout():
     """
     return
 
+@router.get("/scheduled-tasks/available", response_model=List[Dict[str, str]], summary="获取所有可用的定时任务类型")
+async def get_available_job_types(
+    current_user: models.User = Depends(security.get_current_user),
+    scheduler: SchedulerManager = Depends(get_scheduler_manager)
+):
+    """获取所有已加载的、可供用户选择的定时任务类型。"""
+    return scheduler.get_available_jobs()
+
 
 # --- Scheduled Tasks API ---
 

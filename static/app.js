@@ -2344,18 +2344,38 @@ document.addEventListener('DOMContentLoaded', () => {
         taskManagerView.classList.add('hidden');
         editScheduledTaskView.classList.remove('hidden');
         editScheduledTaskForm.reset();
+        const taskTypeSelect = document.getElementById('edit-scheduled-task-type');
+        taskTypeSelect.innerHTML = '<option value="">加载中...</option>';
+        taskTypeSelect.disabled = true;
 
-        if (task && typeof task.id !== 'undefined') {
-            editScheduledTaskTitle.textContent = '编辑定时任务';
-            document.getElementById('edit-scheduled-task-id').value = task.id;
-            document.getElementById('edit-scheduled-task-name').value = task.name;
-            document.getElementById('edit-scheduled-task-type').value = task.job_type;
-            document.getElementById('edit-scheduled-task-cron').value = task.cron_expression;
-            document.getElementById('edit-scheduled-task-enabled').checked = task.is_enabled;
-        } else {
-            editScheduledTaskTitle.textContent = '添加定时任务';
-            document.getElementById('edit-scheduled-task-id').value = '';
-        }
+        apiFetch('/api/ui/scheduled-tasks/available').then(jobs => {
+            taskTypeSelect.innerHTML = '';
+            if (jobs.length === 0) {
+                taskTypeSelect.innerHTML = '<option value="">无可用任务</option>';
+            } else {
+                jobs.forEach(job => {
+                    const option = document.createElement('option');
+                    option.value = job.type;
+                    option.textContent = job.name;
+                    taskTypeSelect.appendChild(option);
+                });
+                taskTypeSelect.disabled = false;
+            }
+            // If editing, set the correct value after populating
+            if (task && typeof task.id !== 'undefined') {
+                editScheduledTaskTitle.textContent = '编辑定时任务';
+                document.getElementById('edit-scheduled-task-id').value = task.id;
+                document.getElementById('edit-scheduled-task-name').value = task.name;
+                taskTypeSelect.value = task.job_type;
+                document.getElementById('edit-scheduled-task-cron').value = task.cron_expression;
+                document.getElementById('edit-scheduled-task-enabled').checked = task.is_enabled;
+            } else {
+                editScheduledTaskTitle.textContent = '添加定时任务';
+                document.getElementById('edit-scheduled-task-id').value = '';
+            }
+        }).catch(err => {
+            taskTypeSelect.innerHTML = `<option value="">加载失败: ${err.message}</option>`;
+        });
     }
 
     async function handleScheduledTaskFormSubmit(e) {
