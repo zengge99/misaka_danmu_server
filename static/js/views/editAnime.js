@@ -409,9 +409,9 @@ async function loadAndRenderEpisodeGroupDetails(groupId, groupName) {
     }
 }
 
-async function handleReassociateSourcesClick() {
-    const sourceAnimeId = document.getElementById('edit-anime-id').value;
-    const sourceAnimeTitle = document.getElementById('edit-anime-title').value;
+async function handleReassociateSourcesClick({ animeId, animeTitle }) {
+    const sourceAnimeId = animeId;
+    const sourceAnimeTitle = animeTitle;
     if (!sourceAnimeId) {
         alert("无法获取当前作品ID。");
         return;
@@ -509,6 +509,7 @@ async function handleEditEpisodeSave(e) {
 export function setupEditAnimeEventListeners() {
     initializeElements();
     document.addEventListener('show:edit-anime', (e) => showEditAnimeView(e.detail.animeId));
+    document.addEventListener('show:reassociate-view', (e) => handleReassociateSourcesClick(e.detail));
     document.addEventListener('show:edit-episode', (e) => showEditEpisodeView(e.detail));
 
     // Listen for search request from bulk import view
@@ -530,7 +531,6 @@ export function setupEditAnimeEventListeners() {
     document.getElementById('search-bgmid-btn').addEventListener('click', handleSearchBgmId);
     document.getElementById('search-tmdbid-btn').addEventListener('click', handleSearchTmdbId);
     document.getElementById('select-egid-btn').addEventListener('click', handleSelectEgidBtnClick);
-    document.getElementById('reassociate-sources-btn').addEventListener('click', handleReassociateSourcesClick);
 
     backToEditAnimeFromBgmSearchBtn.addEventListener('click', handleBackToEditAnime);
     document.getElementById('bangumi-search-form').addEventListener('submit', handleBangumiSearchSubmit);

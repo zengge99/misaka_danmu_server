@@ -156,7 +156,6 @@
                         <div class="view-header-with-actions">
                             <h2>编辑影视信息</h2>
                             <div class="header-actions">
-                                <button id="reassociate-sources-btn">调整关联数据源</button>
                                 <button id="clear-all-cache-in-edit-btn" class="secondary-btn">清除所有缓存</button>
                             </div>
                         </div>
@@ -329,9 +328,20 @@
                             </div>
                             <button id="back-to-library-from-detail-btn"> &lt; 返回弹幕库</button>
                         </div>
-                        <h3>关联的数据源</h3>
+                        <div class="section-header-with-action">
+                            <h3>关联的数据源</h3>
+                            <button id="reassociate-sources-from-detail-btn">调整关联数据源</button>
+                        </div>
+                        <div class="bulk-actions-bar">
+                            <button id="delete-selected-sources-btn">删除选中</button>
+                        </div>
                         <table id="source-detail-table">
-                            <thead><tr><th>源提供方</th><th>源媒体ID</th><th>状态</th><th>收录时间</th><th>操作</th></tr></thead>
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="select-all-sources-checkbox" title="全选"></th>
+                                    <th>源提供方</th><th>源媒体ID</th><th>状态</th><th>收录时间</th><th>操作</th>
+                                </tr>
+                            </thead>
                             <tbody id="source-detail-table-body"></tbody>
                         </table>
                     </div>

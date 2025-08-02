@@ -133,6 +133,7 @@ function renderSourceDetailTable(sources, anime) {
         sources.forEach(source => {
             const row = sourceDetailTableBody.insertRow();
             row.innerHTML = `
+                <td><input type="checkbox" class="source-checkbox" value="${source.source_id}"></td>
                 <td>${source.provider_name}</td>
                 <td>${source.media_id}</td>
                 <td>${source.is_favorited ? '🌟' : ''}</td>
@@ -148,7 +149,7 @@ function renderSourceDetailTable(sources, anime) {
             `;
         });
     } else {
-        sourceDetailTableBody.innerHTML = `<tr><td colspan="5">未关联任何数据源。</td></tr>`;
+        sourceDetailTableBody.innerHTML = `<tr><td colspan="6">未关联任何数据源。</td></tr>`;
     }
 }
 
@@ -324,6 +325,39 @@ export function setupLibraryEventListeners() {
     libraryTableBody.addEventListener('click', handleLibraryAction);
     document.getElementById('back-to-library-from-detail-btn').addEventListener('click', () => switchView('library-view'));
     sourceDetailTableBody.addEventListener('click', handleSourceAction);
+
+    document.getElementById('reassociate-sources-from-detail-btn').addEventListener('click', () => {
+        const animeId = parseInt(animeDetailView.dataset.animeId, 10);
+        const animeTitle = animeDetailView.dataset.animeTitle;
+        if (animeId && animeTitle) {
+            document.dispatchEvent(new CustomEvent('show:reassociate-view', { detail: { animeId, animeTitle } }));
+        }
+    });
+
+    document.getElementById('select-all-sources-checkbox').addEventListener('click', (e) => {
+        const isChecked = e.target.checked;
+        sourceDetailTableBody.querySelectorAll('.source-checkbox').forEach(cb => {
+            cb.checked = isChecked;
+        });
+    });
+
+    document.getElementById('delete-selected-sources-btn').addEventListener('click', async () => {
+        const selectedCheckboxes = sourceDetailTableBody.querySelectorAll('.source-checkbox:checked');
+        if (selectedCheckboxes.length === 0) {
+            alert('请先选择要删除的数据源。');
+            return;
+        }
+        if (!confirm(`您确定要删除选中的 ${selectedCheckboxes.length} 个数据源吗？此操作不可恢复。`)) return;
+
+        const sourceIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value, 10));
+        const animeId = parseInt(animeDetailView.dataset.animeId, 10);
+
+        for (const sourceId of sourceIds) {
+            await apiFetch(`/api/ui/library/source/${sourceId}`, { method: 'DELETE' }).catch(err => console.error(`删除源ID ${sourceId} 失败:`, err));
+        }
+        alert('批量删除操作完成。');
+        if (animeId) showAnimeDetailView(animeId);
+    });
     
     document.addEventListener('viewchange', (e) => {
         if (e.detail.viewId === 'library-view') {

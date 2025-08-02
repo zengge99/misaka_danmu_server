@@ -42,6 +42,16 @@
     word-break: break-all;
 }
 
+.bulk-actions-bar {
+    margin-bottom: 10px;
+}
+
+#source-detail-table th:first-child,
+#source-detail-table td:first-child {
+    width: 1%;
+    padding-left: 20px; /* Match table header padding */
+}
+
 .egid-detail-list {
     list-style: none;
     padding: 0;

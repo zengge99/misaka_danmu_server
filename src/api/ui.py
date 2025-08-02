@@ -610,9 +610,11 @@ async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: Scrape
         media_id=source_info["media_id"],
         anime_title=source_info["title"],
         media_type=source_info["type"],
+        season=source_info.get("season", 1),
         current_episode_index=None,
         image_url=None,
         douban_id=None,
+        tmdb_id=source_info.get("tmdb_id"),
         progress_callback=progress_callback,
         pool=pool,
         manager=manager)

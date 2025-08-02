@@ -460,7 +460,21 @@ async def get_anime_source_info(pool: aiomysql.Pool, source_id: int) -> Optional
     """获取指定源ID的详细信息及其关联的作品信息。"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            query = "SELECT s.id as source_id, s.anime_id, s.provider_name, s.media_id, a.title, a.type FROM anime_sources s JOIN anime a ON s.anime_id = a.id WHERE s.id = %s"
+            query = """
+                SELECT 
+                    s.id as source_id, 
+                    s.anime_id, 
+                    s.provider_name, 
+                    s.media_id, 
+                    a.title, 
+                    a.type,
+                    a.season,
+                    m.tmdb_id
+                FROM anime_sources s 
+                JOIN anime a ON s.anime_id = a.id 
+                LEFT JOIN anime_metadata m ON a.id = m.anime_id
+                WHERE s.id = %s
+            """
             await cursor.execute(query, (source_id,))
             return await cursor.fetchone()
 
