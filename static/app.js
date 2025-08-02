@@ -75,10 +75,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const taskManagerSubViews = taskManagerView.querySelectorAll('.settings-subview');
     const scheduledTasksTableBody = document.querySelector('#scheduled-tasks-table tbody');
     const addScheduledTaskBtn = document.getElementById('add-scheduled-task-btn');
-    const scheduledTaskModal = document.getElementById('scheduled-task-modal');
-    const scheduledTaskForm = document.getElementById('scheduled-task-form');
-    const scheduledTaskModalCloseBtn = document.getElementById('scheduled-task-modal-close-btn');
-    const scheduledTaskModalTitle = document.getElementById('scheduled-task-modal-title');
+    const editScheduledTaskView = document.getElementById('edit-scheduled-task-view');
+    const editScheduledTaskForm = document.getElementById('edit-scheduled-task-form');
+    const editScheduledTaskTitle = document.getElementById('edit-scheduled-task-title');
+    const backToTasksFromEditBtn = document.getElementById('back-to-tasks-from-edit-btn');
 
     const tokenManagerView = document.getElementById('token-manager-view');
     const tokenTableBody = document.querySelector('#token-table tbody');
@@ -349,9 +349,12 @@ document.addEventListener('DOMContentLoaded', () => {
         reassociateSearchInput.addEventListener('input', handleReassociateSearch);
         // New listeners for scheduled tasks
         taskManagerSubNav.addEventListener('click', handleTaskManagerSubNav);
-        addScheduledTaskBtn.addEventListener('click', handleOpenScheduledTaskModal);
-        scheduledTaskModalCloseBtn.addEventListener('click', () => scheduledTaskModal.classList.add('hidden'));
-        scheduledTaskForm.addEventListener('submit', handleScheduledTaskFormSubmit);
+        addScheduledTaskBtn.addEventListener('click', () => showEditScheduledTaskView());
+        editScheduledTaskForm.addEventListener('submit', handleScheduledTaskFormSubmit);
+        backToTasksFromEditBtn.addEventListener('click', () => {
+            editScheduledTaskView.classList.add('hidden');
+            taskManagerView.classList.remove('hidden');
+        });
     }
 
     // --- Event Handlers ---
@@ -2325,7 +2328,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const editBtn = document.createElement('button');
             editBtn.className = 'action-btn'; editBtn.title = '编辑'; editBtn.textContent = '✏️';
-            editBtn.addEventListener('click', () => handleOpenScheduledTaskModal(task));
+            editBtn.addEventListener('click', () => showEditScheduledTaskView(task));
             wrapper.appendChild(editBtn);
 
             const deleteBtn = document.createElement('button');
@@ -2337,37 +2340,40 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function handleOpenScheduledTaskModal(task = null) {
-        scheduledTaskForm.reset();
+    function showEditScheduledTaskView(task = null) {
+        taskManagerView.classList.add('hidden');
+        editScheduledTaskView.classList.remove('hidden');
+        editScheduledTaskForm.reset();
+
         if (task && typeof task.id !== 'undefined') {
-            scheduledTaskModalTitle.textContent = '编辑定时任务';
-            document.getElementById('scheduled-task-id').value = task.id;
-            document.getElementById('scheduled-task-name').value = task.name;
-            document.getElementById('scheduled-task-type').value = task.job_type;
-            document.getElementById('scheduled-task-cron').value = task.cron_expression;
-            document.getElementById('scheduled-task-enabled').checked = task.is_enabled;
+            editScheduledTaskTitle.textContent = '编辑定时任务';
+            document.getElementById('edit-scheduled-task-id').value = task.id;
+            document.getElementById('edit-scheduled-task-name').value = task.name;
+            document.getElementById('edit-scheduled-task-type').value = task.job_type;
+            document.getElementById('edit-scheduled-task-cron').value = task.cron_expression;
+            document.getElementById('edit-scheduled-task-enabled').checked = task.is_enabled;
         } else {
-            scheduledTaskModalTitle.textContent = '添加定时任务';
-            document.getElementById('scheduled-task-id').value = '';
+            editScheduledTaskTitle.textContent = '添加定时任务';
+            document.getElementById('edit-scheduled-task-id').value = '';
         }
-        scheduledTaskModal.classList.remove('hidden');
     }
 
     async function handleScheduledTaskFormSubmit(e) {
         e.preventDefault();
-        const id = document.getElementById('scheduled-task-id').value;
+        const id = document.getElementById('edit-scheduled-task-id').value;
         const payload = {
-            name: document.getElementById('scheduled-task-name').value,
-            job_type: document.getElementById('scheduled-task-type').value,
-            cron_expression: document.getElementById('scheduled-task-cron').value,
-            is_enabled: document.getElementById('scheduled-task-enabled').checked,
+            name: document.getElementById('edit-scheduled-task-name').value,
+            job_type: document.getElementById('edit-scheduled-task-type').value,
+            cron_expression: document.getElementById('edit-scheduled-task-cron').value,
+            is_enabled: document.getElementById('edit-scheduled-task-enabled').checked,
         };
         const url = id ? `/api/ui/scheduled-tasks/${id}` : '/api/ui/scheduled-tasks';
         const method = id ? 'PUT' : 'POST';
 
         try {
             await apiFetch(url, { method, body: JSON.stringify(payload) });
-            scheduledTaskModal.classList.add('hidden');
+            // 成功后返回列表
+            backToTasksFromEditBtn.click();
             loadAndRenderScheduledTasks();
         } catch (error) {
             alert(`保存失败: ${error.message}`);

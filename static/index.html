@@ -495,38 +495,6 @@
         </div>
     </div>
 
-    <!-- Modal for adding/editing scheduled tasks -->
-    <div id="scheduled-task-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <h2 id="scheduled-task-modal-title">添加定时任务</h2>
-            <form id="scheduled-task-form">
-                <input type="hidden" id="scheduled-task-id">
-                <div class="form-row">
-                    <label for="scheduled-task-name">任务名称</label>
-                    <input type="text" id="scheduled-task-name" placeholder="例如：每日TMDB更新" required>
-                </div>
-                <div class="form-row">
-                    <label for="scheduled-task-type">任务类型</label>
-                    <select id="scheduled-task-type" required>
-                        <option value="tmdb_auto_map">TMDB自动映射与更新</option>
-                    </select>
-                </div>
-                <div class="form-row">
-                    <label for="scheduled-task-cron">Cron表达式</label>
-                    <input type="text" id="scheduled-task-cron" placeholder="例如：0 2 * * * (每天凌晨2点)" required>
-                </div>
-                <div class="form-row">
-                    <label for="scheduled-task-enabled">是否启用</label>
-                    <input type="checkbox" id="scheduled-task-enabled" checked>
-                </div>
-                <div class="form-actions">
-                    <button type="submit">保存</button>
-                    <button type="button" id="scheduled-task-modal-close-btn">取消</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <script src="/static/app.js"></script>
 </body>
 </html>
