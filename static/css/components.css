@@ -185,11 +185,11 @@ th {
 }
 
 .actions-cell {
-    text-align: right;
+    /* 移除右对齐，让内容自然左对齐 */
 }
 
 .actions-cell .action-buttons-wrapper {
-    display: inline-flex;
+    display: flex; /* 改为 flex 以便更好地控制内部元素 */
     align-items: center;
     gap: 8px;
 }

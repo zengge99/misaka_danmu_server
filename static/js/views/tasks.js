@@ -55,7 +55,7 @@ async function loadAndRenderTasks() {
     
     const searchTerm = runningTasksSearchInput.value;
     const activeFilterBtn = runningTasksFilterButtons.querySelector('.filter-btn.active');
-    const statusFilter = activeFilterBtn ? activeFilterBtn.dataset.statusFilter : 'incomplete';
+    const statusFilter = activeFilterBtn ? activeFilterBtn.dataset.statusFilter : 'all';
 
     const params = new URLSearchParams();
     if (searchTerm) params.append('search', searchTerm);

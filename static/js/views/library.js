@@ -323,6 +323,8 @@ export function setupLibraryEventListeners() {
     librarySearchInput.addEventListener('input', handleLibrarySearch);
     libraryTableBody.addEventListener('click', handleLibraryAction);
     document.getElementById('back-to-library-from-detail-btn').addEventListener('click', () => switchView('library-view'));
+    sourceDetailTableBody.addEventListener('click', handleSourceAction);
+    
     document.addEventListener('viewchange', (e) => {
         if (e.detail.viewId === 'library-view') {
             loadLibrary();

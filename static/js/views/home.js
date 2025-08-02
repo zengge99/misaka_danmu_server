@@ -104,6 +104,15 @@ function renderSearchResults(results) {
         checkbox.type = 'checkbox';
         checkbox.value = item.mediaId;
         leftContainer.appendChild(checkbox);
+        
+        // Add click listener to the entire row (li)
+        li.addEventListener('click', (e) => {
+            // Only toggle if the click is not on the button or the checkbox itself
+            if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
+                checkbox.checked = !checkbox.checked;
+            }
+        });
+
         const posterImg = document.createElement('img');
         posterImg.className = 'poster';
         posterImg.src = item.imageUrl || '/static/placeholder.png';
@@ -117,7 +126,10 @@ function renderSearchResults(results) {
         const importBtn = document.createElement('button');
         importBtn.textContent = '导入弹幕';
         li.appendChild(leftContainer);
-        importBtn.addEventListener('click', () => handleImportClick(importBtn, item));
+        importBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent the li click event from firing
+            handleImportClick(importBtn, item)
+        });
         li.appendChild(importBtn);
         resultsList.appendChild(li);
     });
@@ -191,18 +203,50 @@ async function handleClearCache() {
 }
 
 async function handleBulkImport() {
-    const selectedCheckboxes = document.querySelectorAll('#results-list input[type="checkbox"]:checked');
-    if (selectedCheckboxes.length === 0) {
+    const resultsList = document.getElementById('results-list');
+    const selectedCheckboxes = resultsList.querySelectorAll('input[type="checkbox"]:checked');
+    const selectedMediaIds = new Set(Array.from(selectedCheckboxes).map(checkbox => checkbox.value));
+
+    if (selectedMediaIds.size === 0) {
         alert("请选择要导入的媒体。");
         return;
     }
-    // 此处省略了具体的批量导入实现逻辑，因为它比较复杂且依赖于 originalSearchResults
-    // 但确保了按钮的事件监听是存在的。
-    alert(`检测到选择了 ${selectedCheckboxes.length} 个项目，批量导入逻辑需要进一步实现。`);
+
+    if (!confirm(`确定要批量导入 ${selectedMediaIds.size} 个媒体吗？`)) return;
+    
+    const bulkImportBtn = document.getElementById('bulk-import-btn');
+    bulkImportBtn.disabled = true;
+    bulkImportBtn.textContent = '批量导入中...';
+
+    const itemsToImport = originalSearchResults.filter(item => selectedMediaIds.has(item.mediaId));
+
+    try {
+        for (const item of itemsToImport) {
+            try {
+                const data = await apiFetch('/api/ui/import', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        provider: item.provider, media_id: item.mediaId, anime_title: item.title,
+                        type: item.type, image_url: item.imageUrl, douban_id: item.douban_id,
+                        current_episode_index: item.currentEpisodeIndex,
+                    }),
+                });
+                console.log(`提交导入任务 ${item.title} 成功: ${data.message}`);
+            } catch (error) {
+                console.error(`提交导入任务 ${item.title} 失败: ${error.message || error}`);
+            }
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        alert("批量导入任务已提交，请在任务管理器中查看进度。");
+    } finally {
+        bulkImportBtn.disabled = false;
+        bulkImportBtn.textContent = '批量导入';
+    }
 }
 
 function handleSelectAll() {
-    const checkboxes = document.querySelectorAll('#results-list input[type="checkbox"]');
+    const resultsList = document.getElementById('results-list');
+    const checkboxes = resultsList.querySelectorAll('input[type="checkbox"]');
     if (checkboxes.length === 0) return;
     const shouldCheckAll = Array.from(checkboxes).some(cb => !cb.checked);
     checkboxes.forEach(cb => { cb.checked = shouldCheckAll; });

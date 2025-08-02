@@ -1196,18 +1196,21 @@ async def finalize_task_in_history(pool: aiomysql.Pool, task_id: str, status: st
 
 async def get_tasks_from_history(pool: aiomysql.Pool, search_term: Optional[str], status_filter: str) -> List[Dict[str, Any]]:
     """从数据库获取任务历史记录，支持搜索和过滤。"""
-    query = "SELECT id as task_id, title, status, progress, description FROM task_history"
+    query = "SELECT id as task_id, title, status, progress, description, created_at FROM task_history"
     conditions, params = [], []
 
     if search_term:
         conditions.append("title LIKE %s")
         params.append(f"%{search_term}%")
 
-    if status_filter == 'in_progress': conditions.append("status IN ('排队中', '运行中')")
-    elif status_filter == 'completed': conditions.append("status = '已完成'")
-    elif status_filter == 'incomplete': conditions.append("status != '已完成'")
+    if status_filter == 'in_progress':
+        conditions.append("status = '运行中'")
+    elif status_filter == 'completed':
+        conditions.append("status = '已完成'")
 
-    if conditions: query += " WHERE " + " AND ".join(conditions)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    
     query += " ORDER BY created_at DESC LIMIT 100"
 
     async with pool.acquire() as conn:

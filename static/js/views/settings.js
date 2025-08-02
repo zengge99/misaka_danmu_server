@@ -88,9 +88,13 @@ async function loadBangumiAuthState() {
             bangumiUserAvatar.src = state.avatar_url || '/static/placeholder.png';
             bangumiAuthStateAuthenticated.classList.remove('hidden');
             bangumiAuthStateUnauthenticated.classList.add('hidden');
+            bangumiLoginBtn.classList.add('hidden');
+            bangumiLogoutBtn.classList.remove('hidden');
         } else {
             bangumiAuthStateAuthenticated.classList.add('hidden');
             bangumiAuthStateUnauthenticated.classList.remove('hidden');
+            bangumiLoginBtn.classList.remove('hidden');
+            bangumiLogoutBtn.classList.add('hidden');
         }
     } catch (error) {
         bangumiAuthStateUnauthenticated.innerHTML = `<p class="error">获取授权状态失败: ${error.message}</p>`;
