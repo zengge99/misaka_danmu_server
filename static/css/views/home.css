@@ -12,6 +12,7 @@
     display: flex;
     align-items: center;
     gap: 15px;
+    min-height: 38px; /* 固定高度以防止布局跳动 */
 }
 
 .advanced-search-controls label {
@@ -21,9 +22,19 @@
     cursor: pointer;
 }
 
+#episode-search-inputs {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
 #episode-search-inputs input {
     width: 80px;
-    margin-left: 5px;
+}
+
+#episode-search-inputs label {
+    font-size: 14px;
+    color: #606266;
 }
 
 #log-output, #test-match-results {
@@ -108,6 +119,11 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.results-list-style li .info .extra-meta {
+    font-size: 0.9em;
+    color: var(--primary-color);
 }
 
 #results-filter-controls {

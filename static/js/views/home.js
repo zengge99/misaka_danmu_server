@@ -23,6 +23,13 @@ function setupEventListeners() {
     document.getElementById('enable-episode-search').addEventListener('change', (e) => {
         document.getElementById('episode-search-inputs').classList.toggle('hidden', !e.target.checked);
     });
+    document.getElementById('insert-episode-btn').addEventListener('click', () => {
+        const season = document.getElementById('search-season').value;
+        const episode = document.getElementById('search-episode').value;
+        if (!season || !episode) return;
+        const formatted = ` S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
+        insertAtCursor(document.getElementById('search-keyword'), formatted);
+    });
 
     // Bulk Import View
     document.getElementById('cancel-bulk-import-btn').addEventListener('click', () => switchView('home-view'));
@@ -44,6 +51,16 @@ function setupEventListeners() {
         document.getElementById('final-import-tmdb-id').value = e.detail.id || '';
         switchView('bulk-import-view'); // Switch back to the bulk import view
     });
+}
+
+function insertAtCursor(inputField, textToInsert) {
+    const startPos = inputField.selectionStart;
+    const endPos = inputField.selectionEnd;
+    const text = inputField.value;
+    inputField.value = text.substring(0, startPos) + textToInsert + text.substring(endPos, text.length);
+    inputField.focus();
+    inputField.selectionStart = startPos + textToInsert.length;
+    inputField.selectionEnd = startPos + textToInsert.length;
 }
 
 function startLogRefresh() {
@@ -191,7 +208,13 @@ function renderSearchResults(results) {
         const infoDiv = document.createElement('div');
         infoDiv.className = 'info';
         const displayType = typeMap[item.type] || item.type;
-        infoDiv.innerHTML = `<p class="title">${item.title}</p><p class="meta">源: ${item.provider} | 类型: ${displayType} | 年份: ${item.year || 'N/A'}</p>`;
+        let metaHtml = `<p class="title">${item.title}</p><p class="meta">源: ${item.provider} | 类型: ${displayType} | 年份: ${item.year || 'N/A'} | 总集数: ${item.episodeCount || '未知'}</p>`;
+        
+        if (item.currentEpisodeIndex) {
+            metaHtml += `<p class="extra-meta">获取→ | 季: ${String(item.season).padStart(2, '0')} | 集: ${String(item.currentEpisodeIndex).padStart(2, '0')}</p>`;
+        }
+        infoDiv.innerHTML = metaHtml;
+
         leftContainer.appendChild(infoDiv);
         const importBtn = document.createElement('button');
         importBtn.textContent = '导入弹幕';
