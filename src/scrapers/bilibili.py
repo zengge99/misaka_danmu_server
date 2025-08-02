@@ -138,6 +138,13 @@ class BiliVideoViewResult(BaseModel):
     message: str
     data: Optional[BiliVideoViewData] = None
 
+class BuvidData(BaseModel):
+    buvid: str
+
+class BuvidResponse(BaseModel):
+    code: int
+    data: Optional[BuvidData] = None
+
 # --- Main Scraper Class ---
 
 class BilibiliScraper(BaseScraper):
@@ -205,7 +212,7 @@ class BilibiliScraper(BaseScraper):
         else:
             self.logger.info("Bilibili: buvid3 cookie未找到，开始获取...")
 
-        # 步骤 1: 优先尝试访问首页，模拟真实浏览器行为
+        # 步骤 1: 优先尝试访问首页，模拟真实浏览器行为以获取完整的会话cookie
         try:
             self.logger.debug("Bilibili: 正在尝试从首页 (www.bilibili.com) 获取 cookie...")
             await self._request_with_rate_limit("GET", "https://www.bilibili.com/")
@@ -213,13 +220,21 @@ class BilibiliScraper(BaseScraper):
                 self.logger.info("Bilibili: 已成功从首页获取 buvid3 cookie。")
                 return
         except Exception as e:
-            self.logger.warning(f"Bilibili: 从首页获取 cookie 失败，将使用 API 作为后备方案。错误: {e}")
+            self.logger.warning(f"Bilibili: 从首页获取 cookie 失败，将使用 API 后备方案。错误: {e}")
 
-        # 步骤 2: 如果首页获取失败，则使用 /getbuvid API 作为后备
+        # 步骤 2: 如果首页获取失败，则使用 /getbuvid API 作为后备，手动解析并设置 buvid3
         try:
             self.logger.info("Bilibili: 首页方法失败，正在使用 API 后备方案 (/getbuvid)...")
-            await self._request_with_rate_limit("GET", "https://api.bilibili.com/x/web-frontend/getbuvid")
-            self.logger.info("Bilibili: 已成功通过 API 后备方案获取或刷新 buvid3 cookie。")
+            response = await self._request_with_rate_limit("GET", "https://api.bilibili.com/x/web-frontend/getbuvid")
+            response.raise_for_status()
+            
+            buvid_data = BuvidResponse.model_validate(response.json())
+            if buvid_data.code == 0 and buvid_data.data and buvid_data.data.buvid:
+                buvid_value = buvid_data.data.buvid
+                self.client.cookies.set("buvid3", buvid_value, domain=".bilibili.com")
+                self.logger.info(f"Bilibili: 已成功通过 API 后备方案获取并设置 buvid3: {buvid_value[:10]}...")
+            else:
+                self.logger.warning(f"Bilibili: API /getbuvid 返回异常或数据缺失: Code={buvid_data.code}")
         except Exception as e:
             self.logger.error(f"Bilibili: API 后备方案获取 cookie 同样失败: {e}", exc_info=True)
 
@@ -373,6 +388,7 @@ class BilibiliScraper(BaseScraper):
         season_id = media_id[2:]
         url = f"https://api.bilibili.com/pgc/view/web/ep/list?season_id={season_id}"
         try:
+            await self._ensure_session_cookie()
             response = await self._request_with_rate_limit("GET", url)
             response.raise_for_status()
             data = BiliSeasonResult.model_validate(response.json())
@@ -397,6 +413,7 @@ class BilibiliScraper(BaseScraper):
         bvid = media_id[2:]
         url = f"https://api.bilibili.com/x/web-interface/view?bvid={bvid}"
         try:
+            await self._ensure_session_cookie()
             response = await self._request_with_rate_limit("GET", url)
             response.raise_for_status()
             data = BiliVideoViewResult.model_validate(response.json())
@@ -425,6 +442,8 @@ class BilibiliScraper(BaseScraper):
         except (ValueError, IndexError):
             self.logger.error(f"Bilibili: 无效的 episode_id 格式: '{episode_id}'")
             return []
+
+        await self._ensure_session_cookie()
 
         all_comments = []
         segment_index = 1
