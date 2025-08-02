@@ -523,18 +523,35 @@
                         </form>
                     </div>
                     <div id="sources-view" class="content-view hidden">
-                        <h2>搜索源管理</h2>
-                        <div class="source-controls">
-                            <button id="save-sources-btn">保存设置</button>
-                            <div class="source-actions">
-                                <button id="toggle-source-btn">启用/禁用</button>
-                                <button id="move-source-up-btn">上移</button>
-                                <button id="move-source-down-btn">下移</button>
-                            </div>
+                        <div class="settings-sub-nav">
+                            <button class="sub-nav-btn active" data-subview="danmaku-sources-subview">弹幕搜索源</button>
+                            <button class="sub-nav-btn" data-subview="metadata-sources-subview">元信息搜索源</button>
                         </div>
-                        <ul id="sources-list">
-                            <!-- 爬虫源将在这里动态生成 -->
-                        </ul>
+
+                        <div id="danmaku-sources-subview" class="settings-subview">
+                            <div class="source-controls">
+                                <h2>弹幕搜索源</h2>
+                                <div class="source-actions">
+                                    <button id="save-danmaku-sources-btn">保存设置</button>
+                                    <button id="toggle-danmaku-source-btn">启用/禁用</button>
+                                    <button id="move-danmaku-source-up-btn">上移</button>
+                                    <button id="move-danmaku-source-down-btn">下移</button>
+                                </div>
+                            </div>
+                            <ul id="danmaku-sources-list"></ul>
+                        </div>
+
+                        <div id="metadata-sources-subview" class="settings-subview hidden">
+                            <div class="source-controls">
+                                <h2>元信息搜索源</h2>
+                                <div class="source-actions">
+                                    <button id="save-metadata-sources-btn">保存排序</button>
+                                    <button id="move-metadata-source-up-btn">上移</button>
+                                    <button id="move-metadata-source-down-btn">下移</button>
+                                </div>
+                            </div>
+                            <ul id="metadata-sources-list"></ul>
+                        </div>
                     </div>
                     <div id="ua-settings-view" class="content-view hidden">
                         <div class="view-header-flexible">

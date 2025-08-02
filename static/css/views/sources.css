@@ -7,23 +7,33 @@
     border-bottom: 1px solid var(--border-color);
 }
 
+.source-controls h2 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 1.5em;
+}
+
 .source-actions button {
     margin-left: 10px;
     background-color: #6c757d;
 }
 
-#save-sources-btn {
+#save-danmaku-sources-btn,
+#save-metadata-sources-btn {
     background-color: var(--success-color);
 }
 
-#sources-list {
+#danmaku-sources-list,
+#metadata-sources-list {
     list-style: none;
     padding: 0;
     border: 1px solid var(--border-color);
     border-radius: 4px;
 }
 
-#sources-list li {
+#danmaku-sources-list li,
+#metadata-sources-list li {
     display: flex;
     align-items: center;
     padding: 12px 15px;
@@ -32,15 +42,18 @@
     transition: background-color 0.2s;
 }
 
-#sources-list li:last-child {
+#danmaku-sources-list li:last-child,
+#metadata-sources-list li:last-child {
     border-bottom: none;
 }
 
-#sources-list li:hover {
+#danmaku-sources-list li:hover,
+#metadata-sources-list li:hover {
     background-color: #f8f9fa;
 }
 
-#sources-list li.selected {
+#danmaku-sources-list li.selected,
+#metadata-sources-list li.selected {
     background-color: #e9ecef;
     border-left: 3px solid var(--primary-color);
 }
@@ -48,4 +61,7 @@
 .status-icon {
     margin-left: auto;
     font-size: 1.2em;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background-color: #e9ecef;
 }
