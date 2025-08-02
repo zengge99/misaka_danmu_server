@@ -168,6 +168,25 @@ class BilibiliScraper(BaseScraper):
             timeout=20.0,
             follow_redirects=True,
         )
+        # 为避免B站风控，增加速率限制
+        self._api_lock = asyncio.Lock()
+        self._last_request_time = 0
+        # B站API请求之间的最小间隔（秒）
+        self._min_interval = 0.5
+
+    async def _request_with_rate_limit(self, method: str, url: str, **kwargs) -> httpx.Response:
+        """封装了速率限制的请求方法。"""
+        async with self._api_lock:
+            now = time.time()
+            time_since_last = now - self._last_request_time
+            if time_since_last < self._min_interval:
+                sleep_duration = self._min_interval - time_since_last
+                self.logger.debug(f"Bilibili: 速率限制，等待 {sleep_duration:.2f} 秒...")
+                await asyncio.sleep(sleep_duration)
+            
+            response = await self.client.request(method, url, **kwargs)
+            self._last_request_time = time.time()
+            return response
 
     async def close(self):
         await self.client.aclose()
@@ -189,7 +208,7 @@ class BilibiliScraper(BaseScraper):
         # 步骤 1: 优先尝试访问首页，模拟真实浏览器行为
         try:
             self.logger.debug("Bilibili: 正在尝试从首页 (www.bilibili.com) 获取 cookie...")
-            await self.client.get("https://www.bilibili.com/")
+            await self._request_with_rate_limit("GET", "https://www.bilibili.com/")
             if "buvid3" in self.client.cookies:
                 self.logger.info("Bilibili: 已成功从首页获取 buvid3 cookie。")
                 return
@@ -199,7 +218,7 @@ class BilibiliScraper(BaseScraper):
         # 步骤 2: 如果首页获取失败，则使用 /getbuvid API 作为后备
         try:
             self.logger.info("Bilibili: 首页方法失败，正在使用 API 后备方案 (/getbuvid)...")
-            await self.client.get("https://api.bilibili.com/x/web-frontend/getbuvid")
+            await self._request_with_rate_limit("GET", "https://api.bilibili.com/x/web-frontend/getbuvid")
             self.logger.info("Bilibili: 已成功通过 API 后备方案获取或刷新 buvid3 cookie。")
         except Exception as e:
             self.logger.error(f"Bilibili: API 后备方案获取 cookie 同样失败: {e}", exc_info=True)
@@ -213,7 +232,7 @@ class BilibiliScraper(BaseScraper):
         self.logger.info("Bilibili: WBI mixin key expired or not found, fetching new one...")
 
         async def _fetch_key_data():
-            nav_resp = await self.client.get("https://api.bilibili.com/x/web-interface/nav")
+            nav_resp = await self._request_with_rate_limit("GET", "https://api.bilibili.com/x/web-interface/nav")
             nav_resp.raise_for_status()
             return nav_resp.json().get("data", {})
 
@@ -284,7 +303,7 @@ class BilibiliScraper(BaseScraper):
         
         results = []
         try:
-            response = await self.client.get(url)
+            response = await self._request_with_rate_limit("GET", url)
             self.logger.debug(f"Bilibili: 收到响应，状态码: {response.status_code}")
             response.raise_for_status()
             
@@ -354,7 +373,7 @@ class BilibiliScraper(BaseScraper):
         season_id = media_id[2:]
         url = f"https://api.bilibili.com/pgc/view/web/ep/list?season_id={season_id}"
         try:
-            response = await self.client.get(url)
+            response = await self._request_with_rate_limit("GET", url)
             response.raise_for_status()
             data = BiliSeasonResult.model_validate(response.json())
             if data.code == 0 and data.result and data.result.episodes:
@@ -378,7 +397,7 @@ class BilibiliScraper(BaseScraper):
         bvid = media_id[2:]
         url = f"https://api.bilibili.com/x/web-interface/view?bvid={bvid}"
         try:
-            response = await self.client.get(url)
+            response = await self._request_with_rate_limit("GET", url)
             response.raise_for_status()
             data = BiliVideoViewResult.model_validate(response.json())
             if data.code == 0 and data.data and data.data.pages:
@@ -416,7 +435,7 @@ class BilibiliScraper(BaseScraper):
                     progress_callback(min(95, segment_index * 10), f"正在获取分段 {segment_index}")
 
                 url = f"https://api.bilibili.com/x/v2/dm/web/seg.so?type=1&oid={cid}&pid={aid}&segment_index={segment_index}"
-                response = await self.client.get(url)
+                response = await self._request_with_rate_limit("GET", url)
                 
                 if response.status_code == 304: # Not Modified
                     self.logger.info(f"Bilibili: 弹幕分段 {segment_index} 未修改，获取结束。")
@@ -434,7 +453,6 @@ class BilibiliScraper(BaseScraper):
 
                 all_comments.extend(danmu_reply.elems)
                 segment_index += 1
-                await asyncio.sleep(0.2)
 
             except httpx.HTTPStatusError as e:
                 # B站有时对不存在的分段返回404，这是正常的结束标志
