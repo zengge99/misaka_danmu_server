@@ -174,23 +174,35 @@ class BilibiliScraper(BaseScraper):
 
     async def _ensure_session_cookie(self, force_refresh: bool = False):
         """
-        确保客户端拥有有效的 buvid3 cookie。
-        使用 /getbuvid 接口获取，比访问首页更可靠。
+        确保客户端拥有有效的 buvid3 cookie，采用更健壮的两步获取策略。
         :param force_refresh: 如果为 True，则无论 cookie 是否存在都强制刷新。
         """
         if not force_refresh and "buvid3" in self.client.cookies:
+            self.logger.debug("Bilibili: buvid3 cookie 已存在，跳过获取。")
             return
+
+        if force_refresh:
+            self.logger.info("Bilibili: 强制刷新会话Cookie (buvid3)...")
+        else:
+            self.logger.info("Bilibili: buvid3 cookie未找到，开始获取...")
+
+        # 步骤 1: 优先尝试访问首页，模拟真实浏览器行为
         try:
-            if force_refresh:
-                self.logger.info("Bilibili: 强制刷新会话Cookie (buvid3)...")
-            else:
-                self.logger.info("Bilibili: buvid3 cookie未找到，正在获取...")
-            
-            # 使用新的、更可靠的端点来获取 buvid3
-            await self.client.get("https://api.bilibili.com/x/web-frontend/getbuvid")
-            self.logger.info("Bilibili: 成功获取或刷新会话Cookie (buvid3)。")
+            self.logger.debug("Bilibili: 正在尝试从首页 (www.bilibili.com) 获取 cookie...")
+            await self.client.get("https://www.bilibili.com/")
+            if "buvid3" in self.client.cookies:
+                self.logger.info("Bilibili: 已成功从首页获取 buvid3 cookie。")
+                return
         except Exception as e:
-            self.logger.error(f"Bilibili: 获取/刷新会话Cookie失败: {e}", exc_info=True)
+            self.logger.warning(f"Bilibili: 从首页获取 cookie 失败，将使用 API 作为后备方案。错误: {e}")
+
+        # 步骤 2: 如果首页获取失败，则使用 /getbuvid API 作为后备
+        try:
+            self.logger.info("Bilibili: 首页方法失败，正在使用 API 后备方案 (/getbuvid)...")
+            await self.client.get("https://api.bilibili.com/x/web-frontend/getbuvid")
+            self.logger.info("Bilibili: 已成功通过 API 后备方案获取或刷新 buvid3 cookie。")
+        except Exception as e:
+            self.logger.error(f"Bilibili: API 后备方案获取 cookie 同样失败: {e}", exc_info=True)
 
     # --- WBI Signing Methods ---
     async def _get_wbi_mixin_key(self) -> str:
