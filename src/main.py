@@ -79,7 +79,7 @@ async def startup_event():
     # 启动缓存清理后台任务
     app.state.cleanup_task = asyncio.create_task(cleanup_task(app))
     # 创建并启动定时任务调度器
-    app.state.scheduler_manager = SchedulerManager(pool)
+    app.state.scheduler_manager = SchedulerManager(pool, app.state.task_manager)
     await app.state.scheduler_manager.start()
 
 @app.on_event("shutdown")

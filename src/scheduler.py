@@ -11,7 +11,8 @@ from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR, JobExecution
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from . import crud, models
+from . import crud, models, task_manager
+from .task_manager import TaskManager
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,9 @@ async def _create_tmdb_client_for_job(pool: aiomysql.Pool) -> httpx.AsyncClient:
     api_key, domain = await asyncio.gather(*tasks)
 
     if not api_key:
-        logger.error("TMDB自动映射任务失败：未配置TMDB API Key。")
-        raise ValueError("TMDB API Key not configured.")
+        error_msg = "TMDB自动映射任务失败：未配置TMDB API Key。"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
     
     domain = domain or "https://api.themoviedb.org"
     cleaned_domain = domain.rstrip('/')
@@ -108,20 +110,27 @@ def _parse_tmdb_details_for_aliases(details: Dict[str, Any]) -> Dict[str, Any]:
         "aliases_cn": list(dict.fromkeys([_clean_movie_title(a) for a in aliases_cn if a]))
     }
 
-async def run_tmdb_auto_map_job(pool: aiomysql.Pool):
+async def run_tmdb_auto_map_job(pool: aiomysql.Pool, progress_callback: Callable):
     """定时任务的核心逻辑。"""
     logger.info("开始执行 [TMDB自动映射与更新] 定时任务...")
+    progress_callback(0, "正在初始化...")
     try:
         client = await _create_tmdb_client_for_job(pool)
     except ValueError as e:
         logger.error(f"无法创建TMDB客户端，任务中止: {e}")
+        progress_callback(100, f"任务失败: {e}")
         return
 
     async with client:
         shows_to_update = await crud.get_animes_with_tmdb_id(pool)
-        logger.info(f"找到 {len(shows_to_update)} 个带TMDB ID的电视节目需要处理。")
+        total_shows = len(shows_to_update)
+        logger.info(f"找到 {total_shows} 个带TMDB ID的电视节目需要处理。")
+        progress_callback(5, f"找到 {total_shows} 个节目待处理")
 
-        for show in shows_to_update:
+        for i, show in enumerate(shows_to_update):
+            current_progress = 5 + int((i / total_shows) * 95) if total_shows > 0 else 95
+            progress_callback(current_progress, f"正在处理: {show['title']} ({i+1}/{total_shows})")
+
             anime_id, tmdb_id, title = show['anime_id'], show['tmdb_id'], show['title']
             logger.info(f"正在处理: '{title}' (Anime ID: {anime_id}, TMDB ID: {tmdb_id})")
             try:
@@ -144,15 +153,26 @@ async def run_tmdb_auto_map_job(pool: aiomysql.Pool):
                 await asyncio.sleep(1)
             except Exception as e:
                 logger.error(f"处理 '{title}' (TMDB ID: {tmdb_id}) 时发生错误: {e}", exc_info=True)
+    
+    progress_callback(100, "任务执行完毕")
     logger.info("定时任务 [TMDB自动映射与更新] 执行完毕。")
 
 # --- Scheduler Manager ---
 
 class SchedulerManager:
-    def __init__(self, pool: aiomysql.Pool):
+    def __init__(self, pool: aiomysql.Pool, task_manager: TaskManager):
         self.pool = pool
+        self.task_manager = task_manager
         self.scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
-        self._job_functions: Dict[str, Callable] = {"tmdb_auto_map": run_tmdb_auto_map_job}
+        self._job_functions: Dict[str, Callable] = {
+            "tmdb_auto_map": self._wrap_job_with_task_manager(run_tmdb_auto_map_job, "TMDB自动映射与更新")
+        }
+
+    def _wrap_job_with_task_manager(self, job_func: Callable, title: str) -> Callable:
+        async def wrapped_job():
+            task_coro_factory = lambda callback: job_func(self.pool, callback)
+            await self.task_manager.submit_task(task_coro_factory, title)
+        return wrapped_job
 
     async def _handle_job_event(self, event: JobExecutionEvent):
         job = self.scheduler.get_job(event.job_id)
@@ -173,7 +193,7 @@ class SchedulerManager:
         for task in tasks:
             if job_func := self._job_functions.get(task['job_type']):
                 try:
-                    job = self.scheduler.add_job(job_func, CronTrigger.from_crontab(task['cron_expression']), id=task['id'], name=task['name'], replace_existing=True, args=[self.pool])
+                    job = self.scheduler.add_job(job_func, CronTrigger.from_crontab(task['cron_expression']), id=task['id'], name=task['name'], replace_existing=True)
                     if not task['is_enabled']: self.scheduler.pause_job(task['id'])
                     await crud.update_scheduled_task_run_times(self.pool, job.id, job.last_run_time, job.next_run_time)
                 except Exception as e:
@@ -187,7 +207,7 @@ class SchedulerManager:
         if not (job_func := self._job_functions.get(job_type)): raise ValueError(f"未知的任务类型: {job_type}")
         task_id = str(uuid4())
         await crud.create_scheduled_task(self.pool, task_id, name, job_type, cron, is_enabled)
-        job = self.scheduler.add_job(job_func, CronTrigger.from_crontab(cron), id=task_id, name=name, args=[self.pool])
+        job = self.scheduler.add_job(job_func, CronTrigger.from_crontab(cron), id=task_id, name=name)
         if not is_enabled: job.pause()
         await crud.update_scheduled_task_run_times(self.pool, task_id, None, job.next_run_time)
         return await crud.get_scheduled_task(self.pool, task_id)
