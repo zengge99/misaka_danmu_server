@@ -7,9 +7,8 @@ from urllib.parse import urlencode
 import aiomysql
 import httpx
 from pydantic import BaseModel, Field, ValidationError
-
 from .. import models
-from .proto import dm_pb2
+from .proto.dm_dynamic import DanmakuElem, DmSegMobileReply
 from .base import BaseScraper
 
 # --- Pydantic Models for Bilibili API ---
@@ -232,12 +231,11 @@ class BilibiliScraper(BaseScraper):
                     self.logger.info(f"Bilibili: 弹幕分段 {segment_index} 未修改，获取结束。")
                     break
                 response.raise_for_status()
-
                 if not response.content:
                     self.logger.info(f"Bilibili: 弹幕分段 {segment_index} 内容为空，获取结束。")
                     break
-
-                danmu_reply = dm_pb2.DmSegMobileReply()
+                
+                danmu_reply = DmSegMobileReply()
                 danmu_reply.ParseFromString(response.content)
 
                 if not danmu_reply.elems:
@@ -263,7 +261,7 @@ class BilibiliScraper(BaseScraper):
 
         return self._format_comments(all_comments)
 
-    def _format_comments(self, comments: List[dm_pb2.DanmakuElem]) -> List[dict]:
+    def _format_comments(self, comments: List[DanmakuElem]) -> List[dict]:
         formatted = []
         for c in comments:
             timestamp = c.progress / 1000.0
