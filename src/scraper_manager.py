@@ -75,25 +75,33 @@ class ScraperManager:
         """检查是否有任何已启用的爬虫。"""
         return bool(self.scrapers)
 
-    async def search_all(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[ProviderSearchInfo]:
+    async def search_all(self, keywords: List[str], episode_info: Optional[Dict[str, Any]] = None) -> List[ProviderSearchInfo]:
         """
-        在所有已注册的爬虫上并发搜索关键词。
+        在所有已注册的爬虫上并发搜索关键词列表。
         """
         if not self.scrapers:
             return []
 
-        # 将爬虫实例和它们的搜索任务一起创建，以便后续处理
-        scraper_instances = list(self.scrapers.values())
-        tasks = [scraper.search(keyword, episode_info=episode_info) for scraper in scraper_instances]
+        tasks = []
+        for keyword in keywords:
+            for scraper in self.scrapers.values():
+                tasks.append(scraper.search(keyword, episode_info=episode_info))
+
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         all_search_results = []
-        # 使用 zip 将爬虫实例和其对应的结果安全地配对
-        for scraper, result in zip(scraper_instances, results):
+        seen_results = set() # 用于去重
+
+        for result in results:
             if isinstance(result, Exception):
-                print(f"在数据源 '{scraper.provider_name}' 上搜索时出错: {result}")
+                logging.getLogger(__name__).error(f"搜索任务中出现错误: {result}")
             elif result:
-                all_search_results.extend(result)
+                for item in result:
+                    # 使用 (provider, mediaId) 作为唯一标识符
+                    unique_id = (item.provider, item.mediaId)
+                    if unique_id not in seen_results:
+                        all_search_results.append(item)
+                        seen_results.add(unique_id)
 
         return all_search_results
 

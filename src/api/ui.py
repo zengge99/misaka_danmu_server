@@ -100,30 +100,61 @@ async def search_anime_local(
 async def search_anime_provider(
     keyword: str = Query(..., min_length=1, description="搜索关键词"),
     manager: ScraperManager = Depends(get_scraper_manager),
-    current_user: models.User = Depends(security.get_current_user)
+    current_user: models.User = Depends(security.get_current_user),
+    tmdb_client: httpx.AsyncClient = Depends(get_tmdb_client),
+    pool: aiomysql.Pool = Depends(get_db_pool)
 ):
     """
     从所有已配置的数据源（如腾讯、B站等）搜索节目信息。
     支持 "标题 SXXEXX" 格式来指定集数。
+    新增TMDB辅助搜索：如果配置了TMDB，会先用关键词搜索TMDB，获取别名，再用所有别名去搜索弹幕源。
     """
     parsed_keyword = parse_search_keyword(keyword)
-
-    logger.info(f"用户 '{current_user.username}' 正在搜索: '{keyword}'")
-    # 新增：检查是否有启用的搜索源
-    if not manager.has_enabled_scrapers:
-        # 如果没有启用任何源，直接返回错误，而不是空列表
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="没有启用的搜索源，请在“搜索源”页面中启用至少一个。"
-        )
-
     search_title = parsed_keyword["title"]
     episode_info = {
         "season": parsed_keyword["season"],
         "episode": parsed_keyword["episode"]
     } if parsed_keyword["episode"] is not None else None
 
-    results = await manager.search_all(search_title, episode_info=episode_info)
+    logger.info(f"用户 '{current_user.username}' 正在搜索: '{keyword}'")
+    if not manager.has_enabled_scrapers:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="没有启用的搜索源，请在“搜索源”页面中启用至少一个。"
+        )
+
+    # --- TMDB 辅助搜索 ---
+    search_aliases = {search_title}
+    try:
+        # 尝试同时搜索 tv 和 movie
+        tv_task = tmdb_client.get("/search/tv", params={"query": search_title, "language": "zh-CN"})
+        movie_task = tmdb_client.get("/search/movie", params={"query": search_title, "language": "zh-CN"})
+        tv_res, movie_res = await asyncio.gather(tv_task, movie_task, return_exceptions=True)
+
+        # 优先处理TV结果
+        tmdb_results = []
+        if isinstance(tv_res, httpx.Response) and tv_res.status_code == 200:
+            tmdb_results.extend(tv_res.json().get("results", []))
+        if isinstance(movie_res, httpx.Response) and movie_res.status_code == 200:
+            tmdb_results.extend(movie_res.json().get("results", []))
+
+        if tmdb_results:
+            # 选择最相关的TMDB结果（这里简化为第一个）
+            best_match = tmdb_results[0]
+            media_type = "tv" if "name" in best_match else "movie"
+            details_res = await tmdb_client.get(f"/{media_type}/{best_match['id']}", params={"append_to_response": "alternative_titles"})
+            if details_res.status_code == 200:
+                details = details_res.json()
+                alt_titles = details.get("alternative_titles", {}).get("titles", [])
+                for title_info in alt_titles:
+                    search_aliases.add(title_info['title'])
+                search_aliases.add(details.get('name') or details.get('title'))
+                search_aliases.add(details.get('original_name') or details.get('original_title'))
+                logger.info(f"TMDB辅助搜索成功，将使用以下别名进行搜索: {search_aliases}")
+    except Exception as e:
+        logger.warning(f"TMDB辅助搜索失败: {e}", exc_info=True)
+
+    results = await manager.search_all(list(search_aliases), episode_info=episode_info)
     return models.ProviderSearchResponse(results=results)
 
 @router.get("/library", response_model=models.LibraryResponse, summary="获取媒体库内容")

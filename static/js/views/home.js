@@ -108,7 +108,7 @@ async function handleSearch(e) {
 
     try {
         const data = await apiFetch(`/api/ui/search/provider?keyword=${encodeURIComponent(keyword)}`);
-        const processedResults = data.results.map(item => ({
+        const processedResults = (data.results || []).map(item => ({
             ...item,
             season: parseTitleForSeason(item.title)
         }));
@@ -127,6 +127,7 @@ function parseTitleForSeason(title) {
         /(?:S|Season)\s*(\d+)/i,
         /第\s*([一二三四五六七八九十\d]+)\s*[季部]/,
         /第\s*([一二三四五六七八九十\d]+)\s*(?:部分|篇|章|幕)/,
+        /\s+([IVXLCDM]+)$/i // Roman numerals at the end of the string
     ];
 
     const chineseNumMap = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
@@ -139,10 +140,31 @@ function parseTitleForSeason(title) {
                 return parseInt(numStr, 10);
             } else if (chineseNumMap[numStr]) {
                 return chineseNumMap[numStr];
+            } else { // Roman numeral check
+                try {
+                    return romanToInt(numStr.toUpperCase());
+                } catch {
+                    // ignore if not a valid roman numeral
+                }
             }
         }
     }
     return 1; // Default to season 1
+}
+
+function romanToInt(s) {
+    const map = { 'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000 };
+    let result = 0;
+    for (let i = 0; i < s.length; i++) {
+        const current = map[s[i]];
+        const next = map[s[i + 1]];
+        if (next && current < next) {
+            result -= current;
+        } else {
+            result += current;
+        }
+    }
+    return result;
 }
 
 function displayResults(results) {
