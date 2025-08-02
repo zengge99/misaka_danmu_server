@@ -1,0 +1,15 @@
+#auth-view .auth-wrapper {
+    display: flex;
+    justify-content: center;
+}
+
+#auth-view form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--card-bg);
+    width: 300px;
+}

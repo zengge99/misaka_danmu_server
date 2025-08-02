@@ -6,7 +6,17 @@
     <title>Danmu API Frontend</title>
     <!-- 新增：设置浏览器的标签页图标 -->
     <link rel="icon" href="/static/logo.png" type="image/png">
-    <link rel="stylesheet" href="/static/style.css">
+    <!-- Refactored CSS -->
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link rel="stylesheet" href="/static/css/views/auth.css">
+    <link rel="stylesheet" href="/static/css/views/home.css">
+    <link rel="stylesheet" href="/static/css/views/library.css">
+    <link rel="stylesheet" href="/static/css/views/edit.css">
+    <link rel="stylesheet" href="/static/css/views/tasks.css">
+    <link rel="stylesheet" href="/static/css/views/tokens.css">
+    <link rel="stylesheet" href="/static/css/views/sources.css">
+    <link rel="stylesheet" href="/static/css/views/settings.css">
 </head>
 <body>
     <div id="app-container">
@@ -536,6 +546,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>

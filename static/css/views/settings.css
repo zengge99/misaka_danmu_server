@@ -1,0 +1,38 @@
+.settings-sub-nav {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sub-nav-btn {
+    padding: 10px 20px;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background-color: transparent;
+    color: #666;
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+    font-size: 15px;
+    font-weight: 500;
+    position: relative;
+    top: 1px;
+    transition: all 0.2s ease;
+}
+
+.sub-nav-btn:hover {
+    background-color: var(--secondary-color);
+    color: var(--primary-color);
+}
+
+.sub-nav-btn.active {
+    background-color: var(--bg-color);
+    color: var(--primary-color);
+    border-color: var(--border-color);
+}
+
+.bangumi-user-profile img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}

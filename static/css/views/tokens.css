@@ -1,0 +1,32 @@
+.token-value {
+    font-family: 'Courier New', Courier, monospace;
+    background-color: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.token-status.disabled {
+    color: #909399;
+    font-style: italic;
+}
+
+.domain-config-section {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    padding: 20px;
+    background: var(--secondary-color);
+    border-radius: 8px;
+}
+
+.domain-config-section h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+.domain-config-section .form-row {
+    align-items: center;
+}
+
+.domain-config-section button {
+    margin-left: 10px;
+}

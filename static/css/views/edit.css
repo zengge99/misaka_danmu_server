@@ -1,0 +1,92 @@
+#edit-anime-form input::placeholder {
+    text-align: left;
+    color: #aaa;
+}
+
+.input-with-icon {
+    display: flex;
+    align-items: stretch;
+    flex-grow: 1;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-color);
+    overflow: hidden;
+}
+
+.input-with-icon.disabled {
+    background-color: #f5f7fa;
+    cursor: not-allowed;
+}
+
+.input-with-icon input {
+    flex-grow: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    padding: 10px;
+    font-size: 16px;
+}
+
+.input-with-icon .icon-btn {
+    flex-shrink: 0;
+    width: 38px;
+    border: none;
+    border-left: 1px solid var(--border-color);
+    background-color: var(--secondary-color);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0;
+    transition: background-color 0.2s;
+}
+
+.input-with-icon .icon-btn:hover {
+    background-color: #e9ecef;
+}
+
+.input-with-icon .icon-btn:disabled {
+    background-color: #f5f7fa;
+    cursor: not-allowed;
+}
+
+.input-with-icon .icon-btn:disabled:hover {
+    background-color: #f5f7fa;
+}
+
+.input-with-apply-icon {
+    display: flex;
+    align-items: stretch;
+    flex-grow: 1;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-color);
+    overflow: hidden;
+}
+
+.input-with-apply-icon input {
+    flex-grow: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    padding: 10px;
+    font-size: 16px;
+}
+
+.input-with-apply-icon .apply-btn {
+    flex-shrink: 0;
+    width: 38px;
+    border: none;
+    border-left: 1px solid var(--border-color);
+    background-color: var(--secondary-color);
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: bold;
+    padding: 0;
+    transition: background-color 0.2s;
+    color: var(--primary-color);
+}
+
+.disabled-indicator {
+    color: var(--error-color);
+    font-size: 1.2em;
+    margin-left: 5px;
+}
