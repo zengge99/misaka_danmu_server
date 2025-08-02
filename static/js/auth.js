@@ -54,8 +54,8 @@ async function logout() {
     } finally {
         token = null;
         localStorage.removeItem('danmu_api_token');
+        document.dispatchEvent(new CustomEvent('auth:status-changed', { detail: { loggedIn: false } }));
         showAuthView(true);
-        stopLogRefresh();
     }
 }
 
@@ -71,24 +71,14 @@ async function checkLogin() {
             throw new Error('未能获取到有效的用户信息。');
         }
         document.getElementById('current-user').textContent = `用户: ${user.username}`;
+        document.dispatchEvent(new CustomEvent('auth:status-changed', { detail: { loggedIn: true } }));
         showAuthView(false);
-        startLogRefresh();
         // Trigger initial view load
         document.dispatchEvent(new CustomEvent('viewchange', { detail: { viewId: 'home-view' } }));
     } catch (error) {
         console.error(`自动登录失败: ${error.message}`);
         logout();
     }
-}
-
-function startLogRefresh() {
-    // Dispatch event to notify other modules
-    document.dispatchEvent(new CustomEvent('logrefresh:start'));
-}
-
-function stopLogRefresh() {
-    // Dispatch event to notify other modules
-    document.dispatchEvent(new CustomEvent('logrefresh:stop'));
 }
 
 export function setupAuthEventListeners() {

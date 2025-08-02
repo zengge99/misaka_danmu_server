@@ -22,8 +22,13 @@ function setupEventListeners() {
     document.getElementById('search-tmdb-for-bulk-btn').addEventListener('click', handleBulkTmdbSearch);
 
     // Listen to global events
-    document.addEventListener('logrefresh:start', startLogRefresh);
-    document.addEventListener('logrefresh:stop', stopLogRefresh);
+    document.addEventListener('auth:status-changed', (e) => {
+        if (e.detail.loggedIn) {
+            startLogRefresh();
+        } else {
+            stopLogRefresh();
+        }
+    });
     document.addEventListener('tmdb-search:selected-for-bulk', (e) => {
         // Listen for the event dispatched from editAnime.js
         const chineseName = e.detail.aliases_cn && e.detail.aliases_cn.length > 0 ? e.detail.aliases_cn[0] : null;
