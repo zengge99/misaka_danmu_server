@@ -52,6 +52,14 @@ pool.Add(file_descriptor_proto)
 factory = MessageFactory(pool)
 
 # 6. Expose the message classes so they can be imported
-DanmakuElem = factory.GetPrototype(danmaku_elem_desc)
-Flag = factory.GetPrototype(flag_desc)
-DmSegMobileReply = factory.GetPrototype(dm_seg_reply_desc)
+# Find the hashable descriptors from the pool by their fully-qualified name.
+# This is the correct way to get a hashable descriptor for the MessageFactory,
+# which resolves the "TypeError: unhashable object" error.
+danmaku_elem_descriptor = pool.FindMessageTypeByName('biliproto.community.service.dm.v1.DanmakuElem')
+flag_descriptor = pool.FindMessageTypeByName('biliproto.community.service.dm.v1.Flag')
+dm_seg_reply_descriptor = pool.FindMessageTypeByName('biliproto.community.service.dm.v1.DmSegMobileReply')
+
+# Get the prototype message classes using the hashable descriptors
+DanmakuElem = factory.GetPrototype(danmaku_elem_descriptor)
+Flag = factory.GetPrototype(flag_descriptor)
+DmSegMobileReply = factory.GetPrototype(dm_seg_reply_descriptor)
