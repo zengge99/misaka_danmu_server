@@ -35,19 +35,19 @@ function initializeElements() {
 
 async function loadAndRenderTokens() {
     if (!tokenTableBody) return;
-    tokenTableBody.innerHTML = '<tr><td colspan="5">加载中...</td></tr>';
+    tokenTableBody.innerHTML = '<tr><td colspan="6">加载中...</td></tr>';
     try {
         const tokens = await apiFetch('/api/ui/tokens');
         renderTokens(tokens);
     } catch (error) {
-        tokenTableBody.innerHTML = `<tr class="error"><td colspan="5">加载失败: ${(error.message || error)}</td></tr>`;
+        tokenTableBody.innerHTML = `<tr class="error"><td colspan="6">加载失败: ${(error.message || error)}</td></tr>`;
     }
 }
 
 function renderTokens(tokens) {
     tokenTableBody.innerHTML = '';
     if (tokens.length === 0) {
-        tokenTableBody.innerHTML = '<tr><td colspan="7">没有创建任何Token。</td></tr>';
+        tokenTableBody.innerHTML = '<tr><td colspan="6">没有创建任何Token。</td></tr>';
         return;
     }
 
@@ -65,7 +65,6 @@ function renderTokens(tokens) {
         const enabledText = token.is_enabled ? '禁用' : '启用';
 
         row.innerHTML = `
-            <td>${token.id}</td>
             <td class="token-name-cell" title="${token.name}">${token.name}</td>
             <td>
                 <span class="token-value">

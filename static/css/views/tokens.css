@@ -38,28 +38,24 @@
 
 #token-table th:nth-child(1),
 #token-table td:nth-child(1) {
-    width: 5%;
+    width: 8%; /* 名称 (Name) */
 }
 
 #token-table th:nth-child(2),
 #token-table td:nth-child(2) {
-    width: 8%; /* 名称 (Name) - 宽度缩小以防止挤压 */
+    width: 30%; /* Token - 增加宽度以容纳长字符串 */
+    word-break: break-all;
 }
 
 #token-table th:nth-child(3),
 #token-table td:nth-child(3) {
-    width: 30%; /* Token - 增加宽度以容纳长字符串 */
-}
-
-#token-table th:nth-child(4),
-#token-table td:nth-child(4) {
     width: 8%;
     text-align: center;
 }
 
-#token-table th:nth-child(5), #token-table td:nth-child(5),
-#token-table th:nth-child(6), #token-table td:nth-child(6) {
-    width: 10%; /* 创建时间 & 有效期 (Created & Expires) - 宽度缩小 */
+#token-table th:nth-child(4), #token-table td:nth-child(4),
+#token-table th:nth-child(5), #token-table td:nth-child(5) {
+    width: 10%; /* 创建时间 & 有效期 (Created & Expires) */
 }
 
 .ua-filter-section {
