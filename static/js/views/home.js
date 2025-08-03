@@ -135,10 +135,14 @@ function parseTitleForSeason(title) {
         /(?:S|Season)\s*(\d+)/i,
         /第\s*([一二三四五六七八九十\d]+)\s*[季部]/,
         /第\s*([一二三四五六七八九十\d]+)\s*(?:部分|篇|章|幕)/,
+        // 新增：匹配Unicode罗马数字 (e.g., Ⅲ)
+        /\s+([Ⅰ-Ⅻ])\b/i,
         /\s+([IVXLCDM]+)$/i // Roman numerals at the end of the string
     ];
 
     const chineseNumMap = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
+    // 新增：Unicode罗马数字到整数的映射
+    const unicodeRomanMap = { 'Ⅰ': 1, 'Ⅱ': 2, 'Ⅲ': 3, 'Ⅳ': 4, 'Ⅴ': 5, 'Ⅵ': 6, 'Ⅶ': 7, 'Ⅷ': 8, 'Ⅸ': 9, 'Ⅹ': 10, 'Ⅺ': 11, 'Ⅻ': 12 };
 
     for (const pattern of patterns) {
         const match = title.match(pattern);
@@ -148,7 +152,9 @@ function parseTitleForSeason(title) {
                 return parseInt(numStr, 10);
             } else if (chineseNumMap[numStr]) {
                 return chineseNumMap[numStr];
-            } else { // Roman numeral check
+            } else if (unicodeRomanMap[numStr.toUpperCase()]) {
+                return unicodeRomanMap[numStr.toUpperCase()];
+            } else { // Fallback for ASCII Roman numerals
                 try {
                     return romanToInt(numStr.toUpperCase());
                 } catch {
