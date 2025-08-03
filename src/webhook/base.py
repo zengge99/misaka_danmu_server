@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import aiomysql
 from pydantic import BaseModel
