@@ -810,39 +810,39 @@ async def delete_episode(pool: aiomysql.Pool, episode_id: int) -> bool:
                 raise e
 
 async def sync_scrapers_to_db(pool: aiomysql.Pool, provider_names: List[str]):
-    """将发现的爬虫同步到数据库，新爬虫会被添加进去。"""
+    """将发现的搜索源同步到数据库，新的搜索源会被添加进去。"""
     if not provider_names:
         return
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
-            # 1. 获取所有已存在的爬虫
+            # 1. 获取所有已存在的搜索源
             await cursor.execute("SELECT provider_name FROM scrapers")
             existing_providers = {row[0] for row in await cursor.fetchall()}
 
-            # 2. 找出新发现的爬虫
+            # 2. 找出新发现的搜索源
             new_providers = [name for name in provider_names if name not in existing_providers]
 
             if not new_providers:
                 return
 
-            # 3. 如果有新爬虫，则插入它们
+            # 3. 如果有新的搜索源，则插入它们
             await cursor.execute("SELECT MAX(display_order) FROM scrapers")
             max_order = (await cursor.fetchone())[0] or 0
 
-            # 只插入新的爬虫
+            # 只插入新的搜索源
             query = "INSERT INTO scrapers (provider_name, display_order) VALUES (%s, %s)"
             data_to_insert = [(name, max_order + i + 1) for i, name in enumerate(new_providers)]
             await cursor.executemany(query, data_to_insert)
 
 async def get_all_scraper_settings(pool: aiomysql.Pool) -> List[Dict[str, Any]]:
-    """获取所有爬虫的设置，按顺序排列。"""
+    """获取所有搜索源的设置，按顺序排列。"""
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             await cursor.execute("SELECT provider_name, is_enabled, display_order FROM scrapers ORDER BY display_order ASC")
             return await cursor.fetchall()
 
 async def update_scrapers_settings(pool: aiomysql.Pool, settings: List[models.ScraperSetting]):
-    """批量更新爬虫的设置。"""
+    """批量更新搜索源的设置。"""
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             query = "UPDATE scrapers SET is_enabled = %s, display_order = %s WHERE provider_name = %s"

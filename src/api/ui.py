@@ -427,27 +427,27 @@ async def delete_bulk_sources(
     logger.info(f"用户 '{current_user.username}' 提交了批量删除 {len(request_data.source_ids)} 个源的任务 (Task ID: {task_id})。")
     return {"message": task_title + "的任务已提交。", "task_id": task_id}
 
-@router.get("/scrapers", response_model=List[models.ScraperSetting], summary="获取所有爬虫源的设置")
+@router.get("/scrapers", response_model=List[models.ScraperSetting], summary="获取所有搜索源的设置")
 async def get_scraper_settings(
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
-    """获取所有可用爬虫源的列表及其配置（启用状态、顺序）。"""
+    """获取所有可用搜索源的列表及其配置（启用状态、顺序）。"""
     settings = await crud.get_all_scraper_settings(pool)
     return [models.ScraperSetting.model_validate(s) for s in settings]
 
-@router.put("/scrapers", status_code=status.HTTP_204_NO_CONTENT, summary="更新爬虫源的设置")
+@router.put("/scrapers", status_code=status.HTTP_204_NO_CONTENT, summary="更新搜索源的设置")
 async def update_scraper_settings(
     settings: List[models.ScraperSetting],
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool),
     manager: ScraperManager = Depends(get_scraper_manager)
 ):
-    """批量更新爬虫源的启用状态和显示顺序。"""
+    """批量更新搜索源的启用状态和显示顺序。"""
     await crud.update_scrapers_settings(pool, settings)
-    # 更新数据库后，触发 ScraperManager 重新加载爬虫
+    # 更新数据库后，触发 ScraperManager 重新加载搜索源
     await manager.load_and_sync_scrapers()
-    logger.info(f"用户 '{current_user.username}' 更新了爬虫源设置，已重新加载。")
+    logger.info(f"用户 '{current_user.username}' 更新了搜索源设置，已重新加载。")
     return
 
 @router.get("/logs", response_model=List[str], summary="获取最新的服务器日志")

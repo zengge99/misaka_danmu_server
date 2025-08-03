@@ -10,7 +10,7 @@ from .. import models
 
 class BaseScraper(ABC):
     """
-    所有爬虫的抽象基类。
+    所有搜索源的抽象基类。
     定义了搜索媒体、获取分集和获取弹幕的通用接口。
     """
 
