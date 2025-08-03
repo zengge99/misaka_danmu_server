@@ -7,6 +7,7 @@ import logging
 import re
 import time
 from typing import Any, Dict, List, Optional, Union, Callable
+from collections import defaultdict
 from urllib.parse import urlencode
 
 import httpx
@@ -370,8 +371,26 @@ class YoukuScraper(BaseScraper):
         return []
 
     def _format_comments(self, comments: List[YoukuComment]) -> List[dict]:
-        formatted = []
+        if not comments:
+            return []
+
+        # 1. 按内容对弹幕进行分组
+        grouped_by_content: Dict[str, List[YoukuComment]] = defaultdict(list)
         for c in comments:
+            grouped_by_content[c.content].append(c)
+
+        # 2. 处理重复项
+        processed_comments: List[YoukuComment] = []
+        for content, group in grouped_by_content.items():
+            if len(group) == 1:
+                processed_comments.append(group[0])
+            else:
+                first_comment = min(group, key=lambda x: x.playat)
+                first_comment.content = f"{first_comment.content} X{len(group)}"
+                processed_comments.append(first_comment)
+
+        formatted = []
+        for c in processed_comments:
             mode = 1
             color = 16777215
             

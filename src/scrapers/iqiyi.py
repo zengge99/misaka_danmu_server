@@ -7,7 +7,7 @@ from typing import ClassVar
 import zlib
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional, Callable
-
+from collections import defaultdict
 import httpx
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
@@ -413,8 +413,27 @@ class IqiyiScraper(BaseScraper):
         return self._format_comments(all_comments)
 
     def _format_comments(self, comments: List[IqiyiComment]) -> List[dict]:
-        formatted = []
+        if not comments:
+            return []
+
+        # 1. 按内容对弹幕进行分组
+        grouped_by_content: Dict[str, List[IqiyiComment]] = defaultdict(list)
         for c in comments:
+            grouped_by_content[c.content].append(c)
+
+        # 2. 处理重复项
+        processed_comments: List[IqiyiComment] = []
+        for content, group in grouped_by_content.items():
+            if len(group) == 1:
+                processed_comments.append(group[0])
+            else:
+                first_comment = min(group, key=lambda x: x.show_time)
+                first_comment.content = f"{first_comment.content} X{len(group)}"
+                processed_comments.append(first_comment)
+
+        # 3. 格式化处理后的弹幕列表
+        formatted = []
+        for c in processed_comments:
             mode = 1 # Default scroll
             try:
                 color = int(c.color, 16)

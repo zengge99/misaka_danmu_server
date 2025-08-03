@@ -7,6 +7,7 @@ import json
 from urllib.parse import urlencode
 from typing import Any, Callable, Dict, List, Optional, Union
 from datetime import datetime
+from collections import defaultdict
 
 import aiomysql
 import httpx
@@ -480,35 +481,45 @@ class BilibiliScraper(BaseScraper):
             self.logger.error(f"Bilibili: 获取UGC分集列表失败 (media_id={media_id}): {e}", exc_info=True)
         return []
 
-    async def get_comments(self, episode_id: str, progress_callback: Optional[Callable] = None) -> List[dict]:
+    async def _get_danmaku_pools(self, aid: int, cid: int) -> List[int]:
+        """获取一个视频的所有弹幕池ID (CID)，包括主弹幕和字幕弹幕。"""
+        all_cids = [cid]  # Start with the main CID
         try:
-            aid_str, cid_str = episode_id.split(',')
-            aid, cid = int(aid_str), int(cid_str)
-        except (ValueError, IndexError):
-            self.logger.error(f"Bilibili: 无效的 episode_id 格式: '{episode_id}'")
-            return []
+            # The /x/player/v2 endpoint provides subtitle information
+            url = f"https://api.bilibili.com/x/player/v2?aid={aid}&cid={cid}"
+            response = await self._request_with_rate_limit("GET", url)
+            response.raise_for_status()
+            data = response.json()
 
-        await self._ensure_session_cookie()
+            if data.get("code") == 0 and data.get("data"):
+                subtitles = data.get("data", {}).get("subtitle", {}).get("list", [])
+                for sub in subtitles:
+                    if sub.get("id"):  # 'id' here is the CID for the subtitle track
+                        all_cids.append(sub['id'])
+                self.logger.info(f"Bilibili: 为 aid={aid}, cid={cid} 找到 {len(all_cids)} 个弹幕池 (包括字幕)。")
+        except Exception as e:
+            self.logger.warning(f"Bilibili: 获取额外弹幕池失败 (aid={aid}, cid={cid}): {e}", exc_info=False)
 
+        return list(dict.fromkeys(all_cids))  # Return unique CIDs
+
+    async def _fetch_comments_for_cid(self, aid: int, cid: int, progress_callback: Optional[Callable] = None) -> List[DanmakuElem]:
+        """为单个CID获取所有弹幕分段。"""
         all_comments = []
         segment_index = 1
         while True:
             try:
                 if progress_callback:
-                    # 无法预知总分段数，只能显示当前正在获取哪个
-                    progress_callback(min(95, segment_index * 10), f"正在获取分段 {segment_index}")
+                    progress_callback(min(95, segment_index * 10), f"获取弹幕池 {cid} 的分段 {segment_index}")
 
                 url = f"https://api.bilibili.com/x/v2/dm/web/seg.so?type=1&oid={cid}&pid={aid}&segment_index={segment_index}"
                 response = await self._request_with_rate_limit("GET", url)
-                
-                if response.status_code == 304: # Not Modified
-                    self.logger.info(f"Bilibili: 弹幕分段 {segment_index} 未修改，获取结束。")
+
+                if response.status_code == 304:
                     break
                 response.raise_for_status()
                 if not response.content:
-                    self.logger.info(f"Bilibili: 弹幕分段 {segment_index} 内容为空，获取结束。")
                     break
-                
+
                 danmu_reply = DmSegMobileReply()
                 danmu_reply.ParseFromString(response.content)
 
@@ -519,24 +530,79 @@ class BilibiliScraper(BaseScraper):
                 segment_index += 1
 
             except httpx.HTTPStatusError as e:
-                # B站有时对不存在的分段返回404，这是正常的结束标志
                 if e.response.status_code == 404:
-                    self.logger.info(f"Bilibili: 找不到弹幕分段 {segment_index}，获取结束。")
                     break
-                self.logger.error(f"Bilibili: 获取弹幕分段 {segment_index} 失败: {e}", exc_info=True)
-                break # 出错时终止
-            except Exception as e:
-                self.logger.error(f"Bilibili: 处理弹幕分段 {segment_index} 时出错: {e}", exc_info=True)
+                self.logger.error(f"Bilibili: 获取弹幕分段失败 (cid={cid}, segment={segment_index}): {e}", exc_info=True)
                 break
+            except Exception as e:
+                self.logger.error(f"Bilibili: 处理弹幕分段时出错 (cid={cid}, segment={segment_index}): {e}", exc_info=True)
+                break
+        return all_comments
+
+    async def get_comments(self, episode_id: str, progress_callback: Optional[Callable] = None) -> List[dict]:
+        try:
+            aid_str, main_cid_str = episode_id.split(',')
+            aid, main_cid = int(aid_str), int(main_cid_str)
+        except (ValueError, IndexError):
+            self.logger.error(f"Bilibili: 无效的 episode_id 格式: '{episode_id}'")
+            return []
+
+        await self._ensure_session_cookie()
+
+        if progress_callback: progress_callback(0, "正在获取弹幕池列表...")
+        all_cids = await self._get_danmaku_pools(aid, main_cid)
+        total_cids = len(all_cids)
+
+        all_comments = []
+        for i, cid in enumerate(all_cids):
+            self.logger.info(f"Bilibili: 正在获取弹幕池 {i + 1}/{total_cids} (CID: {cid})...")
+
+            def sub_progress_callback(danmaku_progress: int, danmaku_description: str):
+                if progress_callback:
+                    base_progress = (i / total_cids) * 100
+                    progress_range = (1 / total_cids) * 100
+                    current_total_progress = base_progress + (danmaku_progress / 100) * progress_range
+                    progress_callback(
+                        progress=current_total_progress,
+                        description=f"池 {i + 1}/{total_cids}: {danmaku_description}"
+                    )
+
+            comments_for_cid = await self._fetch_comments_for_cid(aid, cid, sub_progress_callback)
+            all_comments.extend(comments_for_cid)
 
         if progress_callback:
             progress_callback(100, "弹幕整合完成")
 
-        return self._format_comments(all_comments)
+        unique_comments = {c.id: c for c in all_comments}.values()
+        self.logger.info(f"Bilibili: 为 episode_id='{episode_id}' 获取了 {len(unique_comments)} 条唯一弹幕。")
+        return self._format_comments(list(unique_comments))
 
     def _format_comments(self, comments: List[DanmakuElem]) -> List[dict]:
-        formatted = []
+        if not comments:
+            return []
+
+        # 1. 按内容对弹幕进行分组，以识别重复弹幕
+        grouped_by_content: Dict[str, List[DanmakuElem]] = defaultdict(list)
         for c in comments:
+            grouped_by_content[c.content].append(c)
+
+        # 2. 处理重复项
+        processed_comments: List[DanmakuElem] = []
+        for content, group in grouped_by_content.items():
+            if len(group) == 1:
+                # 如果弹幕不重复，直接添加
+                processed_comments.append(group[0])
+            else:
+                # 如果有重复，找到时间最早的那条
+                first_comment = min(group, key=lambda x: x.progress)
+                # 在其内容后附加重复次数
+                first_comment.content = f"{first_comment.content} X{len(group)}"
+                # 只将这条修改后的弹幕添加到最终列表
+                processed_comments.append(first_comment)
+
+        # 3. 格式化处理后的弹幕列表
+        formatted = []
+        for c in processed_comments:
             timestamp = c.progress / 1000.0
             p_string = f"{timestamp:.3f},{c.mode},{c.fontsize},{c.color},[{self.provider_name}]"
             formatted.append({

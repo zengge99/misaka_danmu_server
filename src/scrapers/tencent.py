@@ -5,6 +5,7 @@ import re
 import logging
 from typing import List, Dict, Any, Optional, Union, Callable
 from pydantic import BaseModel, Field, ValidationError
+from collections import defaultdict
 from datetime import datetime
 
 from .base import BaseScraper
@@ -425,8 +426,27 @@ class TencentScraper(BaseScraper):
         """
         tencent_comments = await self._internal_get_comments(episode_id, progress_callback)
 
-        formatted_comments = []
+        if not tencent_comments:
+            return []
+
+        # 1. 按内容对弹幕进行分组
+        grouped_by_content: Dict[str, List[TencentComment]] = defaultdict(list)
         for c in tencent_comments:
+            grouped_by_content[c.content].append(c)
+
+        # 2. 处理重复项
+        processed_comments: List[TencentComment] = []
+        for content, group in grouped_by_content.items():
+            if len(group) == 1:
+                processed_comments.append(group[0])
+            else:
+                first_comment = min(group, key=lambda x: int(x.time_offset))
+                first_comment.content = f"{first_comment.content} X{len(group)}"
+                processed_comments.append(first_comment)
+
+        # 3. 格式化处理后的弹幕列表
+        formatted_comments = []
+        for c in processed_comments:
             # 默认值
             mode = 1  # 滚动
             color = 16777215  # 白色
