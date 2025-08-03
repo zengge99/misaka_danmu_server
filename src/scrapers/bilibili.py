@@ -3,6 +3,7 @@ import logging
 import re
 import time
 import hashlib
+import html
 import json
 from urllib.parse import urlencode
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -407,10 +408,12 @@ class BilibiliScraper(BaseScraper):
                     except (ValueError, TypeError, OSError):
                         pass
 
+                    # 修正：先进行HTML解码，以处理 &lt;em&gt; 这样的实体编码
+                    unescaped_title = html.unescape(item.title)
                     results.append(models.ProviderSearchInfo(
                         provider=self.provider_name,
                         mediaId=media_id,
-                        title=re.sub(r'<[^>]+>', '', item.title).replace(":", "："),
+                        title=re.sub(r'<[^>]+>', '', unescaped_title).replace(":", "："),
                         type=media_type,
                         year=year,
                         imageUrl=item.cover,
