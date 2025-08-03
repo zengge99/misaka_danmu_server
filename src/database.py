@@ -133,7 +133,8 @@ async def init_db_tables(app: FastAPI):
             await _init_default_config(cursor)
 
 async def _init_default_config(cursor: aiomysql.Cursor):
-    """初始化缓存配置表的默认值"""
+    """初始化配置表的默认值，并避免打印重复键的警告。"""
+    print("正在检查并初始化默认配置...")
     default_configs = [
         ('search_ttl_seconds', '300', '搜索结果的缓存时间（秒），默认5分钟。'),
         ('episodes_ttl_seconds', '1800', '分集列表的缓存时间（秒），默认30分钟。'),
@@ -147,7 +148,24 @@ async def _init_default_config(cursor: aiomysql.Cursor):
         ('ua_filter_mode', 'off', 'UA过滤模式: off, blacklist, whitelist'),
         ('douban_cookie', '', '用于访问豆瓣API的Cookie。')
     ]
-    # 使用 INSERT IGNORE 来避免因主键冲突而报错
-    query = "INSERT IGNORE INTO config (config_key, config_value, description) VALUES (%s, %s, %s)"
-    await cursor.executemany(query, default_configs)
-    print("默认缓存配置已初始化。")
+
+    # 1. 获取所有已存在的配置键
+    await cursor.execute("SELECT config_key FROM config")
+    existing_keys = {row[0] for row in await cursor.fetchall()}
+
+    # 2. 找出需要插入的新配置
+    configs_to_insert = []
+    for key, value, description in default_configs:
+        if key in existing_keys:
+            print(f"配置项 '{key}' 已存在，跳过初始化。")
+        else:
+            print(f"正在初始化配置项 '{key}'...")
+            configs_to_insert.append((key, value, description))
+
+    # 3. 批量插入新配置
+    if configs_to_insert:
+        query = "INSERT INTO config (config_key, config_value, description) VALUES (%s, %s, %s)"
+        await cursor.executemany(query, configs_to_insert)
+        print(f"成功初始化 {len(configs_to_insert)} 个新配置项。")
+    
+    print("默认配置检查完成。")

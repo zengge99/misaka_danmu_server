@@ -51,24 +51,34 @@ async def search_douban(
         html = response.text
 
         results = []
-        # 使用正则表达式解析搜索结果页面的HTML
+        # 修正：更新正则表达式以匹配豆瓣搜索结果页的新HTML结构。
+        # 新结构将 subject ID 放在了 onclick 事件中，并且 rating-info 的内部结构更复杂。
         result_pattern = re.compile(
-            r'<div class="result">.*?<a href="https://movie.douban.com/subject/(\d+)/".*?<img src="([^"]+)".*?<h3>.*?<a.*?>(.*?)</a>.*?</h3>.*?<div class="rating-info">.*?<span>(.*?)</span>.*?</div>.*?<p>(.*?)</p>.*?</div>',
+            r'<div class="result">.*?'  # Start of a result item
+            r'onclick=".*?sid: (\d+).*?".*?'  # Capture the subject ID from the onclick attribute
+            r'<img src="([^"]+)".*?>.*?'  # Capture the image URL
+            r'<h3>.*?<a.*?>(.*?)</a>.*?</h3>.*?'  # Capture the title HTML
+            r'<div class="rating-info">(.*?)</div>.*?'  # Capture the entire rating info block
+            r'<p>(.*?)</p>',  # Capture the description paragraph
             re.DOTALL,
         )
 
         for match in result_pattern.finditer(html):
-            douban_id, img_url, title_html, rating_info, details_text = match.groups()
+            douban_id, img_url, title_html, rating_info_html, description_html = match.groups()
 
-            # 清理HTML标签和多余的空格
+            # 清理标题
             title = re.sub(r"<.*?>", "", title_html).strip()
-            details = re.sub(r"\s+", " ", details_text).strip()
+
+            # 从HTML块中提取纯文本并合并为详细信息
+            rating_text = ' '.join(re.sub(r'<.*?>', ' ', rating_info_html).split())
+            description_text = ' '.join(re.sub(r'<.*?>', ' ', description_html).split())
+            details = f"{rating_text} / {description_text}"
 
             results.append(
                 DoubanSearchResult(
                     id=douban_id,
                     title=title,
-                    details=f"{rating_info.strip()} / {details}",
+                    details=details,
                     image_url=img_url,
                 )
             )
