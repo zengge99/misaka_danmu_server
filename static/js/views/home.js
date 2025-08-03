@@ -254,8 +254,8 @@ function renderSearchResults(results) {
             metaParts.push(`季度: ${String(item.season).padStart(2, '0')}`);
             metaParts.push(`总集数: ${item.episodeCount || '未知'}`);
             if (item.currentEpisodeIndex) {
-                // If a specific episode is searched, append the special format.
-                metaParts.push(`获取→ | 季: ${String(item.season).padStart(2, '0')} | 集: ${String(item.currentEpisodeIndex).padStart(2, '0')}`);
+                // 修正：如果搜索了特定分集，则只追加集数信息
+                metaParts.push(`集: ${String(item.currentEpisodeIndex).padStart(2, '0')}`);
             }
         }
         infoDiv.innerHTML = `<p class="title">${item.title}</p><p class="meta">${metaParts.join(' | ')}</p>`;

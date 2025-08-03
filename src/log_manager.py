@@ -36,6 +36,9 @@ class BilibiliInfoFilter(logging.Filter):
             # 过滤掉 WBI key 获取过程的日志
             if "WBI mixin key" in msg:
                 return False
+            # 过滤掉搜索成功的日志
+            if "API call for type" in msg and "successful" in msg:
+                return False
         return True  # 其他所有日志都通过
 
 # 新增：一个过滤器，用于翻译 apscheduler 的日志

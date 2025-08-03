@@ -188,6 +188,12 @@ async def search_anime_provider(
         logger.info(f"TMDB别名过滤: 从 {len(results)} 个结果中保留了 {len(filtered_results)} 个。")
         results = filtered_results
 
+    # 修正：在返回结果前，确保 currentEpisodeIndex 与本次请求的 episode_info 一致。
+    # 这可以防止因缓存或其他原因导致的状态泄露。
+    current_episode_index_for_this_request = episode_info.get("episode") if episode_info else None
+    for item in results:
+        item.currentEpisodeIndex = current_episode_index_for_this_request
+
     return models.ProviderSearchResponse(results=results)
 
 @router.get("/library", response_model=models.LibraryResponse, summary="获取媒体库内容")
