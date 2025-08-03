@@ -182,6 +182,7 @@ class IqiyiScraper(BaseScraper):
         except Exception as e:
             self.logger.error(f"爱奇艺: 搜索 '{keyword}' 失败: {e}", exc_info=True)
 
+        self.logger.info(f"爱奇艺: 搜索 '{keyword}' 完成，找到 {len(results)} 个有效结果。")
         results_to_cache = [r.model_dump() for r in results]
         await self._set_to_cache(cache_key, results_to_cache, 'search_ttl_seconds', 300)
         return results

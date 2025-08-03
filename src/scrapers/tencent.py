@@ -190,6 +190,7 @@ class TencentScraper(BaseScraper):
         except (ValidationError, KeyError) as e:
             self.logger.error(f"解析搜索结果失败: {e}", exc_info=True)
         
+        self.logger.info(f"Tencent: 搜索 '{keyword}' 完成，找到 {len(results)} 个有效结果。")
         results_to_cache = [r.model_dump() for r in results]
         await self._set_to_cache(cache_key, results_to_cache, 'search_ttl_seconds', 300)
         return results

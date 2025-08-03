@@ -164,6 +164,7 @@ class YoukuScraper(BaseScraper):
         except Exception as e:
             self.logger.error(f"Youku search failed for '{keyword}': {e}", exc_info=True)
 
+        self.logger.info(f"Youku: 搜索 '{keyword}' 完成，找到 {len(results)} 个有效结果。")
         results_to_cache = [r.model_dump() for r in results]
         await self._set_to_cache(cache_key, results_to_cache, 'search_ttl_seconds', 300)
         return results
