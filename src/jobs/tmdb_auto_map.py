@@ -8,6 +8,7 @@ import httpx
 
 from .. import crud, models
 from .base import BaseJob
+from ..task_manager import TaskSuccess
 
 class TmdbAutoMapJob(BaseJob):
     job_type = "tmdb_auto_map"

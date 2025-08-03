@@ -66,6 +66,15 @@ class SchedulerManager:
         
         return runner
 
+    def _event_handler_wrapper(self, event: JobExecutionEvent):
+        """
+        一个同步的包装器，用于调度异步的事件处理器。
+        这是为了解决 'coroutine was never awaited' 的 RuntimeWarning，
+        确保我们的异步逻辑能被正确执行。
+        """
+        # 将真正的异步处理函数作为一个新任务在事件循环中运行
+        asyncio.create_task(self._handle_job_event(event))
+
     async def _handle_job_event(self, event: JobExecutionEvent):
         job = self.scheduler.get_job(event.job_id)
         if job:
@@ -78,7 +87,8 @@ class SchedulerManager:
 
     async def start(self):
         self._load_jobs()
-        self.scheduler.add_listener(self._handle_job_event, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
+        # 修正：使用同步的包装器作为监听器
+        self.scheduler.add_listener(self._event_handler_wrapper, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
         self.scheduler.start()
         await self.load_jobs_from_db()
         logger.info("定时任务调度器已启动。")
