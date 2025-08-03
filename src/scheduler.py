@@ -69,7 +69,12 @@ class SchedulerManager:
     async def _handle_job_event(self, event: JobExecutionEvent):
         job = self.scheduler.get_job(event.job_id)
         if job:
-            await crud.update_scheduled_task_run_times(self.pool, job.id, job.last_run_time, job.next_run_time)
+            # 修正：使用 event.scheduled_run_time 作为 last_run_at 时间。
+            # 这比 job.last_run_time 更可靠，因为它直接来自刚刚发生的事件，
+            # 并且能确保手动触发的任务也能正确记录运行时间。
+            last_run_time = event.scheduled_run_time
+            await crud.update_scheduled_task_run_times(self.pool, job.id, last_run_time, job.next_run_time)
+            logger.info(f"已更新定时任务 '{job.name}' (ID: {job.id}) 的运行时间。")
 
     async def start(self):
         self._load_jobs()

@@ -113,8 +113,8 @@ class TmdbAutoMapJob(BaseJob):
             client = await self._create_tmdb_client()
         except ValueError as e:
             self.logger.error(f"无法创建TMDB客户端，任务中止: {e}")
-            progress_callback(100, f"任务失败: {e}")
-            return
+            # 修正：直接抛出异常，让 TaskManager 捕获并标记任务为失败
+            raise
 
         async with client:
             shows_to_update = await crud.get_animes_with_tmdb_id(self.pool)
@@ -149,5 +149,6 @@ class TmdbAutoMapJob(BaseJob):
                 except Exception as e:
                     self.logger.error(f"处理 '{title}' (TMDB ID: {tmdb_id}) 时发生错误: {e}", exc_info=True)
         
-        progress_callback(100, "任务执行完毕")
         self.logger.info(f"定时任务 [{self.job_name}] 执行完毕。")
+        # 修正：抛出 TaskSuccess 异常，以便 TaskManager 可以用一个有意义的消息来结束任务
+        raise TaskSuccess(f"任务执行完毕，共处理 {total_shows} 个节目。")
