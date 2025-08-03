@@ -4,7 +4,6 @@ import aiomysql
 import hashlib
 import json
 import logging
-import html
 import re
 import time
 from typing import Any, Dict, List, Optional, Union, Callable
@@ -146,9 +145,7 @@ class YoukuScraper(BaseScraper):
                 year_match = self.year_reg.search(common_data.feature)
                 year = int(year_match.group(0)) if year_match else None
                 
-                # 修正：先进行HTML解码，以处理 &lt;em&gt; 这样的实体编码
-                unescaped_title = html.unescape(title)
-                cleaned_title = self.unused_words_reg.sub("", unescaped_title).strip()
+                cleaned_title = self.unused_words_reg.sub("", title).strip()
                 media_type = "movie" if "电影" in common_data.feature else "tv_series"
                 
                 current_episode = episode_info.get("episode") if episode_info else None

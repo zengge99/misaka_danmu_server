@@ -3,7 +3,6 @@ import logging
 import aiomysql
 import re
 import json
-import html
 from typing import ClassVar
 import zlib
 import xml.etree.ElementTree as ET
@@ -168,12 +167,10 @@ class IqiyiScraper(BaseScraper):
                 media_type = "movie" if channel_name == "电影" else "tv_series"
 
                 current_episode = episode_info.get("episode") if episode_info else None
-                # 修正：先进行HTML解码，以处理 &lt;em&gt; 这样的实体编码
-                unescaped_title = html.unescape(album.album_title)
                 results.append(models.ProviderSearchInfo(
                     provider=self.provider_name,
                     mediaId=link_id,
-                    title=re.sub(r'<[^>]+>', '', unescaped_title).replace(":", "："),
+                    title=re.sub(r'<[^>]+>', '', album.album_title).replace(":", "："),
                     type=media_type,
                     year=album.year,
                     imageUrl=album.album_img,
