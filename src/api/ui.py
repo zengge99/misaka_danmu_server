@@ -671,10 +671,8 @@ async def generic_import_task(
                 # danmaku_progress is 0-100
                 # Map it to the current episode's progress slice
                 current_total_progress = base_progress + (danmaku_progress / 100) * progress_range
-                progress_callback(
-                    progress=current_total_progress,
-                    description=f"处理: {episode.title} - {danmaku_description}"
-                )
+                # 使用位置参数调用，以保持与其他任务回调的一致性
+                progress_callback(current_total_progress, f"处理: {episode.title} - {danmaku_description}")
 
             # 3.2 获取弹幕
             comments = await scraper.get_comments(episode.episodeId, progress_callback=sub_progress_callback)
@@ -690,6 +688,7 @@ async def generic_import_task(
 
     except Exception as e:
         logger.error(f"导入任务发生严重错误: {e}", exc_info=True)
+        raise  # 重新抛出异常，以便任务管理器能捕获并标记任务为“失败”
     finally:
         logger.info(f"--- {provider} 导入任务完成 (media_id={media_id})。总共新增 {total_comments_added} 条弹幕。 ---")
 

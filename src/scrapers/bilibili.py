@@ -521,7 +521,10 @@ class BilibiliScraper(BaseScraper):
                     break
 
                 danmu_reply = DmSegMobileReply()
-                danmu_reply.ParseFromString(response.content)
+                # 修正：使用 asyncio.to_thread 在单独的线程中运行可能阻塞的CPU密集型操作，
+                # 避免 Protobuf 解析大数据时阻塞事件循环。
+                # 这是解决任务卡在“运行中”状态的关键。
+                await asyncio.to_thread(danmu_reply.ParseFromString, response.content)
 
                 if not danmu_reply.elems:
                     break
@@ -562,10 +565,8 @@ class BilibiliScraper(BaseScraper):
                     base_progress = (i / total_cids) * 100
                     progress_range = (1 / total_cids) * 100
                     current_total_progress = base_progress + (danmaku_progress / 100) * progress_range
-                    progress_callback(
-                        progress=current_total_progress,
-                        description=f"池 {i + 1}/{total_cids}: {danmaku_description}"
-                    )
+                    # 修正：使用位置参数调用，以匹配 generic_import_task 中回调的签名
+                    progress_callback(current_total_progress, f"池 {i + 1}/{total_cids}: {danmaku_description}")
 
             comments_for_cid = await self._fetch_comments_for_cid(aid, cid, sub_progress_callback)
             all_comments.extend(comments_for_cid)
