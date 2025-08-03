@@ -45,3 +45,31 @@ textarea#douban-cookie {
 #webhook-settings-subview input[readonly] {
     background-color: var(--secondary-color);
 }
+
+#webhook-handlers-list-container {
+    margin-top: 20px;
+}
+
+#webhook-handlers-list-container h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1em;
+    color: #606266;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 5px;
+}
+
+#webhook-handlers-list {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+#webhook-handlers-list li {
+    background-color: var(--secondary-color);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}

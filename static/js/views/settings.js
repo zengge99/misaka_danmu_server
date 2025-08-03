@@ -199,49 +199,35 @@ async function handleSaveDoubanSettings(e) {
 
 async function loadWebhookSettings() {
     try {
-        // Fetch both API key and available handlers in parallel
         const [apiKeyData, availableHandlers] = await Promise.all([
             apiFetch('/api/ui/config/webhook_api_key'),
             apiFetch('/api/ui/webhooks/available')
         ]);
         
         document.getElementById('webhook-api-key').value = apiKeyData.value || '';
-        renderWebhookUrls(availableHandlers, apiKeyData.value);
+        renderWebhookHandlers(availableHandlers);
 
     } catch (error) {
         alert(`加载Webhook配置失败: ${error.message}`);
-        const container = document.getElementById('webhook-urls-container');
-        if (container) container.innerHTML = `<p class="error">加载可用Webhook失败: ${error.message}</p>`;
+        const container = document.getElementById('webhook-handlers-list-container');
+        if (container) container.innerHTML = `<p class="error">加载可用处理器失败: ${error.message}</p>`;
     }
 }
 
-function renderWebhookUrls(handlers, apiKey) {
-    const container = document.getElementById('webhook-urls-container');
-    if (!container) return;
-    container.innerHTML = ''; // Clear previous content
+function renderWebhookHandlers(handlers) {
+    const list = document.getElementById('webhook-handlers-list');
+    if (!list) return;
+    list.innerHTML = ''; // Clear previous content
 
     if (handlers.length === 0) {
-        container.innerHTML = '<p>没有找到可用的Webhook处理器。</p>';
+        list.innerHTML = '<li>没有找到可用的Webhook处理器。</li>';
         return;
     }
 
-    const baseUrl = `${window.location.origin}/api/webhook`;
-
     handlers.forEach(handlerType => {
-        const formRow = document.createElement('div');
-        formRow.className = 'form-row';
-        
-        const url = apiKey ? `${baseUrl}/${handlerType}?api_key=${apiKey}` : '';
-        const handlerName = handlerType.charAt(0).toUpperCase() + handlerType.slice(1); // Capitalize first letter
-
-        formRow.innerHTML = `
-            <label>${handlerName} URL</label>
-            <div class="input-with-icon">
-                <input type="text" id="${handlerType}-webhook-url" value="${url}" readonly>
-                <button type="button" class="icon-btn copy-webhook-url-btn" title="复制">📋</button>
-            </div>
-        `;
-        container.appendChild(formRow);
+        const li = document.createElement('li');
+        li.textContent = handlerType.charAt(0).toUpperCase() + handlerType.slice(1);
+        list.appendChild(li);
     });
 }
 
@@ -251,28 +237,12 @@ async function handleRegenerateWebhookKey() {
     }
     try {
         const response = await apiFetch('/api/ui/config/webhook_api_key/regenerate', { method: 'POST' });
-        // After regenerating, reload the settings to update all URLs
+        // After regenerating, reload the settings to update the key
         loadWebhookSettings();
         alert("新的Webhook API Key已生成！");
     } catch (error) {
         alert(`生成新Key失败: ${error.message}`);
     }
-}
-
-function handleCopyWebhookUrl(e) {
-    const button = e.target.closest('.copy-webhook-url-btn');
-    if (!button) return;
-    const input = button.previousElementSibling;
-    const url = input.value;
-    if (!url) {
-        alert("API Key为空，无法生成URL。");
-        return;
-    }
-    navigator.clipboard.writeText(url).then(() => {
-        alert("Webhook URL已复制到剪贴板！");
-    }, (err) => {
-        alert(`复制失败: ${err}`);
-    });
 }
 
 export function setupSettingsEventListeners() {
@@ -284,8 +254,6 @@ export function setupSettingsEventListeners() {
     tmdbSettingsForm.addEventListener('submit', handleSaveTmdbSettings);
     doubanSettingsForm.addEventListener('submit', handleSaveDoubanSettings);
     document.getElementById('regenerate-webhook-key-btn').addEventListener('click', handleRegenerateWebhookKey);
-    // Attach to the container for event delegation
-    document.getElementById('webhook-urls-container').addEventListener('click', handleCopyWebhookUrl);
 
     window.addEventListener('message', (event) => {
         if (event.data === 'BANGUMI-OAUTH-COMPLETE') {

@@ -637,7 +637,7 @@
                         <div id="webhook-settings-subview" class="settings-subview hidden">
                             <div class="form-card">
                                 <h3>Webhook 配置</h3>
-                                <p>Webhook 用于接收来自 Emby 等外部服务的通知，以实现自动化导入。请将生成的URL填入相应服务的 "Webhook" 通知设置中。</p>
+                                <p>Webhook 用于接收来自 Emby, Jellyfin 等外部服务的通知，以实现自动化导入。请将下方对应服务的 URL 填入其 Webhook 通知设置中。URL 格式为：<code>http(s)://你的域名/api/webhook/{服务名}?api_key={你的API Key}</code></p>
                                 <div class="form-row">
                                     <label for="webhook-api-key">API Key</label>
                                     <div class="input-with-icon">
@@ -645,8 +645,10 @@
                                         <button type="button" id="regenerate-webhook-key-btn" class="icon-btn" title="重新生成">🔄</button>
                                     </div>
                                 </div>
-                                <!-- Webhook URLs will be dynamically generated here -->
-                                <div id="webhook-urls-container"></div>
+                                <div id="webhook-handlers-list-container">
+                                    <h4>已加载的服务:</h4>
+                                    <ul id="webhook-handlers-list"></ul>
+                                </div>
                             </div>
                         </div>
 

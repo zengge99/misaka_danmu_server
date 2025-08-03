@@ -581,6 +581,18 @@ async def update_config_item(
     await crud.update_config_value(pool, config_key, value)
     logger.info(f"用户 '{current_user.username}' 更新了配置项 '{config_key}'。")
 
+@router.post("/config/webhook_api_key/regenerate", response_model=Dict[str, str], summary="重新生成Webhook API Key")
+async def regenerate_webhook_api_key(
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """生成一个新的、随机的Webhook API Key并保存到数据库。"""
+    alphabet = string.ascii_letters + string.digits
+    new_key = ''.join(secrets.choice(alphabet) for _ in range(20))
+    await crud.update_config_value(pool, "webhook_api_key", new_key)
+    logger.info(f"用户 '{current_user.username}' 重新生成了 Webhook API Key。")
+    return {"key": "webhook_api_key", "value": new_key}
+
 @router.get("/ua-rules", response_model=List[models.UaRule], summary="获取所有UA规则")
 async def get_ua_rules(
     current_user: models.User = Depends(security.get_current_user),
