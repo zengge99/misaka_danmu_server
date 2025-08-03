@@ -418,8 +418,9 @@ class BilibiliScraper(BaseScraper):
                         currentEpisodeIndex=episode_info.get("episode") if episode_info else None
                     ))
             else:
-                self.logger.warning(f"Bilibili: API for type '{search_type}' returned error. Code: {api_result.code}, Message: '{api_result.message}'")
-
+                # 修正：将日志级别从 WARNING 改为 INFO，因为这不是一个真正的错误，
+                # 只是B站API表示“无结果”的一种方式。
+                self.logger.info(f"Bilibili: API for type '{search_type}' returned no results. (Code: {api_result.code}, Message: '{api_result.message}')")
         except Exception as e:
             self.logger.error(f"Bilibili: Search for type '{search_type}' failed: {e}", exc_info=True)
         

@@ -23,6 +23,20 @@ class NoHttpxLogFilter(logging.Filter):
         # 不记录来自 'httpx' logger 的日志
         return not record.name.startswith('httpx')
 
+# 新增：一个过滤器，用于从UI日志中排除B站特定的信息性日志
+class BilibiliInfoFilter(logging.Filter):
+    def filter(self, record):
+        # 检查日志记录是否来自 BilibiliScraper 并且是 INFO 级别
+        if record.name == 'BilibiliScraper' and record.levelno == logging.INFO:
+            msg = record.getMessage()
+            # 过滤掉“无结果”的通知
+            if "returned no results." in msg:
+                return False
+            # 过滤掉 WBI key 获取过程的日志
+            if "WBI mixin key" in msg:
+                return False
+        return True  # 其他所有日志都通过
+
 def setup_logging():
     """
     配置根日志记录器，使其能够将日志输出到控制台、一个可轮转的文件，
@@ -51,9 +65,10 @@ def setup_logging():
     logger.addHandler(logging.StreamHandler()) # 控制台处理器
     logger.addHandler(logging.handlers.RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=5, encoding='utf-8')) # 文件处理器
 
-    # 创建并配置 DequeHandler，以过滤掉 httpx 的日志
+    # 创建并配置 DequeHandler，以过滤掉不希望在UI上显示的内容
     deque_handler = DequeHandler(_logs_deque)
     deque_handler.addFilter(NoHttpxLogFilter())
+    deque_handler.addFilter(BilibiliInfoFilter()) # 添加新的过滤器
     logger.addHandler(deque_handler)
 
     # 为所有处理器设置格式
