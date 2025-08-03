@@ -15,16 +15,17 @@ class TmdbAutoMapJob(BaseJob):
 
     async def _create_tmdb_client(self) -> httpx.AsyncClient:
         """Non-FastAPI dependent version of get_tmdb_client."""
-        keys = ["tmdb_api_key", "tmdb_api_base_url"]
-        tasks = [crud.get_config_value(self.pool, key, "") for key in keys]
-        api_key, domain = await asyncio.gather(*tasks)
+        # 修正：移除硬编码的后备URL，改为在数据库查询时提供默认值。
+        # 这使得配置逻辑更统一，所有默认值都由 config 表或 crud 函数管理。
+        api_key_task = crud.get_config_value(self.pool, "tmdb_api_key", "")
+        domain_task = crud.get_config_value(self.pool, "tmdb_api_base_url", "https://api.themoviedb.org")
+        api_key, domain = await asyncio.gather(api_key_task, domain_task)
 
         if not api_key:
             error_msg = "TMDB自动映射任务失败：未配置TMDB API Key。"
             self.logger.error(error_msg)
             raise ValueError(error_msg)
         
-        domain = domain or "https://api.themoviedb.org"
         cleaned_domain = domain.rstrip('/')
         base_url = cleaned_domain if cleaned_domain.endswith('/3') else f"{cleaned_domain}/3"
 

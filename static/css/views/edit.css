@@ -87,8 +87,8 @@
 
 /* Styles for the TMDB Episode Group list to prevent layout issues with long descriptions */
 .egid-group-list li {
-    /* Align items to the top when description wraps */
-    align-items: flex-start;
+    /* 修正：将对齐方式改回居中，以确保按钮在垂直方向上始终对齐 */
+    align-items: center;
 }
 
 .egid-group-list .info {
