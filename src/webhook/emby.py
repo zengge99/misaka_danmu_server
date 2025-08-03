@@ -11,7 +11,7 @@ class EmbyWebhook(BaseWebhook):
     async def handle(self, payload: Dict[str, Any]):
         event_type = payload.get("Event")
         # 我们只关心新媒体入库的事件, 兼容 emby 的 'library.new' 和 jellyfin 的 'item.add'
-        if event_type not in ["item.add", "library.new"]:
+        if event_type not in ["library.new"]:
             logger.info(f"Webhook: 忽略非 'item.add' 或 'library.new' 的事件 (类型: {event_type})")
             return
 
