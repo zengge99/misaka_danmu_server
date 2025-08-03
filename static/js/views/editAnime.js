@@ -21,6 +21,10 @@ function initializeElements() {
     tmdbSearchView = document.getElementById('tmdb-search-view');
     doubanSearchView = document.getElementById('douban-search-view');
     egidView = document.getElementById('egid-view');
+    // 为元数据搜索列表添加特定类，以便应用特定样式
+    document.getElementById('bangumi-search-results-list').classList.add('metadata-search-list');
+    document.getElementById('douban-search-results-list').classList.add('metadata-search-list');
+    document.getElementById('tmdb-search-results-list').classList.add('metadata-search-list');
     reassociateView = document.getElementById('reassociate-view');
 
     backToEditAnimeFromBgmSearchBtn = document.getElementById('back-to-edit-anime-from-bgm-search-btn');
@@ -246,7 +250,7 @@ function renderBangumiSearchResults(results) {
                         <span class="id-tag">ID: ${result.id}</span>
                         <p class="title">${result.name}</p>
                     </div>
-                    <p class="meta">${result.details || ''}</p>
+                    <p class="meta" title="${result.details || ''}">${result.details || ''}</p>
                 </div>
             </div>
             <button class="select-btn">选择</button>
@@ -307,6 +311,7 @@ function renderTmdbSearchResults(results) {
                         <span class="id-tag">ID: ${result.id}</span>
                         <p class="title">${result.name}</p>
                     </div>
+                    <p class="meta"></p> <!-- Add for consistent height -->
                 </div>
             </div>
             <button class="select-btn">选择</button>
@@ -377,7 +382,7 @@ function renderDoubanSearchResults(results) {
                         <span class="id-tag">ID: ${result.id}</span>
                         <p class="title">${result.title}</p>
                     </div>
-                    <p class="meta">${result.details}</p>
+                    <p class="meta" title="${result.details || ''}">${result.details}</p>
                 </div>
             </div>
             <button class="select-btn">选择</button>

@@ -137,14 +137,28 @@
 }
 
 .id-tag {
-    display: inline-block;
-    background-color: var(--secondary-color);
+    /* 移除背景和边框，只保留颜色和加粗 */
     color: var(--primary-color);
-    padding: 2px 8px;
-    border-radius: 4px;
     font-weight: bold;
     font-size: 0.9em;
     margin-right: 10px;
-    border: 1px solid var(--border-color);
     flex-shrink: 0; /* Prevent it from shrinking */
+}
+
+.metadata-search-list li {
+    /* 固定高度 (海报56px + 上下padding 2*10px) */
+    height: 78px;
+    box-sizing: border-box;
+}
+
+.metadata-search-list li .info .meta {
+    /* 确保描述行被截断 */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.metadata-search-list li .select-btn {
+    /* 防止按钮被挤压 */
+    flex-shrink: 0;
 }
