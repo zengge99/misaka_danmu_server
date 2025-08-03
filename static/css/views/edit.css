@@ -118,32 +118,7 @@
     margin-left: 15px; /* Add some space */
 }
 
-/* Styles for metadata search results (Bangumi, TMDB, Douban) */
-.title-container {
-    display: flex;
-    align-items: center;
-}
-
-.title-container .title {
-    /* Resetting some properties from the generic .title style */
-    margin: 0;
-    padding: 0;
-    border: none;
-    /* The title text itself should be able to truncate */
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex-grow: 1; /* Allow it to take remaining space */
-}
-
-.id-tag {
-    /* 移除背景和边框，只保留颜色和加粗 */
-    color: var(--primary-color);
-    font-weight: bold;
-    font-size: 0.9em;
-    margin-right: 10px;
-    flex-shrink: 0; /* Prevent it from shrinking */
-}
+/* --- Styles for Metadata Search Results (Bangumi, TMDB, Douban) --- */
 
 .metadata-search-list li {
     /* 固定高度 (海报56px + 上下padding 2*10px) */
@@ -151,14 +126,46 @@
     box-sizing: border-box;
 }
 
-.metadata-search-list li .info .meta {
-    /* 确保描述行被截断 */
+.metadata-search-list li .info {
+    /* 让 info 块和海报一样高，并使用 flex 布局 */
+    height: 56px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; /* 核心：将内容推向两端 */
+}
+
+.metadata-search-list li .info .title-container {
+    display: flex;
+    align-items: baseline; /* 基线对齐，看起来更专业 */
+}
+
+.metadata-search-list li .info .title-container .title {
+    margin: 0;
+    padding: 0;
+    border: none;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex-grow: 1;
+}
+
+.id-tag {
+    color: var(--primary-color);
+    font-weight: bold;
+    font-size: 0.9em;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+.metadata-search-list li .info .meta {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.9em;
+    color: #666;
+    margin: 0;
 }
 
 .metadata-search-list li .select-btn {
-    /* 防止按钮被挤压 */
     flex-shrink: 0;
 }

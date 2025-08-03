@@ -145,6 +145,7 @@ function clearSearchSelectionState() {
 function applySearchSelectionData() {
     if (!_currentSearchSelectionData) return;
     const data = _currentSearchSelectionData;
+
     if ('details' in data) { // Bangumi result
         document.getElementById('edit-anime-bgmid').value = data.id || '';
         updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
@@ -154,13 +155,7 @@ function applySearchSelectionData() {
         updateFieldWithApplyLogic('edit-anime-alias-cn-1', cnAliases[0]);
         updateFieldWithApplyLogic('edit-anime-alias-cn-2', cnAliases[1]);
         updateFieldWithApplyLogic('edit-anime-alias-cn-3', cnAliases[2]);
-    } else if ('details' in data) { // Douban result
-        document.getElementById('edit-anime-doubanid').value = data.id || '';
-        updateFieldWithApplyLogic('edit-anime-imdbid', data.imdb_id);
-        updateFieldWithApplyLogic('edit-anime-name-en', data.name_en);
-        updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
-        (data.aliases_cn || []).forEach((alias, i) => updateFieldWithApplyLogic(`edit-anime-alias-cn-${i+1}`, alias));
-    } else { // TMDB result
+    } else if ('tvdb_id' in data) { // TMDB result
         document.getElementById('edit-anime-tmdbid').value = data.id || '';
         updateFieldWithApplyLogic('edit-anime-imdbid', data.imdb_id);
         updateFieldWithApplyLogic('edit-anime-tvdbid', data.tvdb_id);
@@ -171,6 +166,16 @@ function applySearchSelectionData() {
         updateFieldWithApplyLogic('edit-anime-alias-cn-1', cnAliases[0]);
         updateFieldWithApplyLogic('edit-anime-alias-cn-2', cnAliases[1]);
         updateFieldWithApplyLogic('edit-anime-alias-cn-3', cnAliases[2]);
+    } else { // Douban result (distinguished by not having 'details' or 'tvdb_id')
+        document.getElementById('edit-anime-doubanid').value = data.id || '';
+        updateFieldWithApplyLogic('edit-anime-imdbid', data.imdb_id);
+        updateFieldWithApplyLogic('edit-anime-name-en', data.name_en);
+        updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
+        (data.aliases_cn || []).forEach((alias, i) => {
+            if (i < 3) { // Only apply first 3 aliases
+                updateFieldWithApplyLogic(`edit-anime-alias-cn-${i+1}`, alias);
+            }
+        });
     }
 }
 
