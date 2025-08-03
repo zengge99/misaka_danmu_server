@@ -53,20 +53,29 @@ function renderTokens(tokens) {
 
     tokens.forEach(token => {
         const row = tokenTableBody.insertRow();
-        const expiresText = token.expires_at ? new Date(token.expires_at).toLocaleString() : '永久有效';
+
+        const createdDate = new Date(token.created_at);
+        const createdHtml = `${createdDate.toLocaleDateString()}<br><span class="time-part">${createdDate.toLocaleTimeString()}</span>`;
+
+        const expiresHtml = token.expires_at 
+            ? `${new Date(token.expires_at).toLocaleDateString()}<br><span class="time-part">${new Date(token.expires_at).toLocaleTimeString()}</span>`
+            : '永久有效';
+        
+        const hiddenTokenText = '*'.repeat(token.token.length);
         const enabledText = token.is_enabled ? '禁用' : '启用';
+
         row.innerHTML = `
             <td>${token.id}</td>
-            <td>${token.name}</td>
+            <td class="token-name-cell" title="${token.name}">${token.name}</td>
             <td>
                 <span class="token-value">
-                    <span class="token-text token-hidden" data-token-value="${token.token}">************</span>
+                    <span class="token-text token-hidden" data-token-value="${token.token}">${hiddenTokenText}</span>
                     <span class="token-visibility-toggle" data-action="toggle-visibility" title="显示/隐藏">👁️</span>
                 </span>
             </td>
             <td class="token-status ${token.is_enabled ? '' : 'disabled'}">${token.is_enabled ? '✅' : '❌'}</td>
-            <td>${new Date(token.created_at).toLocaleString()}</td>
-            <td>${expiresText}</td>
+            <td class="date-cell">${createdHtml}</td>
+            <td class="date-cell">${expiresHtml}</td>
             <td class="actions-cell">
                 <div class="action-buttons-wrapper">
                     <button class="action-btn" data-action="copy" data-token-id="${token.id}" data-token-value="${token.token}" title="复制链接">📋</button>
@@ -93,7 +102,7 @@ async function handleTokenAction(e) {
                 tokenTextSpan.textContent = tokenTextSpan.dataset.tokenValue;
                 tokenTextSpan.classList.remove('token-hidden');
             } else {
-                tokenTextSpan.textContent = '************';
+                tokenTextSpan.textContent = '*'.repeat(tokenTextSpan.dataset.tokenValue.length);
                 tokenTextSpan.classList.add('token-hidden');
             }
         }
