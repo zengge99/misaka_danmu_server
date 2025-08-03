@@ -116,16 +116,28 @@ async function handleEditAnimeSave(e) {
 
 function handleAnimeTypeChange() {
     const isMovie = editAnimeTypeSelect.value === 'movie';
+
+    // --- Season ---
     const seasonInput = document.getElementById('edit-anime-season');
-    const episodeCountInput = document.getElementById('edit-anime-episode-count');
-    const egidInput = document.getElementById('edit-anime-egid');
-    
     seasonInput.disabled = isMovie;
     if (isMovie) seasonInput.value = 1;
+    // The indicator is the next sibling of the input
+    seasonInput.nextElementSibling.classList.toggle('hidden', !isMovie);
+
+    // --- Episode Count ---
+    const episodeCountInput = document.getElementById('edit-anime-episode-count');
     episodeCountInput.disabled = isMovie;
     if (isMovie) episodeCountInput.value = 1;
+    episodeCountInput.nextElementSibling.classList.toggle('hidden', !isMovie);
+
+    // --- Episode Group ID ---
+    const egidInput = document.getElementById('edit-anime-egid');
+    const egidWrapper = egidInput.closest('.input-with-icon');
     egidInput.disabled = isMovie;
+    egidWrapper.classList.toggle('disabled', isMovie);
     if (isMovie) egidInput.value = '';
+    // The indicator is the next sibling of the wrapper div
+    egidWrapper.nextElementSibling.classList.toggle('hidden', !isMovie);
 
     updateEgidSelectButtonState();
 }
@@ -142,40 +154,57 @@ function clearSearchSelectionState() {
     applyBtns.forEach(btn => btn.remove());
 }
 
+function _applyAliases(aliases, mainTitle) {
+    // 过滤掉与主标题相同以及为空的别名
+    const filteredAliases = (aliases || []).filter(alias => alias && alias !== mainTitle);
+    // 应用最多前三个别名
+    updateFieldWithApplyLogic('edit-anime-alias-cn-1', filteredAliases[0]);
+    updateFieldWithApplyLogic('edit-anime-alias-cn-2', filteredAliases[1]);
+    updateFieldWithApplyLogic('edit-anime-alias-cn-3', filteredAliases[2]);
+}
+
 function applySearchSelectionData() {
     if (!_currentSearchSelectionData) return;
     const data = _currentSearchSelectionData;
 
+    // 辅助函数：检查字符串是否包含日文字符（平假名、片假名、汉字）
+    const containsJapanese = (str) => {
+        if (!str) return false;
+        // 此正则表达式匹配日文假名和常见的CJK统一表意文字
+        return /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(str);
+    };
+
     if ('details' in data) { // Bangumi result
+        const mainTitle = data.name;
         document.getElementById('edit-anime-bgmid').value = data.id || '';
-        updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
+        // 验证后应用：只在包含日文字符时才填充日文名
+        if (containsJapanese(data.name_jp)) {
+            updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
+        }
         updateFieldWithApplyLogic('edit-anime-name-en', data.name_en);
         updateFieldWithApplyLogic('edit-anime-name-romaji', data.name_romaji);
-        const cnAliases = data.aliases_cn || [];
-        updateFieldWithApplyLogic('edit-anime-alias-cn-1', cnAliases[0]);
-        updateFieldWithApplyLogic('edit-anime-alias-cn-2', cnAliases[1]);
-        updateFieldWithApplyLogic('edit-anime-alias-cn-3', cnAliases[2]);
+        _applyAliases(data.aliases_cn, mainTitle);
     } else if ('tvdb_id' in data) { // TMDB result
+        const mainTitle = data.main_title_from_search;
         document.getElementById('edit-anime-tmdbid').value = data.id || '';
         updateFieldWithApplyLogic('edit-anime-imdbid', data.imdb_id);
         updateFieldWithApplyLogic('edit-anime-tvdbid', data.tvdb_id);
         updateFieldWithApplyLogic('edit-anime-name-en', data.name_en);
-        updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
+        if (containsJapanese(data.name_jp)) {
+            updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
+        }
         updateFieldWithApplyLogic('edit-anime-name-romaji', data.name_romaji);
-        const cnAliases = data.aliases_cn || [];
-        updateFieldWithApplyLogic('edit-anime-alias-cn-1', cnAliases[0]);
-        updateFieldWithApplyLogic('edit-anime-alias-cn-2', cnAliases[1]);
-        updateFieldWithApplyLogic('edit-anime-alias-cn-3', cnAliases[2]);
+        _applyAliases(data.aliases_cn, mainTitle);
     } else { // Douban result (distinguished by not having 'details' or 'tvdb_id')
+        // 对于豆瓣，其API返回的别名列表通常已包含主标题，我们将其作为主标题进行过滤
+        const mainTitle = (data.aliases_cn && data.aliases_cn.length > 0) ? data.aliases_cn[0] : '';
         document.getElementById('edit-anime-doubanid').value = data.id || '';
         updateFieldWithApplyLogic('edit-anime-imdbid', data.imdb_id);
         updateFieldWithApplyLogic('edit-anime-name-en', data.name_en);
-        updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
-        (data.aliases_cn || []).forEach((alias, i) => {
-            if (i < 3) { // Only apply first 3 aliases
-                updateFieldWithApplyLogic(`edit-anime-alias-cn-${i+1}`, alias);
-            }
-        });
+        if (containsJapanese(data.name_jp)) {
+            updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
+        }
+        _applyAliases(data.aliases_cn, mainTitle);
     }
 }
 
@@ -325,6 +354,7 @@ function renderTmdbSearchResults(results) {
             const mediaType = document.getElementById('edit-anime-type').value === 'movie' ? 'movie' : 'tv';
             try {
                 const details = await apiFetch(`/api/tmdb/details/${mediaType}/${result.id}`);
+                details.main_title_from_search = result.name; // 将搜索时的主标题传递给详情对象
                 if (tmdbSearchView.dataset.source === 'bulk-import') {
                     // If the search was triggered from the bulk import view
                     document.dispatchEvent(new CustomEvent('tmdb-search:selected-for-bulk', { detail: details }));
