@@ -688,6 +688,8 @@ async def generic_import_task(
     image_url: Optional[str],
     douban_id: Optional[str],
     tmdb_id: Optional[str],
+    imdb_id: Optional[str],
+    tvdb_id: Optional[str],
     progress_callback: Callable,
     pool: aiomysql.Pool,
     manager: ScraperManager,
@@ -719,10 +721,8 @@ async def generic_import_task(
 
         # 1. 在数据库中创建或获取番剧ID，并链接数据源
         anime_id = await crud.get_or_create_anime(pool, normalized_title, media_type, season, image_url)
-        if douban_id:
-            await crud.update_douban_id_if_not_exists(pool, anime_id, douban_id)
-        if tmdb_id:
-            await crud.update_tmdb_id_if_not_exists(pool, anime_id, tmdb_id)
+        # 智能更新所有从Webhook获取的元数据ID
+        await crud.update_metadata_if_empty(pool, anime_id, tmdb_id, imdb_id, tvdb_id, douban_id)
         source_id = await crud.link_source_to_anime(pool, anime_id, provider, media_id)
 
         logger.info(f"媒体 '{normalized_title}' (ID: {anime_id}, 类型: {media_type}) 已准备就绪。")
@@ -904,7 +904,8 @@ async def import_from_provider(
         current_episode_index=request_data.current_episode_index,
         image_url=request_data.image_url,
         douban_id=request_data.douban_id,
-        tmdb_id=request_data.tmdb_id,
+        tmdb_id=request_data.tmdb_id, 
+        imdb_id=None, tvdb_id=None, # 手动导入时这些ID为空
         progress_callback=callback,
         pool=pool,
         manager=scraper_manager

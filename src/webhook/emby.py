@@ -7,12 +7,27 @@ from ..scraper_manager import ScraperManager
 
 logger = logging.getLogger(__name__)
 
+# 定义 Emby ProviderId 键与我们内部搜索源名称的映射关系
+# 如果未来 Emby 支持更多源，可以在此扩展
+PROVIDER_ID_MAP = {
+    "Tmdb": "tmdb",
+    "Imdb": "imdb",
+    "Tvdb": "tvdb",
+    "DoubanID": "douban",
+    "TencentID": "tencent",
+    "IqiyiID": "iqiyi",
+    "YoukuID": "youku",
+    "BilibiliID": "bilibili",
+    "MgtvID": "mgtv",
+    "DandanplayID": "dandanplay"
+}
+
 class EmbyWebhook(BaseWebhook):
     async def handle(self, payload: Dict[str, Any]):
         event_type = payload.get("Event")
-        # 我们只关心新媒体入库的事件
-        if event_type != "item.add":
-            logger.info(f"Emby Webhook: 忽略非 'item.add' 事件 (类型: {event_type})")
+        # 我们只关心新媒体入库的事件, 兼容 emby 的 'library.new' 和 jellyfin 的 'item.add'
+        if event_type not in ["item.add", "library.new"]:
+            logger.info(f"Webhook: 忽略非 'item.add' 或 'library.new' 的事件 (类型: {event_type})")
             return
 
         item = payload.get("Item", {})
@@ -22,12 +37,14 @@ class EmbyWebhook(BaseWebhook):
 
         item_type = item.get("Type")
         if item_type not in ["Episode", "Movie"]:
-            logger.info(f"Emby Webhook: 忽略非 'Episode' 或 'Movie' 类型的媒体项 (类型: {item_type})")
+            logger.info(f"Webhook: 忽略非 'Episode' 或 'Movie' 的媒体项 (类型: {item_type})")
             return
 
         # 提取通用信息
         provider_ids = item.get("ProviderIds", {})
         tmdb_id = provider_ids.get("Tmdb")
+        imdb_id = provider_ids.get("Imdb")
+        tvdb_id = provider_ids.get("Tvdb")
         
         # 根据媒体类型分别处理
         if item_type == "Episode":
@@ -36,10 +53,10 @@ class EmbyWebhook(BaseWebhook):
             episode_number = item.get("EpisodeNumber")
             
             if not all([series_title, season_number is not None, episode_number is not None]):
-                logger.warning(f"Emby Webhook: 忽略一个剧集，因为缺少系列标题、季度或集数信息: {item}")
+                logger.warning(f"Webhook: 忽略一个剧集，因为缺少系列标题、季度或集数信息。")
                 return
 
-            logger.info(f"Emby Webhook: 收到新增剧集通知 - '{series_title}' S{season_number:02d}E{episode_number:02d}")
+            logger.info(f"Webhook: 收到剧集 '{series_title}' S{season_number:02d}E{episode_number:02d}' 的入库通知。")
             
             task_title = f"Webhook导入: {series_title} - S{season_number:02d}E{episode_number:02d}"
             search_keyword = f"{series_title} S{season_number:02d}E{episode_number:02d}"
@@ -49,10 +66,10 @@ class EmbyWebhook(BaseWebhook):
         elif item_type == "Movie":
             movie_title = item.get("Name")
             if not movie_title:
-                logger.warning(f"Emby Webhook: 忽略一个电影，因为缺少标题信息: {item}")
+                logger.warning(f"Webhook: 忽略一个电影，因为缺少标题信息。")
                 return
             
-            logger.info(f"Emby Webhook: 收到新增电影通知 - '{movie_title}'")
+            logger.info(f"Webhook: 收到电影 '{movie_title}' 的入库通知。")
             
             task_title = f"Webhook导入: {movie_title}"
             search_keyword = movie_title
@@ -60,6 +77,37 @@ class EmbyWebhook(BaseWebhook):
             season_number = 1
             episode_number = 1 # 电影按单集处理
             anime_title = movie_title
+
+        # --- 优先使用直连ID进行导入 ---
+        for emby_key, internal_provider in PROVIDER_ID_MAP.items():
+            if media_id := provider_ids.get(emby_key):
+                logger.info(f"Webhook: 发现直连ID ({internal_provider}): {media_id}，将直接导入。")
+                
+                scraper_manager = ScraperManager(self.pool)
+                await scraper_manager.load_and_sync_scrapers()
+
+                try:
+                    scraper_manager.get_scraper(internal_provider)
+                except ValueError:
+                    logger.warning(f"Webhook: 发现 {internal_provider} 的直连ID，但该搜索源未启用。跳过。")
+                    continue
+
+                direct_task_title = f"Webhook直连导入: {anime_title}"
+                if item_type == "Episode":
+                    direct_task_title += f" - S{season_number:02d}E{episode_number:02d}"
+
+                task_coro = lambda callback: generic_import_task(
+                    provider=internal_provider, media_id=media_id, anime_title=anime_title, media_type=media_type,
+                    season=season_number, current_episode_index=episode_number, image_url=None,
+                    douban_id=None, tmdb_id=str(tmdb_id) if tmdb_id else None, 
+                    imdb_id=str(imdb_id) if imdb_id else None, tvdb_id=str(tvdb_id) if tvdb_id else None,
+                    progress_callback=callback, pool=self.pool, manager=scraper_manager
+                )
+                await self.task_manager.submit_task(task_coro, direct_task_title)
+                return # 成功提交直连任务后，直接返回，不再执行后续的搜索
+
+        # --- 如果没有直连ID，则回退到搜索模式 ---
+        logger.info("Webhook: 未发现可用的直连ID，将回退到标题搜索模式。")
 
         # 动态创建一个 ScraperManager 实例以供导入任务使用
         scraper_manager = ScraperManager(self.pool)
@@ -69,7 +117,8 @@ class EmbyWebhook(BaseWebhook):
         task_coro = lambda callback: generic_import_task(
             provider=None, media_id=search_keyword, anime_title=anime_title, media_type=media_type,
             season=season_number, current_episode_index=episode_number, image_url=None,
-            douban_id=None, tmdb_id=str(tmdb_id) if tmdb_id else None,
+            douban_id=None, tmdb_id=str(tmdb_id) if tmdb_id else None, 
+            imdb_id=str(imdb_id) if imdb_id else None, tvdb_id=str(tvdb_id) if tvdb_id else None,
             progress_callback=callback, pool=self.pool, manager=scraper_manager, is_webhook=True
         )
         await self.task_manager.submit_task(task_coro, task_title)

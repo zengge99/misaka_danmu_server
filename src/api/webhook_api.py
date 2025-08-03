@@ -31,7 +31,13 @@ async def handle_webhook(
     if not stored_key or api_key != stored_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的Webhook API Key")
 
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="无效的请求体。Webhook 必须使用 'json' 类型发送。"
+        )
     logger.info(f"收到来自 '{webhook_type}' 的 Webhook 原始负载:\n{json.dumps(payload, indent=2, ensure_ascii=False)}")
     handler = webhook_manager.get_handler(webhook_type)
     await handler.handle(payload)

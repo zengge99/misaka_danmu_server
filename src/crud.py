@@ -857,33 +857,35 @@ async def update_episode_fetch_time(pool: aiomysql.Pool, episode_id: int):
 
 # --- 数据库缓存服务 ---
 
-async def update_douban_id_if_not_exists(pool: aiomysql.Pool, anime_id: int, douban_id: str):
-    """如果一个作品记录没有豆瓣ID，则更新它。"""
+async def update_metadata_if_empty(
+    pool: aiomysql.Pool, anime_id: int, 
+    tmdb_id: Optional[str], imdb_id: Optional[str], 
+    tvdb_id: Optional[str], douban_id: Optional[str]
+):
+    """如果一个作品记录的元数据ID为空，则使用提供的新ID进行更新。"""
     async with pool.acquire() as conn:
-        async with conn.cursor() as cursor:
-            # 首先，确保元数据行存在，以防是刚刚创建的新作品
-            await cursor.execute(
-                "INSERT IGNORE INTO anime_metadata (anime_id) VALUES (%s)",
-                (anime_id,)
-            )
-            # 然后，仅当 douban_id 字段为空或NULL时才更新
-            await cursor.execute(
-                "UPDATE anime_metadata SET douban_id = %s WHERE anime_id = %s AND (douban_id IS NULL OR douban_id = '')",
-                (douban_id, anime_id)
-            )
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            # 1. 确保元数据行存在
+            await cursor.execute("INSERT IGNORE INTO anime_metadata (anime_id) VALUES (%s)", (anime_id,))
+            
+            # 2. 获取当前元数据
+            await cursor.execute("SELECT tmdb_id, imdb_id, tvdb_id, douban_id FROM anime_metadata WHERE anime_id = %s", (anime_id,))
+            current = await cursor.fetchone()
+            if not current: return
 
-async def update_tmdb_id_if_not_exists(pool: aiomysql.Pool, anime_id: int, tmdb_id: str):
-    """如果一个作品记录没有TMDB ID，则更新它。"""
-    async with pool.acquire() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                "INSERT IGNORE INTO anime_metadata (anime_id) VALUES (%s)",
-                (anime_id,)
-            )
-            await cursor.execute(
-                "UPDATE anime_metadata SET tmdb_id = %s WHERE anime_id = %s AND (tmdb_id IS NULL OR tmdb_id = '')",
-                (tmdb_id, anime_id)
-            )
+            # 3. 构建需要更新的字段
+            updates, params = [], []
+            if not current.get('tmdb_id') and tmdb_id: updates.append("tmdb_id = %s"); params.append(tmdb_id)
+            if not current.get('imdb_id') and imdb_id: updates.append("imdb_id = %s"); params.append(imdb_id)
+            if not current.get('tvdb_id') and tvdb_id: updates.append("tvdb_id = %s"); params.append(tvdb_id)
+            if not current.get('douban_id') and douban_id: updates.append("douban_id = %s"); params.append(douban_id)
+
+            # 4. 如果有需要更新的字段，则执行更新
+            if updates:
+                query = f"UPDATE anime_metadata SET {', '.join(updates)} WHERE anime_id = %s"
+                params.append(anime_id)
+                await cursor.execute(query, tuple(params))
+                logging.info(f"为作品 ID {anime_id} 更新了 {len(updates)} 个元数据ID。")
 
 async def check_source_exists_by_media_id(pool: aiomysql.Pool, provider: str, media_id: str) -> bool:
     """通过 provider 和 media_id 检查数据源是否已存在于任何番剧下。"""
