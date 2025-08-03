@@ -89,13 +89,7 @@ class TencentScraper(BaseScraper):
             "Referer": "https://v.qq.com/",
         }
         # 根据C#代码，这个特定的cookie对于成功请求至关重要
-        self.cookies = {
-            "pgv_pvid": "40b67e3b06027f3d",
-            "video_platform": "2",
-            "vversion_name": "8.2.95",
-            "video_bucketid": "4",
-            "video_omgid": "0a1ff6bc9407c0b1cff86ee5d359614d"
-        }
+        self.cookies = {"pgv_pvid": "40b67e3b06027f3d","video_platform": "2","vversion_name": "8.2.95","video_bucketid": "4","video_omgid": "0a1ff6bc9407c0b1cff86ee5d359614d"}
         # httpx.AsyncClient 是 Python 中功能强大的异步HTTP客户端，等同于 C# 中的 HttpClient
         # 此处通过 cookies 参数传入字典，httpx 会自动将其格式化为正确的 Cookie 请求头，效果与C#代码一致
         self.client = httpx.AsyncClient(headers=self.base_headers, cookies=self.cookies, timeout=20.0)

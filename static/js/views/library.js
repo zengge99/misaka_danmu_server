@@ -82,11 +82,14 @@ async function handleLibraryAction(e) {
     const title = button.dataset.animeTitle;
 
     if (action === 'delete') {
-        if (confirm(`您确定要提交删除作品 '${title}' 的任务吗？\n此操作将在后台执行，请稍后在任务管理器中查看进度。`)) {
+        if (confirm(`您确定要删除作品 '${title}' 吗？\n此操作将在后台提交一个删除任务。`)) {
             try {
                 const response = await apiFetch(`/api/ui/library/anime/${animeId}`, { method: 'DELETE' });
-                alert(response.message || "删除任务已提交。");
-                document.querySelector('.nav-link[data-view="task-manager-view"]').click();
+                if (confirm((response.message || "删除任务已提交。") + "\n\n是否立即跳转到任务管理器查看进度？")) {
+                    document.querySelector('.nav-link[data-view="task-manager-view"]').click();
+                } else {
+                    loadLibrary(); // Refresh the library view
+                }
             } catch (error) {
                 alert(`提交删除任务失败: ${(error.message || error)}`);
             }
@@ -184,11 +187,14 @@ async function handleSourceAction(e) {
             }
             break;
         case 'delete':
-            if (confirm(`您确定要提交删除这个数据源的任务吗？\n此操作将在后台执行。`)) {
+            if (confirm(`您确定要删除这个数据源吗？\n此操作将在后台提交一个删除任务。`)) {
                 try {
                     const response = await apiFetch(`/api/ui/library/source/${sourceId}`, { method: 'DELETE' });
-                    alert(response.message || "删除任务已提交。");
-                    showAnimeDetailView(animeId);
+                    if (confirm((response.message || "删除任务已提交。") + "\n\n是否立即跳转到任务管理器查看进度？")) {
+                        document.querySelector('.nav-link[data-view="task-manager-view"]').click();
+                    } else {
+                        showAnimeDetailView(animeId);
+                    }
                 } catch (error) {
                     alert(`提交删除任务失败: ${error.message}`);
                 }
@@ -282,11 +288,14 @@ async function handleEpisodeAction(e) {
             showDanmakuListView(episodeId, episodeTitle, sourceId, animeTitle, animeId);
             break;
         case 'delete':
-            if (confirm(`您确定要提交删除分集 '${episodeTitle}' 的任务吗？`)) {
+            if (confirm(`您确定要删除分集 '${episodeTitle}' 吗？\n此操作将在后台提交一个删除任务。`)) {
                 try {
                     const response = await apiFetch(`/api/ui/library/episode/${episodeId}`, { method: 'DELETE' });
-                    alert(response.message || "删除任务已提交。");
-                    showEpisodeListView(sourceId, animeTitle, animeId);
+                    if (confirm((response.message || "删除任务已提交。") + "\n\n是否立即跳转到任务管理器查看进度？")) {
+                        document.querySelector('.nav-link[data-view="task-manager-view"]').click();
+                    } else {
+                        showEpisodeListView(sourceId, animeTitle, animeId);
+                    }
                 } catch (error) {
                     alert(`提交删除任务失败: ${error.message}`);
                 }
@@ -353,7 +362,7 @@ export function setupLibraryEventListeners() {
             alert('请先选择要删除的数据源。');
             return;
         }
-        if (!confirm(`您确定要提交删除选中的 ${selectedCheckboxes.length} 个数据源的任务吗？`)) return;
+        if (!confirm(`您确定要删除选中的 ${selectedCheckboxes.length} 个数据源吗？\n此操作将在后台提交一个批量删除任务。`)) return;
 
         const sourceIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value, 10));
         const animeId = parseInt(animeDetailView.dataset.animeId, 10);
@@ -363,8 +372,11 @@ export function setupLibraryEventListeners() {
                 method: 'POST',
                 body: JSON.stringify({ source_ids: sourceIds })
             });
-            alert(response.message || "批量删除任务已提交。");
-            if (animeId) showAnimeDetailView(animeId); // Refresh the view
+            if (confirm((response.message || "批量删除任务已提交。") + "\n\n是否立即跳转到任务管理器查看进度？")) {
+                document.querySelector('.nav-link[data-view="task-manager-view"]').click();
+            } else if (animeId) {
+                showAnimeDetailView(animeId); // Refresh the view
+            }
         } catch (error) {
             alert(`提交批量删除任务失败: ${error.message}`);
         }
