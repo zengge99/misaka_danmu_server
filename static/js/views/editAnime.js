@@ -242,8 +242,11 @@ function renderBangumiSearchResults(results) {
             <div class="result-item-left">
                 <img class="poster" src="${result.image_url || '/static/placeholder.png'}" referrerpolicy="no-referrer" alt="${result.name}">
                 <div class="info">
-                    <p class="title">${result.name}</p>
-                    <p class="meta">${result.details ? `${result.details} / ID: ${result.id}` : `ID: ${result.id}`}</p>
+                    <div class="title-container">
+                        <span class="id-tag">ID: ${result.id}</span>
+                        <p class="title">${result.name}</p>
+                    </div>
+                    <p class="meta">${result.details || ''}</p>
                 </div>
             </div>
             <button class="select-btn">选择</button>
@@ -300,8 +303,10 @@ function renderTmdbSearchResults(results) {
             <div class="result-item-left">
                 <img class="poster" src="${result.image_url || '/static/placeholder.png'}" referrerpolicy="no-referrer" alt="${result.name}">
                 <div class="info">
-                    <p class="title">${result.name}</p>
-                    <p class="meta">ID: ${result.id}</p>
+                    <div class="title-container">
+                        <span class="id-tag">ID: ${result.id}</span>
+                        <p class="title">${result.name}</p>
+                    </div>
                 </div>
             </div>
             <button class="select-btn">选择</button>
@@ -368,7 +373,10 @@ function renderDoubanSearchResults(results) {
             <div class="result-item-left">
                 <img class="poster" src="${result.image_url || '/static/placeholder.png'}" referrerpolicy="no-referrer" alt="${result.title}">
                 <div class="info">
-                    <p class="title">${result.title}</p>
+                    <div class="title-container">
+                        <span class="id-tag">ID: ${result.id}</span>
+                        <p class="title">${result.title}</p>
+                    </div>
                     <p class="meta">${result.details}</p>
                 </div>
             </div>

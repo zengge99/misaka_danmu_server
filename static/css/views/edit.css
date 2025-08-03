@@ -117,3 +117,34 @@
     flex-shrink: 0;
     margin-left: 15px; /* Add some space */
 }
+
+/* Styles for metadata search results (Bangumi, TMDB, Douban) */
+.title-container {
+    display: flex;
+    align-items: center;
+}
+
+.title-container .title {
+    /* Resetting some properties from the generic .title style */
+    margin: 0;
+    padding: 0;
+    border: none;
+    /* The title text itself should be able to truncate */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-grow: 1; /* Allow it to take remaining space */
+}
+
+.id-tag {
+    display: inline-block;
+    background-color: var(--secondary-color);
+    color: var(--primary-color);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 0.9em;
+    margin-right: 10px;
+    border: 1px solid var(--border-color);
+    flex-shrink: 0; /* Prevent it from shrinking */
+}
