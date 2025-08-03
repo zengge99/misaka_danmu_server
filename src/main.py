@@ -10,6 +10,7 @@ from .database import create_db_pool, close_db_pool, init_db_tables, create_init
 from .api.ui import router as ui_router, auth_router
 from .api.bangumi_api import router as bangumi_router
 from .api.tmdb_api import router as tmdb_router
+from .api.webhook_api import router as webhook_router
 from .api.douban_api import router as douban_router
 from .dandan_api import dandan_router
 from .task_manager import TaskManager
@@ -108,6 +109,7 @@ app.include_router(dandan_router, prefix="/api/{token}", tags=["DanDanPlay Compa
 app.include_router(bangumi_router, prefix="/api/bgm", tags=["Bangumi"])
 app.include_router(tmdb_router, prefix="/api/tmdb", tags=["TMDB"])
 app.include_router(douban_router, prefix="/api/douban", tags=["Douban"])
+app.include_router(webhook_router, prefix="/api/webhook", tags=["Webhook"])
 
 # 根路径返回前端页面
 @app.get("/", response_class=FileResponse, include_in_schema=False)

@@ -15,7 +15,6 @@ from .. import crud, models, security
 from ..log_manager import get_logs
 from ..task_manager import TaskManager, TaskSuccess
 from ..scraper_manager import ScraperManager
-from ..webhook_manager import WebhookManager
 from ..scheduler import SchedulerManager
 from .tmdb_api import get_tmdb_client
 from ..config import settings
@@ -54,10 +53,6 @@ async def get_task_manager(request: Request) -> TaskManager:
 async def get_scheduler_manager(request: Request) -> SchedulerManager:
     """依赖项：从应用状态获取 Scheduler 管理器"""
     return request.app.state.scheduler_manager
-
-async def get_webhook_manager(request: Request) -> WebhookManager:
-    """依赖项：从应用状态获取 Webhook 管理器"""
-    return request.app.state.webhook_manager
 
 async def update_tmdb_mappings(
     pool: aiomysql.Pool,
@@ -581,18 +576,6 @@ async def update_config_item(
     await crud.update_config_value(pool, config_key, value)
     logger.info(f"用户 '{current_user.username}' 更新了配置项 '{config_key}'。")
 
-@router.post("/config/webhook_api_key/regenerate", response_model=Dict[str, str], summary="重新生成Webhook API Key")
-async def regenerate_webhook_api_key(
-    current_user: models.User = Depends(security.get_current_user),
-    pool: aiomysql.Pool = Depends(get_db_pool)
-):
-    """生成一个新的、随机的Webhook API Key并保存到数据库。"""
-    alphabet = string.ascii_letters + string.digits
-    new_key = ''.join(secrets.choice(alphabet) for _ in range(20))
-    await crud.update_config_value(pool, "webhook_api_key", new_key)
-    logger.info(f"用户 '{current_user.username}' 重新生成了 Webhook API Key。")
-    return {"key": "webhook_api_key", "value": new_key}
-
 @router.get("/ua-rules", response_model=List[models.UaRule], summary="获取所有UA规则")
 async def get_ua_rules(
     current_user: models.User = Depends(security.get_current_user),
@@ -655,32 +638,6 @@ async def get_comments(
     
     comments = [models.Comment(cid=item["cid"], p=item["p"], m=item["m"]) for item in comments_data]
     return models.CommentResponse(count=len(comments), comments=comments)
-
-@router.get("/webhooks/available", response_model=List[str], summary="获取所有可用的Webhook类型")
-async def get_available_webhook_types(
-    current_user: models.User = Depends(security.get_current_user),
-    webhook_manager: WebhookManager = Depends(get_webhook_manager)
-):
-    """获取所有已成功加载的、可供用户选择的Webhook处理器类型。"""
-    return webhook_manager.get_available_handlers()
-
-@router.post("/webhook/{webhook_type}", status_code=status.HTTP_202_ACCEPTED, summary="接收外部服务的Webhook通知")
-async def handle_webhook(
-    webhook_type: str,
-    request: Request,
-    api_key: str = Query(..., description="Webhook安全密钥"),
-    pool: aiomysql.Pool = Depends(get_db_pool),
-    webhook_manager: WebhookManager = Depends(get_webhook_manager)
-):
-    """统一的Webhook入口，用于接收来自Sonarr, Radarr等服务的通知。"""
-    stored_key = await crud.get_config_value(pool, "webhook_api_key", "")
-    if not stored_key or api_key != stored_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的Webhook API Key")
-    
-    payload = await request.json()
-    handler = webhook_manager.get_handler(webhook_type)
-    await handler.handle(payload)
-    return {"message": "Webhook received and is being processed."}
 
 async def delete_anime_task(anime_id: int, pool: aiomysql.Pool, progress_callback: Callable):
     """Background task to delete an anime and all its related data."""
