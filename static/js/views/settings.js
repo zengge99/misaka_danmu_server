@@ -226,7 +226,8 @@ function renderWebhookHandlers(handlers) {
 
     handlers.forEach(handlerType => {
         const li = document.createElement('li');
-        li.textContent = handlerType.charAt(0).toUpperCase() + handlerType.slice(1);
+        // 修正：直接使用从后端获取的处理器类型（即文件名），不再进行首字母大写转换。
+        li.textContent = handlerType;
         list.appendChild(li);
     });
 }
