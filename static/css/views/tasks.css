@@ -8,7 +8,13 @@
     border-radius: 8px;
     padding: 15px;
     margin-bottom: 10px;
+    cursor: pointer;
     border-left: 5px solid var(--primary-color);
+    transition: background-color 0.2s, border-left-color 0.2s;
+}
+
+.task-item:hover {
+    background-color: #f8f9fa;
 }
 
 .task-item[data-status="排队中"] {
@@ -19,6 +25,11 @@
 }
 .task-item[data-status="失败"] {
     border-left-color: var(--error-color);
+}
+
+.task-item.selected {
+    background-color: #e9ecef;
+    border-left-color: #0056b3; /* A darker blue to indicate selection */
 }
 
 .task-header {
@@ -67,4 +78,36 @@
 
 .view-controls input[type="text"] {
     max-width: 300px;
+}
+
+.view-controls .task-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.view-controls .control-btn {
+    padding: 5px 12px;
+    border: 1px solid var(--border-color);
+    background-color: var(--secondary-color);
+    color: #666;
+    cursor: pointer;
+    border-radius: 15px;
+    font-size: 14px;
+}
+
+.view-controls .control-btn.danger {
+    background-color: var(--error-color);
+    color: white;
+    border-color: var(--error-color);
+}
+
+.view-controls .control-btn.danger:hover {
+    background-color: #d43f3f;
+}
+
+.view-controls .control-btn:disabled {
+    background-color: #e9ecef;
+    color: #c0c4cc;
+    cursor: not-allowed;
+    border-color: #e9ecef;
 }

@@ -1315,3 +1315,10 @@ async def get_tasks_from_history(pool: aiomysql.Pool, search_term: Optional[str]
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             await cursor.execute(query, tuple(params))
             return await cursor.fetchall()
+
+async def delete_task_from_history(pool: aiomysql.Pool, task_id: str) -> bool:
+    """从 task_history 表中删除一个任务记录。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            affected_rows = await cursor.execute("DELETE FROM task_history WHERE id = %s", (task_id,))
+            return affected_rows > 0

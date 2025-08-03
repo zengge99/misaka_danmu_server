@@ -1,7 +1,7 @@
 import { apiFetch } from '../api.js';
 import { switchView } from '../ui.js';
 
-let taskListUl, taskManagerSubNav, runningTasksSearchInput, runningTasksFilterButtons, taskManagerSubViews;
+let taskListUl, taskManagerSubNav, runningTasksSearchInput, runningTasksFilterButtons, taskManagerSubViews, deleteRunningTaskBtn;
 let scheduledTasksTableBody, addScheduledTaskBtn, editScheduledTaskView, editScheduledTaskForm, backToTasksFromEditBtn, editScheduledTaskTitle;
 let taskLoadInterval = null;
 let taskLoadTimeout;
@@ -11,6 +11,7 @@ function initializeElements() {
     taskManagerSubNav = document.querySelector('#task-manager-view .settings-sub-nav');
     runningTasksSearchInput = document.getElementById('running-tasks-search-input');
     runningTasksFilterButtons = document.getElementById('running-tasks-filter-buttons');
+    deleteRunningTaskBtn = document.getElementById('delete-running-task-btn');
     taskManagerSubViews = document.querySelectorAll('#task-manager-view .settings-subview');
     scheduledTasksTableBody = document.querySelector('#scheduled-tasks-table tbody');
     addScheduledTaskBtn = document.getElementById('add-scheduled-task-btn');
@@ -133,6 +134,19 @@ function loadAndRenderTasksWithDebounce() {
     taskLoadTimeout = setTimeout(loadAndRenderTasks, 300);
 }
 
+function handleTaskSelection(e) {
+    const clickedLi = e.target.closest('.task-item');
+    if (!clickedLi) return;
+
+    // Remove 'selected' from all other items
+    taskListUl.querySelectorAll('.task-item.selected').forEach(item => {
+        if (item !== clickedLi) {
+            item.classList.remove('selected');
+        }
+    });
+    clickedLi.classList.toggle('selected');
+}
+
 async function loadAndRenderScheduledTasks() {
     if (!scheduledTasksTableBody) return;
     scheduledTasksTableBody.innerHTML = '<tr><td colspan="7">加载中...</td></tr>';
@@ -240,12 +254,32 @@ async function handleScheduledTaskAction(action, taskId) {
     }
 }
 
+async function handleDeleteRunningTask() {
+    const selectedTask = taskListUl.querySelector('.task-item.selected');
+    if (!selectedTask) {
+        alert('请先选择一个任务。');
+        return;
+    }
+    const taskId = selectedTask.dataset.taskId;
+    const taskTitle = selectedTask.querySelector('.task-title').textContent;
+
+    if (confirm(`您确定要从历史记录中删除任务 "${taskTitle}" 吗？`)) {
+        try {
+            await apiFetch(`/api/ui/tasks/${taskId}`, { method: 'DELETE' });
+            loadAndRenderTasks();
+        } catch (error) {
+            alert(`删除任务失败: ${error.message}`);
+        }
+    }
+}
+
 export function setupTasksEventListeners() {
     initializeElements();
     taskManagerSubNav.addEventListener('click', handleTaskManagerSubNav);
     runningTasksSearchInput.addEventListener('input', applyTaskFilters);
     runningTasksFilterButtons.addEventListener('click', handleTaskFilterClick);
     addScheduledTaskBtn.addEventListener('click', () => showEditScheduledTaskView());
+    deleteRunningTaskBtn.addEventListener('click', handleDeleteRunningTask);
     editScheduledTaskForm.addEventListener('submit', handleScheduledTaskFormSubmit);
     backToTasksFromEditBtn.addEventListener('click', () => {
         switchView('task-manager-view');
@@ -266,4 +300,6 @@ export function setupTasksEventListeners() {
             if (firstSubNavBtn) firstSubNavBtn.click();
         }
     });
+
+    taskListUl.addEventListener('click', handleTaskSelection);
 }

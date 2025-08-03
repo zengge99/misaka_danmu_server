@@ -594,6 +594,18 @@ async def get_all_tasks(
     tasks = await crud.get_tasks_from_history(pool, search, status)
     return [models.TaskInfo.model_validate(t) for t in tasks]
 
+@router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除一个历史任务")
+async def delete_task_from_history_endpoint(
+    task_id: str,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """从历史记录中删除一个任务。"""
+    deleted = await crud.delete_task_from_history(pool, task_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    return
+
 @router.get("/tokens", response_model=List[models.ApiTokenInfo], summary="获取所有弹幕API Token")
 async def get_all_api_tokens(
     current_user: models.User = Depends(security.get_current_user),

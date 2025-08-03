@@ -419,6 +419,10 @@
                             <div class="library-header">
                                 <h2>运行中任务</h2>
                                 <div class="view-controls">
+                                    <div class="task-actions">
+                                        <button id="pause-running-task-btn" class="control-btn" title="暂停/恢复功能暂未实现" disabled>暂停/恢复</button>
+                                        <button id="delete-running-task-btn" class="control-btn danger">删除任务</button>
+                                    </div>
                                     <input type="text" id="running-tasks-search-input" placeholder="按任务标题搜索...">
                                     <div id="running-tasks-filter-buttons" class="filter-buttons">
                                         <button class="filter-btn" data-status-filter="all">全部</button>
@@ -638,8 +642,8 @@
                         <div id="webhook-settings-subview" class="settings-subview hidden">
                             <div class="form-card">
                                 <h3>Webhook 配置</h3>
-                                <p>Webhook 用于接收来自 Emby, Jellyfin 等外部服务的通知，以实现自动化导入。请将下方对应服务的 URL 填入其 Webhook 通知设置中。</p>
-                                <p>URL 格式为：<code>http(s)://你的域名/api/webhook/{服务名}?api_key={你的API Key}</code></p>
+                                <p>Webhook 用于接收来自外部服务的通知，以实现自动化导入。请将下方对应服务的 URL 填入其 Webhook 通知设置中。</p>
+                                <p>URL 格式为：<code>http(s)://域名(ip):端口(port)/api/webhook/{服务名}?api_key={你的API Key}</code></p>
                                 <div class="form-row">
                                     <label for="webhook-api-key">API Key</label>
                                     <div class="input-with-icon">
