@@ -116,15 +116,19 @@ class TencentScraper(BaseScraper):
             self.logger.info(f"Tencent: 正在搜索 '{keyword}'...")
             response = await self.client.post(url, json=payload)
             response.raise_for_status()
+            self.logger.debug(f"Tencent: 收到 '{keyword}' 的原始搜索响应: {response.text}")
             data = TencentSearchResult.model_validate(response.json())
 
             if data.data and data.data.normal_list:
+                self.logger.info(f"Tencent: API为 '{keyword}' 返回了 {len(data.data.normal_list.item_list)} 个原始条目，开始过滤...")
                 for item in data.data.normal_list.item_list:
                     # 新增：检查 video_info 是否存在，因为API有时会返回null
                     if not item.video_info:
+                        self.logger.debug(f"Tencent: 过滤掉一个条目，因为它缺少 'videoInfo'。")
                         continue
                     # 参考C#代码，增加对年份的过滤，可以有效排除很多不相关的结果（如：资讯、短视频等）
                     if not item.video_info.year or item.video_info.year == 0:
+                        self.logger.debug(f"Tencent: 过滤掉结果 '{item.video_info.title}'，因为它缺少有效的年份信息。")
                         continue
 
                     # 新增：更严格的内容类型和标题过滤
@@ -134,9 +138,11 @@ class TencentScraper(BaseScraper):
                     
                     # 1. 只保留电影和电视剧
                     if not any(valid_type in type_name for valid_type in ["电影", "电视剧"]):
+                        self.logger.debug(f"Tencent: 过滤掉结果 '{title}'，因为其类型 '{type_name}' 不是电影或电视剧。")
                         continue
                     # 2. 过滤掉预告、花絮等非正片内容
                     if any(junk_word in title for junk_word in ["预告", "花絮", "特辑", "速看", "资讯", "解读"]):
+                        self.logger.debug(f"Tencent: 过滤掉结果 '{title}'，因为它包含非正片关键词。")
                         continue
 
                     video_info = item.video_info
@@ -179,6 +185,8 @@ class TencentScraper(BaseScraper):
                             currentEpisodeIndex=current_episode
                         )
                     )
+            else:
+                self.logger.info(f"Tencent: API为 '{keyword}' 返回的响应中没有 'normalList' 数据。")
         except httpx.HTTPStatusError as e:
             self.logger.error(f"搜索请求失败: {e}")
         except (ValidationError, KeyError) as e:
