@@ -7,27 +7,12 @@ from ..scraper_manager import ScraperManager
 
 logger = logging.getLogger(__name__)
 
-# 定义 Emby ProviderId 键与我们内部搜索源名称的映射关系
-# 如果未来 Emby 支持更多源，可以在此扩展
-PROVIDER_ID_MAP = {
-    "Tmdb": "tmdb",
-    "Imdb": "imdb",
-    "Tvdb": "tvdb",
-    "DoubanID": "douban",
-    "TencentID": "tencent",
-    "IqiyiID": "iqiyi",
-    "YoukuID": "youku",
-    "BilibiliID": "bilibili",
-    "MgtvID": "mgtv",
-    "DandanplayID": "dandanplay"
-}
-
 class EmbyWebhook(BaseWebhook):
     async def handle(self, payload: Dict[str, Any]):
         event_type = payload.get("Event")
         # 我们只关心新媒体入库的事件, 兼容 emby 的 'library.new' 和 jellyfin 的 'item.add'
-        if event_type not in ["library.new"]:
-            logger.info(f"Webhook: 忽略非 'library.new' 的事件 (类型: {event_type})")
+        if event_type not in ["item.add", "library.new"]:
+            logger.info(f"Webhook: 忽略非 'item.add' 或 'library.new' 的事件 (类型: {event_type})")
             return
 
         item = payload.get("Item", {})
@@ -45,7 +30,7 @@ class EmbyWebhook(BaseWebhook):
         tmdb_id = provider_ids.get("Tmdb")
         imdb_id = provider_ids.get("Imdb")
         tvdb_id = provider_ids.get("Tvdb")
-        douban_id = provider_ids.get("DoubanID")
+        douban_id = provider_ids.get("DoubanID") # Emby 可能使用 DoubanID
         
         # 根据媒体类型分别处理
         if item_type == "Episode":
@@ -79,40 +64,9 @@ class EmbyWebhook(BaseWebhook):
             season_number = 1
             episode_number = 1 # 电影按单集处理
             anime_title = movie_title
-
-        # --- 优先使用直连ID进行导入 ---
-        # 修正：将传入的 provider_ids 的键统一转为小写，以实现大小写不敏感的匹配
-        normalized_provider_ids = {k.lower(): v for k, v in provider_ids.items()}
-
-        for emby_key_lower, internal_provider in PROVIDER_ID_MAP.items():
-            if media_id := normalized_provider_ids.get(emby_key_lower):
-                logger.info(f"Webhook: 发现直连ID ({internal_provider}): {media_id}，将直接导入。")
-                
-                scraper_manager = ScraperManager(self.pool)
-                await scraper_manager.load_and_sync_scrapers()
-
-                try:
-                    scraper_manager.get_scraper(internal_provider)
-                except ValueError:
-                    logger.warning(f"Webhook: 发现 {internal_provider} 的直连ID，但该搜索源未启用。跳过。")
-                    continue
-
-                direct_task_title = f"Webhook直连导入: {anime_title}"
-                if item_type == "Episode":
-                    direct_task_title += f" - S{season_number:02d}E{episode_number:02d}"
-
-                task_coro = lambda callback: generic_import_task(
-                    provider=internal_provider, media_id=media_id, anime_title=anime_title, media_type=media_type,
-                    season=season_number, current_episode_index=episode_number, image_url=None,
-                    douban_id=str(douban_id) if douban_id else None, tmdb_id=str(tmdb_id) if tmdb_id else None, 
-                    imdb_id=str(imdb_id) if imdb_id else None, tvdb_id=str(tvdb_id) if tvdb_id else None,
-                    progress_callback=callback, pool=self.pool, manager=scraper_manager
-                )
-                await self.task_manager.submit_task(task_coro, direct_task_title)
-                return # 成功提交直连任务后，直接返回，不再执行后续的搜索
-
-        # --- 如果没有直连ID，则回退到搜索模式 ---
-        logger.info("Webhook: 未发现可用的直连ID，将回退到标题搜索模式。")
+        
+        # 新逻辑：总是触发全网搜索任务，并附带元数据ID
+        logger.info(f"Webhook: 准备为 '{anime_title}' 创建全网搜索任务，并附加元数据ID (TMDB: {tmdb_id}, IMDb: {imdb_id}, TVDB: {tvdb_id}, Douban: {douban_id})。")
 
         # 动态创建一个 ScraperManager 实例以供导入任务使用
         scraper_manager = ScraperManager(self.pool)
@@ -120,10 +74,11 @@ class EmbyWebhook(BaseWebhook):
 
         # 复用通用的导入任务逻辑
         task_coro = lambda callback: generic_import_task(
-            provider=None, media_id=search_keyword, anime_title=anime_title, media_type=media_type,
+            provider=None, # provider=None 会触发全网搜索
+            media_id=search_keyword, anime_title=anime_title, media_type=media_type,
             season=season_number, current_episode_index=episode_number, image_url=None,
-            douban_id=str(douban_id) if douban_id else None, tmdb_id=str(tm_id) if tmdb_id else None, 
+            douban_id=str(douban_id) if douban_id else None, tmdb_id=str(tmdb_id) if tmdb_id else None, 
             imdb_id=str(imdb_id) if imdb_id else None, tvdb_id=str(tvdb_id) if tvdb_id else None,
-            progress_callback=callback, pool=self.pool, manager=scraper_manager, is_webhook=True
+            progress_callback=callback, pool=self.pool, manager=scraper_manager, task_manager=self.task_manager, is_webhook=True
         )
         await self.task_manager.submit_task(task_coro, task_title)

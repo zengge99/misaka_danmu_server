@@ -13,3 +13,6 @@ python-multipart
 # protobuf v4.x 引入了不兼容的变更，可能导致预编译的 _pb2.py 文件解析失败
 # 将其固定到 v3.x 的最后一个稳定版本以确保兼容性
 protobuf==3.20.3
+# 用于模糊字符串匹配，提高搜索结果排序的准确性
+thefuzz
+python-Levenshtein

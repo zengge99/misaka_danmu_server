@@ -16,6 +16,7 @@ from ..log_manager import get_logs
 from ..task_manager import TaskManager, TaskSuccess
 from ..scraper_manager import ScraperManager
 from ..scheduler import SchedulerManager
+from thefuzz import fuzz
 from .tmdb_api import get_tmdb_client
 from ..config import settings
 from ..config import settings
@@ -362,7 +363,7 @@ async def refresh_single_episode(
     logger.info(f"用户 '{current_user.username}' 请求刷新分集 ID: {episode_id} ({episode['title']})")
     
     task_coro = lambda callback: refresh_episode_task(episode_id, pool, scraper_manager, callback)
-    task_id = await task_manager.submit_task(task_coro, f"刷新分集: {episode['title']}")
+    task_id, _ = await task_manager.submit_task(task_coro, f"刷新分集: {episode['title']}")
 
     return {"message": f"分集 '{episode['title']}' 的刷新任务已提交。", "task_id": task_id}
 
@@ -381,8 +382,8 @@ async def refresh_anime(
     
     logger.info(f"用户 '{current_user.username}' 为番剧 '{source_info['title']}' (源ID: {source_id}) 启动了全量刷新任务。")
     
-    task_coro = lambda callback: full_refresh_task(source_id, pool, scraper_manager, callback)
-    task_id = await task_manager.submit_task(task_coro, f"刷新: {source_info['title']}")
+    task_coro = lambda callback: full_refresh_task(source_id, pool, scraper_manager, task_manager, callback)
+    task_id, _ = await task_manager.submit_task(task_coro, f"刷新: {source_info['title']}")
 
     return {"message": f"番剧 '{source_info['title']}' 的全量刷新任务已提交。", "task_id": task_id}
 
@@ -576,6 +577,18 @@ async def update_config_item(
     await crud.update_config_value(pool, config_key, value)
     logger.info(f"用户 '{current_user.username}' 更新了配置项 '{config_key}'。")
 
+@router.post("/config/webhook_api_key/regenerate", response_model=Dict[str, str], summary="重新生成Webhook API Key")
+async def regenerate_webhook_api_key(
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """生成一个新的、随机的Webhook API Key并保存到数据库。"""
+    alphabet = string.ascii_letters + string.digits
+    new_key = ''.join(secrets.choice(alphabet) for _ in range(20))
+    await crud.update_config_value(pool, "webhook_api_key", new_key)
+    logger.info(f"用户 '{current_user.username}' 重新生成了 Webhook API Key。")
+    return {"key": "webhook_api_key", "value": new_key}
+
 @router.get("/ua-rules", response_model=List[models.UaRule], summary="获取所有UA规则")
 async def get_ua_rules(
     current_user: models.User = Depends(security.get_current_user),
@@ -639,6 +652,14 @@ async def get_comments(
     comments = [models.Comment(cid=item["cid"], p=item["p"], m=item["m"]) for item in comments_data]
     return models.CommentResponse(count=len(comments), comments=comments)
 
+@router.get("/webhooks/available", response_model=List[str], summary="获取所有可用的Webhook类型")
+async def get_available_webhook_types(
+    current_user: models.User = Depends(security.get_current_user),
+    webhook_manager: WebhookManager = Depends(get_webhook_manager)
+):
+    """获取所有已成功加载的、可供用户选择的Webhook处理器类型。"""
+    return webhook_manager.get_available_handlers()
+
 async def delete_anime_task(anime_id: int, pool: aiomysql.Pool, progress_callback: Callable):
     """Background task to delete an anime and all its related data."""
     progress_callback(0, "开始删除...")
@@ -693,28 +714,58 @@ async def generic_import_task(
     progress_callback: Callable,
     pool: aiomysql.Pool,
     manager: ScraperManager,
+    task_manager: TaskManager,
     is_webhook: bool = False
 ):
     """
     后台任务：执行从指定数据源导入弹幕的完整流程。
+    如果 is_webhook=True 且 provider=None，则会搜索所有源并为最佳匹配项分发新的导入任务。
     """
     total_comments_added = 0
     try:
-        scraper = manager.get_scraper(provider)
-
-        # Webhook 触发的特殊逻辑
-        if is_webhook:
+        # Webhook 触发的特殊逻辑: 搜索所有源并为最佳匹配项创建新任务
+        if is_webhook and provider is None:
             logger.info(f"Webhook 任务: 正在为 '{anime_title}' 搜索所有源...")
-            search_results = await manager.search_all([media_id]) # media_id here is the search keyword
+            # media_id 在这里是搜索关键词
+            search_results = await manager.search_all([media_id], episode_info={"season": season, "episode": current_episode_index})
+            
             if not search_results:
                 raise TaskSuccess(f"Webhook 任务失败: 未找到 '{anime_title}' 的任何可用源。")
+
+            # 按与原始标题的相似度对结果进行排序
+            search_results.sort(key=lambda r: fuzz.ratio(anime_title, r.title), reverse=True)
+
+            # 按 provider 分组，并为每个 provider 选择最佳匹配（即排序后的第一个）
+            best_results_per_provider: Dict[str, models.ProviderSearchInfo] = {}
+            for result in search_results:
+                if result.provider not in best_results_per_provider:
+                    best_results_per_provider[result.provider] = result
             
-            # 简单策略：选择第一个找到的源
-            best_source = search_results[0]
-            provider = best_source.provider
-            media_id = best_source.mediaId
-            image_url = best_source.imageUrl
-            scraper = manager.get_scraper(provider)
+            logger.info(f"Webhook 任务: 找到 {len(best_results_per_provider)} 个源的最佳匹配项，将为每个源创建导入任务。")
+
+            # 为每个最佳匹配项提交一个新的、具体的导入任务
+            for prov, item in best_results_per_provider.items():
+                specific_task_title = f"Webhook自动导入: {item.title} ({prov})"
+                
+                # 使用闭包来捕获当前循环的 `item`
+                def create_task_coro(captured_item):
+                    return lambda callback: generic_import_task(
+                        provider=captured_item.provider, media_id=captured_item.mediaId,
+                        anime_title=captured_item.title, media_type=captured_item.type,
+                        season=captured_item.season, current_episode_index=captured_item.currentEpisodeIndex,
+                        image_url=captured_item.imageUrl, douban_id=douban_id,
+                        tmdb_id=tmdb_id, imdb_id=imdb_id, tvdb_id=tvdb_id,
+                        progress_callback=callback, pool=pool, manager=manager,
+                        task_manager=task_manager, is_webhook=False
+                    )
+                
+                await task_manager.submit_task(create_task_coro(item), specific_task_title)
+
+            # 主 webhook 任务成功完成
+            raise TaskSuccess(f"Webhook: 已为 {len(best_results_per_provider)} 个源创建导入任务。")
+
+        # --- 原有的导入逻辑 ---
+        scraper = manager.get_scraper(provider)
 
         # 统一将标题中的英文冒号替换为中文冒号，作为写入数据库前的最后保障
         normalized_title = anime_title.replace(":", "：")
@@ -781,9 +832,11 @@ async def generic_import_task(
         logger.error(f"导入任务发生严重错误: {e}", exc_info=True)
         raise  # 重新抛出异常，以便任务管理器能捕获并标记任务为“失败”
     finally:
-        logger.info(f"--- {provider} 导入任务完成 (media_id={media_id})。总共新增 {total_comments_added} 条弹幕。 ---")
+        # 这个 finally 块只对单个导入任务有意义，对于分发任务来说，它的日志会产生误导
+        if not (is_webhook and provider is None):
+             logger.info(f"--- {provider} 导入任务完成 (media_id={media_id})。总共新增 {total_comments_added} 条弹幕。 ---")
 
-async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: ScraperManager, progress_callback: Callable):
+async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: ScraperManager, task_manager: TaskManager, progress_callback: Callable):
     """
     后台任务：全量刷新一个已存在的番剧。
     """
@@ -808,11 +861,12 @@ async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: Scrape
         season=source_info.get("season", 1),
         current_episode_index=None,
         image_url=None,
-        douban_id=None,
-        tmdb_id=source_info.get("tmdb_id"),
+        douban_id=None, tmdb_id=source_info.get("tmdb_id"), 
+        imdb_id=None, tvdb_id=None,
         progress_callback=progress_callback,
         pool=pool,
-        manager=manager)
+        manager=manager,
+        task_manager=task_manager)
 
 async def delete_bulk_sources_task(source_ids: List[int], pool: aiomysql.Pool, progress_callback: Callable):
     """Background task to delete multiple sources."""
@@ -904,8 +958,9 @@ async def import_from_provider(
         current_episode_index=request_data.current_episode_index,
         image_url=request_data.image_url,
         douban_id=request_data.douban_id,
-        tmdb_id=request_data.tmdb_id, 
-        imdb_id=None, tvdb_id=None, # 手动导入时这些ID为空
+        tmdb_id=request_data.tmdb_id,
+        imdb_id=None, tvdb_id=None, # 手动导入时这些ID为空,
+        task_manager=task_manager,
         progress_callback=callback,
         pool=pool,
         manager=scraper_manager
