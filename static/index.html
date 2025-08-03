@@ -686,11 +686,11 @@
                         <div id="douban-settings-subview" class="settings-subview hidden">
                             <div class="form-card">
                                 <h3>豆瓣 Cookie 配置</h3>
-                                <p>为了确保豆瓣搜索的稳定性，建议在此处配置您的豆瓣账户Cookie。请从浏览器开发者工具中获取。</p>
+                                <p>豆瓣搜索通常无需配置即可使用。如果遇到搜索失败或403错误，可以尝试在此处配置您的豆瓣账户Cookie以提高请求成功率。请从浏览器开发者工具中获取。</p>
                                 <form id="douban-settings-form">
                                     <div class="form-row">
                                         <label for="douban-cookie">Cookie</label>
-                                        <textarea id="douban-cookie" rows="4" placeholder="在此输入您的豆瓣Cookie字符串"></textarea>
+                                        <textarea id="douban-cookie" rows="4" placeholder="选填。如果搜索失败或被限制，请在此输入Cookie"></textarea>
                                     </div>
                                     <div class="form-actions">
                                         <button type="submit">保存</button>

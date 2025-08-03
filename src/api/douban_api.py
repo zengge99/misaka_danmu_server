@@ -19,18 +19,15 @@ async def get_douban_client(
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool),
 ) -> httpx.AsyncClient:
-    """依赖项：创建一个带有豆瓣Cookie的httpx客户端。"""
+    """依赖项：创建一个带有可选豆瓣Cookie的httpx客户端。"""
     cookie = await crud.get_config_value(pool, "douban_cookie", "")
-    if not cookie:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="豆瓣Cookie未配置。请在“设置”页面中填写。",
-        )
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Cookie": cookie,
     }
+    if cookie:
+        headers["Cookie"] = cookie
+
     return httpx.AsyncClient(headers=headers, timeout=20.0, follow_redirects=True)
 
 
