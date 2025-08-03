@@ -14,6 +14,7 @@ from .api.douban_api import router as douban_router
 from .dandan_api import dandan_router
 from .task_manager import TaskManager
 from .scraper_manager import ScraperManager
+from .webhook_manager import WebhookManager
 from .scheduler import SchedulerManager
 from .config import settings
 from . import crud, security
@@ -33,6 +34,7 @@ async def lifespan(app: FastAPI):
     app.state.scraper_manager = ScraperManager(pool)
     await app.state.scraper_manager.load_and_sync_scrapers()
     app.state.task_manager = TaskManager(pool)
+    app.state.webhook_manager = WebhookManager(pool, app.state.task_manager)
     app.state.task_manager.start()
     await create_initial_admin_user(app)
     app.state.cleanup_task = asyncio.create_task(cleanup_task(app))

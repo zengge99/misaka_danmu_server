@@ -603,6 +603,7 @@
                         <h2>设置</h2>
                         <div class="settings-sub-nav">
                             <button class="sub-nav-btn active" data-subview="account-settings-subview">账户安全</button>
+                            <button class="sub-nav-btn" data-subview="webhook-settings-subview">Webhook</button>
                             <button class="sub-nav-btn" data-subview="bangumi-settings-subview">Bangumi配置</button>
                             <button class="sub-nav-btn" data-subview="tmdb-settings-subview">TMDB配置</button>
                             <button class="sub-nav-btn" data-subview="douban-settings-subview">豆瓣配置</button>
@@ -630,6 +631,22 @@
                                     </div>
                                     <p id="password-change-message" class="message"></p>
                                 </form>
+                            </div>
+                        </div>
+
+                        <div id="webhook-settings-subview" class="settings-subview hidden">
+                            <div class="form-card">
+                                <h3>Webhook 配置</h3>
+                                <p>Webhook 用于接收来自 Emby 等外部服务的通知，以实现自动化导入。请将生成的URL填入相应服务的 "Webhook" 通知设置中。</p>
+                                <div class="form-row">
+                                    <label for="webhook-api-key">API Key</label>
+                                    <div class="input-with-icon">
+                                        <input type="text" id="webhook-api-key" readonly>
+                                        <button type="button" id="regenerate-webhook-key-btn" class="icon-btn" title="重新生成">🔄</button>
+                                    </div>
+                                </div>
+                                <!-- Webhook URLs will be dynamically generated here -->
+                                <div id="webhook-urls-container"></div>
                             </div>
                         </div>
 

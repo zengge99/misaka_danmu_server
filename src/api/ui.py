@@ -15,6 +15,7 @@ from .. import crud, models, security
 from ..log_manager import get_logs
 from ..task_manager import TaskManager, TaskSuccess
 from ..scraper_manager import ScraperManager
+from ..webhook_manager import WebhookManager
 from ..scheduler import SchedulerManager
 from .tmdb_api import get_tmdb_client
 from ..config import settings
@@ -53,6 +54,10 @@ async def get_task_manager(request: Request) -> TaskManager:
 async def get_scheduler_manager(request: Request) -> SchedulerManager:
     """依赖项：从应用状态获取 Scheduler 管理器"""
     return request.app.state.scheduler_manager
+
+async def get_webhook_manager(request: Request) -> WebhookManager:
+    """依赖项：从应用状态获取 Webhook 管理器"""
+    return request.app.state.webhook_manager
 
 async def update_tmdb_mappings(
     pool: aiomysql.Pool,
@@ -639,6 +644,32 @@ async def get_comments(
     comments = [models.Comment(cid=item["cid"], p=item["p"], m=item["m"]) for item in comments_data]
     return models.CommentResponse(count=len(comments), comments=comments)
 
+@router.get("/webhooks/available", response_model=List[str], summary="获取所有可用的Webhook类型")
+async def get_available_webhook_types(
+    current_user: models.User = Depends(security.get_current_user),
+    webhook_manager: WebhookManager = Depends(get_webhook_manager)
+):
+    """获取所有已成功加载的、可供用户选择的Webhook处理器类型。"""
+    return webhook_manager.get_available_handlers()
+
+@router.post("/webhook/{webhook_type}", status_code=status.HTTP_202_ACCEPTED, summary="接收外部服务的Webhook通知")
+async def handle_webhook(
+    webhook_type: str,
+    request: Request,
+    api_key: str = Query(..., description="Webhook安全密钥"),
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    webhook_manager: WebhookManager = Depends(get_webhook_manager)
+):
+    """统一的Webhook入口，用于接收来自Sonarr, Radarr等服务的通知。"""
+    stored_key = await crud.get_config_value(pool, "webhook_api_key", "")
+    if not stored_key or api_key != stored_key:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的Webhook API Key")
+    
+    payload = await request.json()
+    handler = webhook_manager.get_handler(webhook_type)
+    await handler.handle(payload)
+    return {"message": "Webhook received and is being processed."}
+
 async def delete_anime_task(anime_id: int, pool: aiomysql.Pool, progress_callback: Callable):
     """Background task to delete an anime and all its related data."""
     progress_callback(0, "开始删除...")
@@ -690,7 +721,8 @@ async def generic_import_task(
     tmdb_id: Optional[str],
     progress_callback: Callable,
     pool: aiomysql.Pool,
-    manager: ScraperManager
+    manager: ScraperManager,
+    is_webhook: bool = False
 ):
     """
     后台任务：执行从指定数据源导入弹幕的完整流程。
@@ -698,6 +730,20 @@ async def generic_import_task(
     total_comments_added = 0
     try:
         scraper = manager.get_scraper(provider)
+
+        # Webhook 触发的特殊逻辑
+        if is_webhook:
+            logger.info(f"Webhook 任务: 正在为 '{anime_title}' 搜索所有源...")
+            search_results = await manager.search_all([media_id]) # media_id here is the search keyword
+            if not search_results:
+                raise TaskSuccess(f"Webhook 任务失败: 未找到 '{anime_title}' 的任何可用源。")
+            
+            # 简单策略：选择第一个找到的源
+            best_source = search_results[0]
+            provider = best_source.provider
+            media_id = best_source.mediaId
+            image_url = best_source.imageUrl
+            scraper = manager.get_scraper(provider)
 
         # 统一将标题中的英文冒号替换为中文冒号，作为写入数据库前的最后保障
         normalized_title = anime_title.replace(":", "：")

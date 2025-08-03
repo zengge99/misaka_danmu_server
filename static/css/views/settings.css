@@ -41,3 +41,7 @@ textarea#douban-cookie {
     width: 100%;
 }
 
+/* 让只读输入框看起来更像普通文本 */
+#webhook-settings-subview input[readonly] {
+    background-color: var(--secondary-color);
+}
