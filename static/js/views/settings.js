@@ -4,7 +4,7 @@ import { apiFetch } from '../api.js';
 let settingsSubNav, settingsSubViews;
 let passwordChangeMessage;
 let bangumiAuthStateUnauthenticated, bangumiAuthStateAuthenticated, bangumiUserNickname, bangumiUserId, bangumiAuthorizedAt, bangumiExpiresAt, bangumiUserAvatar, bangumiLoginBtn, bangumiLogoutBtn;
-let tmdbSettingsForm, tmdbSaveMessage;
+let tmdbSettingsForm, tmdbSaveMessage, doubanSettingsForm, doubanSaveMessage;
 
 function initializeElements() {
     settingsSubNav = document.querySelector('#settings-view .settings-sub-nav');
@@ -23,6 +23,9 @@ function initializeElements() {
 
     tmdbSettingsForm = document.getElementById('tmdb-settings-form');
     tmdbSaveMessage = document.getElementById('tmdb-save-message');
+
+    doubanSettingsForm = document.getElementById('douban-settings-form');
+    doubanSaveMessage = document.getElementById('douban-save-message');
 }
 
 function handleSettingsSubNav(e) {
@@ -41,6 +44,7 @@ function handleSettingsSubNav(e) {
 
     if (subViewId === 'bangumi-settings-subview') loadBangumiAuthState();
     if (subViewId === 'tmdb-settings-subview') loadTmdbSettings();
+    if (subViewId === 'douban-settings-subview') loadDoubanSettings();
 }
 
 async function handleChangePassword(e) {
@@ -158,6 +162,40 @@ async function handleSaveTmdbSettings(e) {
     }
 }
 
+async function loadDoubanSettings() {
+    doubanSaveMessage.textContent = '';
+    try {
+        const data = await apiFetch('/api/ui/config/douban_cookie');
+        document.getElementById('douban-cookie').value = data.value || '';
+    } catch (error) {
+        doubanSaveMessage.textContent = `加载豆瓣Cookie失败: ${error.message}`;
+    }
+}
+
+async function handleSaveDoubanSettings(e) {
+    e.preventDefault();
+    const payload = {
+        value: document.getElementById('douban-cookie').value.trim(),
+    };
+    const saveBtn = e.target.querySelector('button[type="submit"]');
+    saveBtn.disabled = true;
+    doubanSaveMessage.textContent = '保存中...';
+    doubanSaveMessage.className = 'message';
+    try {
+        await apiFetch('/api/ui/config/douban_cookie', {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+        });
+        doubanSaveMessage.textContent = '豆瓣 Cookie 保存成功！';
+        doubanSaveMessage.classList.add('success');
+    } catch (error) {
+        doubanSaveMessage.textContent = `保存失败: ${error.message}`;
+        doubanSaveMessage.classList.add('error');
+    } finally {
+        saveBtn.disabled = false;
+    }
+}
+
 export function setupSettingsEventListeners() {
     initializeElements();
     settingsSubNav.addEventListener('click', handleSettingsSubNav);
@@ -165,6 +203,7 @@ export function setupSettingsEventListeners() {
     bangumiLoginBtn.addEventListener('click', handleBangumiLogin);
     bangumiLogoutBtn.addEventListener('click', handleBangumiLogout);
     tmdbSettingsForm.addEventListener('submit', handleSaveTmdbSettings);
+    doubanSettingsForm.addEventListener('submit', handleSaveDoubanSettings);
     window.addEventListener('message', (event) => {
         if (event.data === 'BANGUMI-OAUTH-COMPLETE') {
             loadBangumiAuthState();

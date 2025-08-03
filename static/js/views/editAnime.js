@@ -6,8 +6,8 @@ let _currentSearchSelectionData = null;
 
 // --- DOM Elements ---
 let editAnimeView, editAnimeForm, editAnimeTypeSelect, selectEgidBtn, editAnimeTmdbIdInput;
-let bangumiSearchView, tmdbSearchView, egidView, reassociateView;
-let backToEditAnimeFromBgmSearchBtn, backToEditAnimeFromTmdbSearchBtn, backToEditFromEgidBtn, backToEditFromReassociateBtn;
+let bangumiSearchView, tmdbSearchView, doubanSearchView, egidView, reassociateView;
+let backToEditAnimeFromBgmSearchBtn, backToEditAnimeFromTmdbSearchBtn, backToEditAnimeFromDoubanSearchBtn, backToEditFromEgidBtn, backToEditFromReassociateBtn;
 let editEpisodeView, editEpisodeForm;
 
 function initializeElements() {
@@ -19,11 +19,13 @@ function initializeElements() {
 
     bangumiSearchView = document.getElementById('bangumi-search-view');
     tmdbSearchView = document.getElementById('tmdb-search-view');
+    doubanSearchView = document.getElementById('douban-search-view');
     egidView = document.getElementById('egid-view');
     reassociateView = document.getElementById('reassociate-view');
 
     backToEditAnimeFromBgmSearchBtn = document.getElementById('back-to-edit-anime-from-bgm-search-btn');
     backToEditAnimeFromTmdbSearchBtn = document.getElementById('back-to-edit-anime-from-tmdb-search-btn');
+    backToEditAnimeFromDoubanSearchBtn = document.getElementById('back-to-edit-anime-from-douban-search-btn');
     backToEditFromEgidBtn = document.getElementById('back-to-edit-from-egid-btn');
     backToEditFromReassociateBtn = document.getElementById('back-to-edit-from-reassociate-btn');
 
@@ -148,6 +150,12 @@ function applySearchSelectionData() {
         updateFieldWithApplyLogic('edit-anime-alias-cn-1', cnAliases[0]);
         updateFieldWithApplyLogic('edit-anime-alias-cn-2', cnAliases[1]);
         updateFieldWithApplyLogic('edit-anime-alias-cn-3', cnAliases[2]);
+    } else if ('details' in data) { // Douban result
+        document.getElementById('edit-anime-doubanid').value = data.id || '';
+        updateFieldWithApplyLogic('edit-anime-imdbid', data.imdb_id);
+        updateFieldWithApplyLogic('edit-anime-name-en', data.name_en);
+        updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
+        (data.aliases_cn || []).forEach((alias, i) => updateFieldWithApplyLogic(`edit-anime-alias-cn-${i+1}`, alias));
     } else { // TMDB result
         document.getElementById('edit-anime-tmdbid').value = data.id || '';
         updateFieldWithApplyLogic('edit-anime-imdbid', data.imdb_id);
@@ -314,6 +322,63 @@ function renderTmdbSearchResults(results) {
             } catch (error) {
                 alert(`获取TMDB详情失败: ${error.message}`);
             }
+        });
+        resultsList.appendChild(li);
+    });
+}
+
+function handleSearchDoubanId() {
+    const title = document.getElementById('edit-anime-title').value;
+    const animeId = document.getElementById('edit-anime-id').value;
+    doubanSearchView.dataset.returnToAnimeId = animeId;
+    switchView('douban-search-view');
+    document.getElementById('douban-search-keyword').value = title;
+    document.getElementById('douban-search-view-title').textContent = `为 "${title}" 搜索 豆瓣 ID`;
+    document.getElementById('douban-search-results-list').innerHTML = '';
+}
+
+async function handleDoubanSearchSubmit(e) {
+    e.preventDefault();
+    const keyword = document.getElementById('douban-search-keyword').value.trim();
+    if (!keyword) return;
+    const resultsList = document.getElementById('douban-search-results-list');
+    resultsList.innerHTML = '<li>正在搜索...</li>';
+    const searchButton = e.target.querySelector('button[type="submit"]');
+    searchButton.disabled = true;
+    try {
+        const results = await apiFetch(`/api/douban/search?keyword=${encodeURIComponent(keyword)}`);
+        renderDoubanSearchResults(results);
+    } catch (error) {
+        resultsList.innerHTML = `<li class="error">搜索失败: ${error.message}</li>`;
+    } finally {
+        searchButton.disabled = false;
+    }
+}
+
+function renderDoubanSearchResults(results) {
+    const resultsList = document.getElementById('douban-search-results-list');
+    resultsList.innerHTML = '';
+    if (results.length === 0) {
+        resultsList.innerHTML = '<li>未找到匹配项。</li>';
+        return;
+    }
+    results.forEach(result => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <div class="result-item-left">
+                <img class="poster" src="${result.image_url || '/static/placeholder.png'}" referrerpolicy="no-referrer" alt="${result.title}">
+                <div class="info">
+                    <p class="title">${result.title}</p>
+                    <p class="meta">${result.details}</p>
+                </div>
+            </div>
+            <button class="select-btn">选择</button>
+        `;
+        li.querySelector('.select-btn').addEventListener('click', async () => {
+            const details = await apiFetch(`/api/douban/details/${result.id}`);
+            _currentSearchSelectionData = details;
+            handleBackToEditAnime();
+            setTimeout(applySearchSelectionData, 50);
         });
         resultsList.appendChild(li);
     });
@@ -530,10 +595,13 @@ export function setupEditAnimeEventListeners() {
     });
     document.getElementById('search-bgmid-btn').addEventListener('click', handleSearchBgmId);
     document.getElementById('search-tmdbid-btn').addEventListener('click', handleSearchTmdbId);
+    document.getElementById('search-doubanid-btn').addEventListener('click', handleSearchDoubanId);
     document.getElementById('select-egid-btn').addEventListener('click', handleSelectEgidBtnClick);
 
     backToEditAnimeFromBgmSearchBtn.addEventListener('click', handleBackToEditAnime);
     document.getElementById('bangumi-search-form').addEventListener('submit', handleBangumiSearchSubmit);
+    backToEditAnimeFromDoubanSearchBtn.addEventListener('click', handleBackToEditAnime);
+    document.getElementById('douban-search-form').addEventListener('submit', handleDoubanSearchSubmit);
     backToEditAnimeFromTmdbSearchBtn.addEventListener('click', handleBackToEditAnime);
     document.getElementById('tmdb-search-form').addEventListener('submit', handleTmdbSearchSubmit);
     backToEditFromEgidBtn.addEventListener('click', () => switchView('edit-anime-view'));

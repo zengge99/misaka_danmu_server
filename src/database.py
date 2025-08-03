@@ -144,7 +144,8 @@ async def _init_default_config(cursor: aiomysql.Cursor):
         ('tmdb_api_key', '', '用于访问 The Movie Database API 的密钥。'),
         ('tmdb_api_base_url', 'https://api.themoviedb.org', 'TMDB API 的基础域名。'),
         ('tmdb_image_base_url', 'https://image.tmdb.org', 'TMDB 图片服务的基础 URL。'),
-        ('ua_filter_mode', 'off', 'UA过滤模式: off, blacklist, whitelist')
+        ('ua_filter_mode', 'off', 'UA过滤模式: off, blacklist, whitelist'),
+        ('douban_cookie', '', '用于访问豆瓣API的Cookie。')
     ]
     # 使用 INSERT IGNORE 来避免因主键冲突而报错
     query = "INSERT IGNORE INTO config (config_key, config_value, description) VALUES (%s, %s, %s)"

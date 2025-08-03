@@ -236,7 +236,7 @@
                                     <label for="edit-anime-doubanid">豆瓣ID</label>
                                     <div class="input-with-icon">
                                         <input type="text" id="edit-anime-doubanid" placeholder="例如: 35297708">
-                                        <button type="button" class="icon-btn" title="查找">🔍</button>
+                                        <button type="button" id="search-doubanid-btn" class="icon-btn" title="查找">🔍</button>
                                     </div>
                                 </div>
                                 <div class="form-row">
@@ -298,6 +298,17 @@
                         <ul id="bangumi-search-results-list" class="results-list-style">
                             <!-- Search results will be populated here -->
                         </ul>
+                    </div>
+                    <div id="douban-search-view" class="content-view hidden">
+                        <div class="view-header-flexible">
+                            <h2 id="douban-search-view-title">搜索 豆瓣 ID</h2>
+                            <button id="back-to-edit-anime-from-douban-search-btn">&lt; 返回编辑</button>
+                        </div>
+                        <form id="douban-search-form" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                            <input type="text" id="douban-search-keyword" placeholder="输入影视名称..." required style="flex-grow: 1;">
+                            <button type="submit">搜索</button>
+                        </form>
+                        <ul id="douban-search-results-list" class="results-list-style"></ul>
                     </div>
                     <div id="tmdb-search-view" class="content-view hidden">
                         <div class="view-header-flexible">
@@ -597,6 +608,7 @@
                             <button class="sub-nav-btn active" data-subview="account-settings-subview">账户安全</button>
                             <button class="sub-nav-btn" data-subview="bangumi-settings-subview">Bangumi配置</button>
                             <button class="sub-nav-btn" data-subview="tmdb-settings-subview">TMDB配置</button>
+                            <button class="sub-nav-btn" data-subview="douban-settings-subview">豆瓣配置</button>
                         </div>
 
                         <div id="account-settings-subview" class="settings-subview">
@@ -668,6 +680,23 @@
                                     </div>
                                 </form>
                                 <p id="tmdb-save-message" class="message"></p>
+                            </div>
+                        </div>
+
+                        <div id="douban-settings-subview" class="settings-subview hidden">
+                            <div class="form-card">
+                                <h3>豆瓣 Cookie 配置</h3>
+                                <p>为了确保豆瓣搜索的稳定性，建议在此处配置您的豆瓣账户Cookie。请从浏览器开发者工具中获取。</p>
+                                <form id="douban-settings-form">
+                                    <div class="form-row">
+                                        <label for="douban-cookie">Cookie</label>
+                                        <textarea id="douban-cookie" rows="4" placeholder="在此输入您的豆瓣Cookie字符串"></textarea>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit">保存</button>
+                                    </div>
+                                </form>
+                                <p id="douban-save-message" class="message"></p>
                             </div>
                         </div>
                     </div>

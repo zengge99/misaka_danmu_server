@@ -49,6 +49,11 @@ class YamlConfigSettingsSource(PydanticBaseSettingsSource):
             return yaml.safe_load(f) or {}
 
 
+# (新增) 豆瓣配置
+class DoubanConfig(BaseModel):
+    cookie: Optional[str] = None
+
+
 # 3. 定义主设置类，它将聚合所有配置
 class Settings(BaseSettings):
     server: ServerConfig = ServerConfig()
@@ -56,6 +61,7 @@ class Settings(BaseSettings):
     jwt: JWTConfig = JWTConfig()
     admin: AdminConfig = AdminConfig()
     bangumi: BangumiConfig = BangumiConfig()
+    douban: DoubanConfig = DoubanConfig()
     class Config:
         # 为环境变量设置前缀，避免与系统变量冲突
         # 例如，在容器中设置环境变量 DANMUAPI_SERVER__PORT=8080
