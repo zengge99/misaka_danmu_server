@@ -157,7 +157,8 @@ function parseTitleForSeason(title) {
         /第\s*([一二三四五六七八九十\d]+)\s*(?:部分|篇|章|幕)/,
         // 新增：匹配Unicode罗马数字 (e.g., Ⅲ)
         /\s+([Ⅰ-Ⅻ])\b/i,
-        /\s+([IVXLCDM]+)$/i // Roman numerals at the end of the string
+        /\s+([IVXLCDM]+)$/i, // Roman numerals at the end of the string
+        /\s(\d{1,2})$/ // 匹配末尾的独立数字作为季度, e.g., "Title 2"
     ];
 
     const chineseNumMap = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
@@ -186,6 +187,17 @@ function parseTitleForSeason(title) {
     return 1; // Default to season 1
 }
 
+function getBaseTitle(title) {
+    if (!title) return '';
+    // 尝试移除常见的季度/部分标识符以获取基础标题用于排序
+    // 例如: "Title Season 2", "Title S02", "Title 第二季", "Title II"
+    let baseTitle = title.replace(/\s*Season\s*\d+/i, '')
+                         .replace(/\s*S\d+$/i, '')
+                         .replace(/\s*第\s*[一二三四五六七八九十\d]+\s*[季部篇章幕]$/, '')
+                         .replace(/\s+[IVXLCDMⅠ-Ⅻ]+$/, '');
+    return baseTitle.trim();
+}
+
 function romanToInt(s) {
     const map = { 'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000 };
     let result = 0;
@@ -203,6 +215,18 @@ function romanToInt(s) {
 
 function displayResults(results) {
     originalSearchResults = results;
+
+    // 智能排序：首先按基础标题分组，然后在组内按季度升序排列
+    originalSearchResults.sort((a, b) => {
+        const baseTitleA = getBaseTitle(a.title);
+        const baseTitleB = getBaseTitle(b.title);
+
+        if (baseTitleA.localeCompare(baseTitleB) !== 0) {
+            return baseTitleA.localeCompare(baseTitleB);
+        }
+        return a.season - b.season;
+    });
+
     const resultsFilterControls = document.getElementById('results-filter-controls');
     resultsFilterControls.classList.toggle('hidden', results.length === 0);
 
