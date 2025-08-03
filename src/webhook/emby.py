@@ -26,8 +26,8 @@ class EmbyWebhook(BaseWebhook):
     async def handle(self, payload: Dict[str, Any]):
         event_type = payload.get("Event")
         # 我们只关心新媒体入库的事件, 兼容 emby 的 'library.new' 和 jellyfin 的 'item.add'
-        if event_type not in ["item.add", "library.new"]:
-            logger.info(f"Webhook: 忽略非 'item.add' 或 'library.new' 的事件 (类型: {event_type})")
+        if event_type not in ["library.new"]:
+            logger.info(f"Webhook: 忽略非 'library.new' 的事件 (类型: {event_type})")
             return
 
         item = payload.get("Item", {})
@@ -45,12 +45,14 @@ class EmbyWebhook(BaseWebhook):
         tmdb_id = provider_ids.get("Tmdb")
         imdb_id = provider_ids.get("Imdb")
         tvdb_id = provider_ids.get("Tvdb")
+        douban_id = provider_ids.get("DoubanID")
         
         # 根据媒体类型分别处理
         if item_type == "Episode":
             series_title = item.get("SeriesName")
-            season_number = item.get("SeasonNumber")
-            episode_number = item.get("EpisodeNumber")
+            # 修正：使用正确的键名来获取季度和集数
+            season_number = item.get("ParentIndexNumber")
+            episode_number = item.get("IndexNumber")
             
             if not all([series_title, season_number is not None, episode_number is not None]):
                 logger.warning(f"Webhook: 忽略一个剧集，因为缺少系列标题、季度或集数信息。")
@@ -79,8 +81,11 @@ class EmbyWebhook(BaseWebhook):
             anime_title = movie_title
 
         # --- 优先使用直连ID进行导入 ---
-        for emby_key, internal_provider in PROVIDER_ID_MAP.items():
-            if media_id := provider_ids.get(emby_key):
+        # 修正：将传入的 provider_ids 的键统一转为小写，以实现大小写不敏感的匹配
+        normalized_provider_ids = {k.lower(): v for k, v in provider_ids.items()}
+
+        for emby_key_lower, internal_provider in PROVIDER_ID_MAP.items():
+            if media_id := normalized_provider_ids.get(emby_key_lower):
                 logger.info(f"Webhook: 发现直连ID ({internal_provider}): {media_id}，将直接导入。")
                 
                 scraper_manager = ScraperManager(self.pool)
@@ -99,7 +104,7 @@ class EmbyWebhook(BaseWebhook):
                 task_coro = lambda callback: generic_import_task(
                     provider=internal_provider, media_id=media_id, anime_title=anime_title, media_type=media_type,
                     season=season_number, current_episode_index=episode_number, image_url=None,
-                    douban_id=None, tmdb_id=str(tmdb_id) if tmdb_id else None, 
+                    douban_id=str(douban_id) if douban_id else None, tmdb_id=str(tmdb_id) if tmdb_id else None, 
                     imdb_id=str(imdb_id) if imdb_id else None, tvdb_id=str(tvdb_id) if tvdb_id else None,
                     progress_callback=callback, pool=self.pool, manager=scraper_manager
                 )
@@ -117,7 +122,7 @@ class EmbyWebhook(BaseWebhook):
         task_coro = lambda callback: generic_import_task(
             provider=None, media_id=search_keyword, anime_title=anime_title, media_type=media_type,
             season=season_number, current_episode_index=episode_number, image_url=None,
-            douban_id=None, tmdb_id=str(tmdb_id) if tmdb_id else None, 
+            douban_id=str(douban_id) if douban_id else None, tmdb_id=str(tm_id) if tmdb_id else None, 
             imdb_id=str(imdb_id) if imdb_id else None, tvdb_id=str(tvdb_id) if tvdb_id else None,
             progress_callback=callback, pool=self.pool, manager=scraper_manager, is_webhook=True
         )
