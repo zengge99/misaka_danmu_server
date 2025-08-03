@@ -2,7 +2,7 @@ import importlib
 import inspect
 import logging
 from pathlib import Path
-from typing import Dict, Type
+from typing import Dict, Type, List
 
 import aiomysql
 
