@@ -148,6 +148,13 @@ class BuvidResponse(BaseModel):
 class BilibiliScraper(BaseScraper):
     provider_name = "bilibili"
 
+    # Regex to filter out non-main content like specials, trailers, etc.
+    # Based on user-provided rules.
+    _JUNK_TITLE_PATTERN = re.compile(
+        r'(\[|\【|\b)(NC)?(OP|ED|SP|OVA|OAD|CM|PV|MV|BDMenu|Menu|Bonus|Recap|Teaser|Trailer|Preview|特典|预告|广告|菜单|花絮|特辑|速看|资讯|彩蛋|直拍|直播回顾|片头|片尾|映像|CD|Disc|Scan|Sample|Logo|Info|EDPV|SongSpot|BDSpot)(\d{1,2})?(\s|_ALL)?(\]|\】|\b)',
+        re.IGNORECASE
+    )
+
     # For WBI signing
     _WBI_MIXIN_KEY_CACHE: Dict[str, Any] = {
         "key": None,
@@ -368,6 +375,11 @@ class BilibiliScraper(BaseScraper):
             if api_result.code == 0 and api_result.data and api_result.data.result:
                 self.logger.info(f"Bilibili: API call for type '{search_type}' successful, found {len(api_result.data.result)} items.")
                 for item in api_result.data.result:
+                    # Filter out junk results based on title
+                    if self._JUNK_TITLE_PATTERN.search(item.title):
+                        self.logger.debug(f"Bilibili: Filtering out junk title: '{item.title}'")
+                        continue
+
                     media_id = ""
                     media_type = "tv_series"
                     
