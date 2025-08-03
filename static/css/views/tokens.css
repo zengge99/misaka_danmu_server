@@ -43,8 +43,7 @@
 
 #token-table th:nth-child(2),
 #token-table td:nth-child(2) {
-    width: 30%; /* Token - 增加宽度以容纳长字符串 */
-    word-break: break-all;
+    width: 23%; /* Token - 增加宽度以容纳长字符串 */
 }
 
 #token-table th:nth-child(3),
