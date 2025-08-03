@@ -121,14 +121,11 @@ function handleAnimeTypeChange() {
     const seasonInput = document.getElementById('edit-anime-season');
     seasonInput.disabled = isMovie;
     if (isMovie) seasonInput.value = 1;
-    // The indicator is the next sibling of the input
-    seasonInput.nextElementSibling.classList.toggle('hidden', !isMovie);
 
     // --- Episode Count ---
     const episodeCountInput = document.getElementById('edit-anime-episode-count');
     episodeCountInput.disabled = isMovie;
     if (isMovie) episodeCountInput.value = 1;
-    episodeCountInput.nextElementSibling.classList.toggle('hidden', !isMovie);
 
     // --- Episode Group ID ---
     const egidInput = document.getElementById('edit-anime-egid');
@@ -136,8 +133,6 @@ function handleAnimeTypeChange() {
     egidInput.disabled = isMovie;
     egidWrapper.classList.toggle('disabled', isMovie);
     if (isMovie) egidInput.value = '';
-    // The indicator is the next sibling of the wrapper div
-    egidWrapper.nextElementSibling.classList.toggle('hidden', !isMovie);
 
     updateEgidSelectButtonState();
 }

@@ -85,12 +85,6 @@
     color: var(--primary-color);
 }
 
-.disabled-indicator {
-    color: var(--error-color);
-    font-size: 1.2em;
-    margin-left: 5px;
-}
-
 /* Styles for the TMDB Episode Group list to prevent layout issues with long descriptions */
 .egid-group-list li {
     /* Align items to the top when description wraps */

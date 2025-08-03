@@ -43,12 +43,14 @@
 
 #token-table th:nth-child(2),
 #token-table td:nth-child(2) {
-    width: 20%;
+    width: 12%; /* 名称 (Name) - 宽度缩小以防止挤压 */
 }
 
 #token-table th:nth-child(3),
 #token-table td:nth-child(3) {
     width: 25%;
+    /* 新增：强制长字符串（如Token）换行，防止表格溢出 */
+    word-break: break-all;
 }
 
 #token-table th:nth-child(4),
@@ -59,7 +61,7 @@
 
 #token-table th:nth-child(5), #token-table td:nth-child(5),
 #token-table th:nth-child(6), #token-table td:nth-child(6) {
-    width: 15%;
+    width: 15%; /* 创建时间 & 有效期 (Created & Expires) */
 }
 
 .ua-filter-section {
