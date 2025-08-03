@@ -386,5 +386,5 @@ class YoukuScraper(BaseScraper):
 
             timestamp = c.playat / 1000.0
             p_string = f"{timestamp:.2f},{mode},{color},[{self.provider_name}]"
-            formatted.append({"cid": str(c.id), "p": p_string, "m": c.content, "t": timestamp})
+            formatted.append({"cid": str(c.id), "p": p_string, "m": c.content, "t": round(timestamp, 2)})
         return formatted

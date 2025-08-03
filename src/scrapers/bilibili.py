@@ -543,6 +543,6 @@ class BilibiliScraper(BaseScraper):
                 "cid": str(c.id),
                 "p": p_string,
                 "m": c.content,
-                "t": timestamp
+                "t": round(timestamp, 2)
             })
         return formatted
