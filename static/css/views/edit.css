@@ -90,3 +90,30 @@
     font-size: 1.2em;
     margin-left: 5px;
 }
+
+/* Styles for the TMDB Episode Group list to prevent layout issues with long descriptions */
+.egid-group-list li {
+    /* Align items to the top when description wraps */
+    align-items: flex-start;
+}
+
+.egid-group-list .info {
+    /* Allow the info block to shrink and not push the buttons */
+    min-width: 0;
+}
+
+.egid-group-list .meta {
+    /* Allow the description to wrap */
+    white-space: normal;
+    /* To prevent very long words from breaking the layout */
+    word-break: break-word; 
+    /* Remove ellipsis since it's now multi-line */
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.egid-group-list .actions {
+    /* Ensure buttons don't shrink */
+    flex-shrink: 0;
+    margin-left: 15px; /* Add some space */
+}

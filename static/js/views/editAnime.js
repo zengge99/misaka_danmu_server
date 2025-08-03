@@ -404,7 +404,7 @@ async function loadAndRenderEpisodeGroups(tmdbId) {
             return;
         }
         const ul = document.createElement('ul');
-        ul.className = 'results-list-style';
+        ul.className = 'results-list-style egid-group-list';
         groups.forEach(group => {
             const li = document.createElement('li');
             li.innerHTML = `
