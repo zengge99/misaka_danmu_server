@@ -239,7 +239,10 @@
                                 </div>
                                 <div class="form-row">
                                     <label for="edit-anime-imdbid">IMDB ID</label>
-                                    <input type="text" id="edit-anime-imdbid" placeholder="例如: tt9140554">
+                                    <div class="input-with-icon">
+                                        <input type="text" id="edit-anime-imdbid" placeholder="例如: tt9140554">
+                                        <button type="button" id="search-imdbid-btn" class="icon-btn" title="查找">🔍</button>
+                                    </div>
                                 </div>
                                 <div class="form-row">
                                     <label for="edit-anime-name-en">英文名</label>
@@ -319,6 +322,17 @@
                         </form>
                         <ul id="tmdb-search-results-list" class="results-list-style">
                         </ul>
+                    </div>
+                    <div id="imdb-search-view" class="content-view hidden">
+                        <div class="view-header-flexible">
+                            <h2 id="imdb-search-view-title">搜索 IMDb ID</h2>
+                            <button id="back-to-edit-anime-from-imdb-search-btn">&lt; 返回编辑</button>
+                        </div>
+                        <form id="imdb-search-form" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                            <input type="text" id="imdb-search-keyword" placeholder="输入影视名称..." required style="flex-grow: 1;">
+                            <button type="submit">搜索</button>
+                        </form>
+                        <ul id="imdb-search-results-list" class="results-list-style"></ul>
                     </div>
                     <div id="egid-view" class="content-view hidden">
                         <div class="view-header-flexible">

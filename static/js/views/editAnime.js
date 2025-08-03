@@ -6,8 +6,8 @@ let _currentSearchSelectionData = null;
 
 // --- DOM Elements ---
 let editAnimeView, editAnimeForm, editAnimeTypeSelect, selectEgidBtn, editAnimeTmdbIdInput;
-let bangumiSearchView, tmdbSearchView, doubanSearchView, egidView, reassociateView;
-let backToEditAnimeFromBgmSearchBtn, backToEditAnimeFromTmdbSearchBtn, backToEditAnimeFromDoubanSearchBtn, backToEditFromEgidBtn, backToEditFromReassociateBtn;
+let bangumiSearchView, tmdbSearchView, doubanSearchView, imdbSearchView, egidView, reassociateView;
+let backToEditAnimeFromBgmSearchBtn, backToEditAnimeFromTmdbSearchBtn, backToEditAnimeFromDoubanSearchBtn, backToEditAnimeFromImdbSearchBtn, backToEditFromEgidBtn, backToEditFromReassociateBtn;
 let editEpisodeView, editEpisodeForm;
 
 function initializeElements() {
@@ -20,16 +20,19 @@ function initializeElements() {
     bangumiSearchView = document.getElementById('bangumi-search-view');
     tmdbSearchView = document.getElementById('tmdb-search-view');
     doubanSearchView = document.getElementById('douban-search-view');
+    imdbSearchView = document.getElementById('imdb-search-view');
     egidView = document.getElementById('egid-view');
     // 为元数据搜索列表添加特定类，以便应用特定样式
     document.getElementById('bangumi-search-results-list').classList.add('metadata-search-list');
     document.getElementById('douban-search-results-list').classList.add('metadata-search-list');
     document.getElementById('tmdb-search-results-list').classList.add('metadata-search-list');
+    document.getElementById('imdb-search-results-list').classList.add('metadata-search-list');
     reassociateView = document.getElementById('reassociate-view');
 
     backToEditAnimeFromBgmSearchBtn = document.getElementById('back-to-edit-anime-from-bgm-search-btn');
     backToEditAnimeFromTmdbSearchBtn = document.getElementById('back-to-edit-anime-from-tmdb-search-btn');
     backToEditAnimeFromDoubanSearchBtn = document.getElementById('back-to-edit-anime-from-douban-search-btn');
+    backToEditAnimeFromImdbSearchBtn = document.getElementById('back-to-edit-anime-from-imdb-search-btn');
     backToEditFromEgidBtn = document.getElementById('back-to-edit-from-egid-btn');
     backToEditFromReassociateBtn = document.getElementById('back-to-edit-from-reassociate-btn');
 
@@ -190,7 +193,14 @@ function applySearchSelectionData() {
         }
         updateFieldWithApplyLogic('edit-anime-name-romaji', data.name_romaji);
         _applyAliases(data.aliases_cn, mainTitle);
-    } else { // Douban result (distinguished by not having 'details' or 'tvdb_id')
+    } else if (data.id && String(data.id).startsWith('tt')) { // IMDb result
+        const mainTitle = data.name_en;
+        document.getElementById('edit-anime-imdbid').value = data.id || '';
+        if (containsJapanese(data.name_jp)) {
+            updateFieldWithApplyLogic('edit-anime-name-jp', data.name_jp);
+        }
+        _applyAliases(data.aliases_cn, mainTitle);
+    } else { // Douban result (fallback)
         // 对于豆瓣，其API返回的别名列表通常已包含主标题，我们将其作为主标题进行过滤
         const mainTitle = (data.aliases_cn && data.aliases_cn.length > 0) ? data.aliases_cn[0] : '';
         document.getElementById('edit-anime-doubanid').value = data.id || '';
@@ -427,6 +437,67 @@ function renderDoubanSearchResults(results) {
     });
 }
 
+function handleSearchImdbId() {
+    const title = document.getElementById('edit-anime-title').value;
+    const animeId = document.getElementById('edit-anime-id').value;
+    imdbSearchView.dataset.returnToAnimeId = animeId;
+    switchView('imdb-search-view');
+    document.getElementById('imdb-search-keyword').value = title;
+    document.getElementById('imdb-search-view-title').textContent = `为 "${title}" 搜索 IMDb ID`;
+    document.getElementById('imdb-search-results-list').innerHTML = '';
+}
+
+async function handleImdbSearchSubmit(e) {
+    e.preventDefault();
+    const keyword = document.getElementById('imdb-search-keyword').value.trim();
+    if (!keyword) return;
+    const resultsList = document.getElementById('imdb-search-results-list');
+    resultsList.innerHTML = '<li>正在搜索...</li>';
+    const searchButton = e.target.querySelector('button[type="submit"]');
+    searchButton.disabled = true;
+    try {
+        const results = await apiFetch(`/api/imdb/search?keyword=${encodeURIComponent(keyword)}`);
+        renderImdbSearchResults(results);
+    } catch (error) {
+        resultsList.innerHTML = `<li class="error">搜索失败: ${error.message}</li>`;
+    } finally {
+        searchButton.disabled = false;
+    }
+}
+
+function renderImdbSearchResults(results) {
+    const resultsList = document.getElementById('imdb-search-results-list');
+    resultsList.innerHTML = '';
+    if (results.length === 0) {
+        resultsList.innerHTML = '<li>未找到匹配项。</li>';
+        return;
+    }
+    results.forEach(result => {
+        const li = document.createElement('li');
+        // Re-use the same structure as Douban/Bangumi
+        li.innerHTML = `
+            <div class="result-item-left">
+                <img class="poster" src="${result.image_url || '/static/placeholder.png'}" referrerpolicy="no-referrer" alt="${result.title}">
+                <div class="info">
+                    <div class="title-container">
+                        <span class="id-tag">ID: ${result.id}</span>
+                        <p class="title">${result.title}</p>
+                    </div>
+                    <p class="meta" title="${result.details || ''}">${result.details}</p>
+                </div>
+            </div>
+            <button class="select-btn">选择</button>
+        `;
+        li.querySelector('.select-btn').addEventListener('click', async () => {
+            const details = await apiFetch(`/api/imdb/details/${result.id}`);
+            _currentSearchSelectionData = details;
+            handleBackToEditAnime();
+            setTimeout(applySearchSelectionData, 50);
+        });
+        resultsList.appendChild(li);
+    });
+}
+
 async function handleSelectEgidBtnClick() {
     const tmdbId = editAnimeTmdbIdInput.value.trim();
     const animeTitle = document.getElementById('edit-anime-title').value.trim();
@@ -639,6 +710,7 @@ export function setupEditAnimeEventListeners() {
     document.getElementById('search-bgmid-btn').addEventListener('click', handleSearchBgmId);
     document.getElementById('search-tmdbid-btn').addEventListener('click', handleSearchTmdbId);
     document.getElementById('search-doubanid-btn').addEventListener('click', handleSearchDoubanId);
+    document.getElementById('search-imdbid-btn').addEventListener('click', handleSearchImdbId);
     document.getElementById('select-egid-btn').addEventListener('click', handleSelectEgidBtnClick);
 
     backToEditAnimeFromBgmSearchBtn.addEventListener('click', handleBackToEditAnime);
@@ -647,6 +719,8 @@ export function setupEditAnimeEventListeners() {
     document.getElementById('douban-search-form').addEventListener('submit', handleDoubanSearchSubmit);
     backToEditAnimeFromTmdbSearchBtn.addEventListener('click', handleBackToEditAnime);
     document.getElementById('tmdb-search-form').addEventListener('submit', handleTmdbSearchSubmit);
+    backToEditAnimeFromImdbSearchBtn.addEventListener('click', handleBackToEditAnime);
+    document.getElementById('imdb-search-form').addEventListener('submit', handleImdbSearchSubmit);
     backToEditFromEgidBtn.addEventListener('click', () => switchView('edit-anime-view'));
     backToEditFromReassociateBtn.addEventListener('click', () => switchView('edit-anime-view'));
     document.getElementById('reassociate-search-input').addEventListener('input', handleReassociateSearch);
