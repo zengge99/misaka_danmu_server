@@ -119,12 +119,10 @@ class TencentScraper(BaseScraper):
             response = await self.client.post(url, json=payload)
             response.raise_for_status()
             response_json = response.json()
-            # 将原始响应的日志级别提升到 INFO，并使用json格式化，方便调试
-            self.logger.info(f"Tencent: 收到 '{keyword}' 的原始搜索响应:\n{json.dumps(response_json, indent=2, ensure_ascii=False)}")
+            self.logger.debug(f"Tencent: 收到 '{keyword}' 的原始搜索响应: {response.text}")
             data = TencentSearchResult.model_validate(response_json)
 
             if data.data and data.data.normal_list:
-                self.logger.info(f"Tencent: API为 '{keyword}' 返回了 {len(data.data.normal_list.item_list)} 个原始条目，开始过滤...")
                 for item in data.data.normal_list.item_list:
                     # 新增：检查 video_info 是否存在，因为API有时会返回null
                     if not item.video_info:
@@ -172,8 +170,6 @@ class TencentScraper(BaseScraper):
                             currentEpisodeIndex=current_episode
                         )
                     )
-            else:
-                self.logger.info(f"Tencent: API为 '{keyword}' 返回的响应中没有 'normalList' 数据。")
         except httpx.HTTPStatusError as e:
             self.logger.error(f"搜索请求失败: {e}")
         except (ValidationError, KeyError) as e:
