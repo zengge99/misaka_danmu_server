@@ -135,38 +135,15 @@ class TencentScraper(BaseScraper):
                         self.logger.debug(f"Tencent: 过滤掉结果 '{item.video_info.title}'，因为它缺少有效的年份信息。")
                         continue
 
-                    # 新增：更严格的内容类型和标题过滤
-                    video_info = item.video_info
-                    type_name = video_info.type_name
-                    title = video_info.title
-                    
-                    # 1. 只保留电影和电视剧
-                    if not any(valid_type in type_name for valid_type in ["电影", "电视剧"]):
-                        self.logger.debug(f"Tencent: 过滤掉结果 '{title}'，因为其类型 '{type_name}' 不是电影或电视剧。")
-                        continue
-                    # 2. 过滤掉预告、花絮等非正片内容
-                    if any(junk_word in title for junk_word in ["预告", "花絮", "特辑", "速看", "资讯", "解读"]):
-                        self.logger.debug(f"Tencent: 过滤掉结果 '{title}'，因为它包含非正片关键词。")
-                        continue
-
                     video_info = item.video_info
                     # 清理标题中的HTML高亮标签 (如 <em>)，并先进行HTML解码
-                    # 这是解决 <em&gt; 这种实体编码导致过滤失败的关键
                     unescaped_title = html.unescape(video_info.title)
                     cleaned_title = re.sub(r'<[^>]+>', '', unescaped_title)
 
-                    # 3. 相似度检查：确保搜索词与结果标题相关。
-                    #    使用更健壮的归一化方法，移除所有标点和空格，以提高匹配的兼容性。
-                    def normalize_for_match(text: str) -> str:
-                        # 移除所有非字母、非数字的字符（包括标点和空格），并转为小写
-                        return re.sub(r"[\s\W_]+", "", text.lower(), flags=re.UNICODE)
-
-                    normalized_keyword = normalize_for_match(keyword)
-                    normalized_title = normalize_for_match(cleaned_title)
-
-                    # 核心过滤逻辑：如果归一化后的标题不包含归一化后的关键词，则跳过
-                    if normalized_keyword not in normalized_title:
-                        self.logger.debug(f"Tencent: 过滤掉结果 '{cleaned_title}' (归一化后: '{normalized_title}')，因为它与搜索词 '{keyword}' (归一化后: '{normalized_keyword}') 不直接相关。")
+                    # 相似度检查：确保搜索词与结果标题相关。
+                    # 这是对 C# 中 .Distance() 方法的简化实现，只进行简单的包含检查。
+                    if keyword.lower() not in cleaned_title.lower():
+                        self.logger.debug(f"Tencent: 过滤掉结果 '{cleaned_title}'，因为它与搜索词 '{keyword}' 不直接相关。")
                         continue
 
                     # 将腾讯的类型映射到我们内部的类型
