@@ -95,21 +95,15 @@ async function refreshServerLogs() {
 
 async function handleSearch(e) {
     e.preventDefault();
-    let keyword = document.getElementById('search-keyword').value.trim();
+    const keyword = document.getElementById('search-keyword').value.trim();
     if (!keyword) {
         alert('请输入搜索关键词。');
         return;
     }
 
-    const enableEpisodeSearch = document.getElementById('enable-episode-search').checked;
-    const season = document.getElementById('search-season').value;
-    const episode = document.getElementById('search-episode').value;
-
-    // 如果启用了精确搜索，并且填写了季和集，则拼接字符串
-    // 同时检查原始关键词中是否已包含 SXXEXX 格式，避免重复拼接
-    if (enableEpisodeSearch && season && episode && !/S\d+E\d+/i.test(keyword)) {
-        keyword = `${keyword} S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
-    }
+    // 修正：移除了根据复选框状态自动拼接搜索关键词的逻辑。
+    // 现在，搜索将严格按照搜索框中的文本执行。
+    // “电视节目精确搜索”复选框和输入框现在仅作为“插入”按钮的辅助工具，让用户可以显式地构建搜索字符串。
 
     document.getElementById('results-list').innerHTML = '';
     toggleLoader(true);
