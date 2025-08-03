@@ -20,14 +20,40 @@ function setupEventListeners() {
     document.getElementById('filter-btn-movie').addEventListener('click', handleTypeFilterClick);
     document.getElementById('filter-btn-tv_series').addEventListener('click', handleTypeFilterClick);
     document.getElementById('results-filter-input').addEventListener('input', applyFiltersAndRender);
+
+    // --- 电视节目精确搜索逻辑重构 ---
+    const searchSeasonInput = document.getElementById('search-season');
+    const searchEpisodeInput = document.getElementById('search-episode');
+
     document.getElementById('enable-episode-search').addEventListener('change', (e) => {
         document.getElementById('episode-search-inputs').classList.toggle('hidden', !e.target.checked);
     });
+
+    // 当季度输入框变化时，控制集数输入框的可用状态
+    searchSeasonInput.addEventListener('input', () => {
+        const seasonIsEmpty = !searchSeasonInput.value;
+        searchEpisodeInput.disabled = seasonIsEmpty;
+        if (seasonIsEmpty) {
+            searchEpisodeInput.value = ''; // 如果季度被清空，也清空集数
+        }
+    });
+    // 初始化时根据季度输入框的状态设置集数输入框
+    searchEpisodeInput.disabled = !searchSeasonInput.value;
+
+    // “插入”按钮的新逻辑
     document.getElementById('insert-episode-btn').addEventListener('click', () => {
-        const season = document.getElementById('search-season').value;
-        const episode = document.getElementById('search-episode').value;
-        if (!season || !episode) return;
-        const formatted = ` S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
+        const season = searchSeasonInput.value;
+        const episode = searchEpisodeInput.value;
+        
+        if (!season) {
+            alert('请输入季度后再插入。');
+            return;
+        }
+
+        let formatted = ` S${String(season).padStart(2, '0')}`;
+        if (episode) {
+            formatted += `E${String(episode).padStart(2, '0')}`;
+        }
         insertAtCursor(document.getElementById('search-keyword'), formatted);
     });
     document.querySelectorAll('input[name="bulk-import-mode"]').forEach(radio => {

@@ -27,14 +27,32 @@ router = APIRouter()
 auth_router = APIRouter()
 logger = logging.getLogger(__name__)
 
-def parse_search_keyword(keyword: str) -> dict:
+def _roman_to_int(s: str) -> int:
+    """将罗马数字字符串转换为整数。"""
+    roman_map = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
+    s = s.upper()
+    result = 0
+    i = 0
+    while i < len(s):
+        # 处理减法规则 (e.g., IV, IX)
+        if i + 1 < len(s) and roman_map[s[i]] < roman_map[s[i+1]]:
+            result += roman_map[s[i+1]] - roman_map[s[i]]
+            i += 2
+        else:
+            result += roman_map[s[i]]
+            i += 1
+    return result
+
+def parse_search_keyword(keyword: str) -> Dict[str, Any]:
     """
     解析搜索关键词，提取标题、季数和集数。
-    例如: "吞噬星空 S01E172" -> {'title': '吞噬星空', 'season': 1, 'episode': 172}
+    支持 "Title S01E01", "Title S01", "Title 2", "Title 第二季", "Title Ⅲ" 等格式。
     """
-    # Pattern for "Title S01E172"
-    pattern = re.compile(r"^(?P<title>.+?)\s*S(?P<season>\d{1,2})E(?P<episode>\d{1,4})$", re.IGNORECASE)
-    match = pattern.match(keyword.strip())
+    keyword = keyword.strip()
+
+    # 1. 优先匹配 SXXEXX 格式
+    s_e_pattern = re.compile(r"^(?P<title>.+?)\s*S(?P<season>\d{1,2})E(?P<episode>\d{1,4})$", re.IGNORECASE)
+    match = s_e_pattern.match(keyword)
     if match:
         data = match.groupdict()
         return {
@@ -42,6 +60,30 @@ def parse_search_keyword(keyword: str) -> dict:
             "season": int(data["season"]),
             "episode": int(data["episode"]),
         }
+
+    # 2. 匹配季度信息
+    season_patterns = [
+        (re.compile(r"^(.*?)\s*(?:S|Season)\s*(\d{1,2})$", re.I), lambda m: int(m.group(2))),
+        (re.compile(r"^(.*?)\s*第\s*([一二三四五六七八九十\d]+)\s*[季部]$", re.I), 
+         lambda m: {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}.get(m.group(2)) or int(m.group(2))),
+        (re.compile(r"^(.*?)\s*([Ⅰ-Ⅻ])$"), 
+         lambda m: {'Ⅰ': 1, 'Ⅱ': 2, 'Ⅲ': 3, 'Ⅳ': 4, 'Ⅴ': 5, 'Ⅵ': 6, 'Ⅶ': 7, 'Ⅷ': 8, 'Ⅸ': 9, 'Ⅹ': 10, 'Ⅺ': 11, 'Ⅻ': 12}.get(m.group(2).upper())),
+        (re.compile(r"^(.*?)\s+([IVXLCDM]+)$", re.I), lambda m: _roman_to_int(m.group(2))),
+        (re.compile(r"^(.*?)\s+(\d{1,2})$"), lambda m: int(m.group(2))),
+    ]
+
+    for pattern, handler in season_patterns:
+        match = pattern.match(keyword)
+        if match:
+            try:
+                title = match.group(1).strip()
+                season = handler(match)
+                if season and not (len(title) > 4 and title[-4:].isdigit()): # 避免将年份误认为季度
+                    return {"title": title, "season": season, "episode": None}
+            except (ValueError, KeyError, IndexError):
+                continue
+
+    # 3. 如果没有匹配到特定格式，则返回原始标题
     return {"title": keyword, "season": None, "episode": None}
 
 async def get_scraper_manager(request: Request) -> ScraperManager:
@@ -82,6 +124,30 @@ async def update_tmdb_mappings(
             group_details=group_details
         )
 
+def _get_season_from_title(title: str) -> int:
+    """从标题中解析季度信息，返回季度数。"""
+    if not title:
+        return 1
+    
+    # 模式的顺序很重要
+    patterns = [
+        (re.compile(r"(?:S|Season)\s*(\d+)", re.I), lambda m: int(m.group(1))),
+        (re.compile(r"第\s*([一二三四五六七八九十\d]+)\s*[季部]", re.I), 
+         lambda m: {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}.get(m.group(1)) or int(m.group(1))),
+        (re.compile(r"\s+([Ⅰ-Ⅻ])\b", re.I), 
+         lambda m: {'Ⅰ': 1, 'Ⅱ': 2, 'Ⅲ': 3, 'Ⅳ': 4, 'Ⅴ': 5, 'Ⅵ': 6, 'Ⅶ': 7, 'Ⅷ': 8, 'Ⅸ': 9, 'Ⅹ': 10, 'Ⅺ': 11, 'Ⅻ': 12}.get(m.group(1).upper())),
+        (re.compile(r"\s+([IVXLCDM]+)$", re.I), lambda m: _roman_to_int(m.group(1))),
+    ]
+
+    for pattern, handler in patterns:
+        match = pattern.search(title)
+        if match:
+            try:
+                if season := handler(match): return season
+            except (ValueError, KeyError, IndexError):
+                continue
+    return 1 # Default to season 1
+
 @router.get(
     "/search/anime",
     response_model=models.AnimeSearchResponse,
@@ -117,12 +183,15 @@ async def search_anime_provider(
     """
     parsed_keyword = parse_search_keyword(keyword)
     search_title = parsed_keyword["title"]
-    episode_info = {
-        "season": parsed_keyword["season"],
-        "episode": parsed_keyword["episode"]
-    } if parsed_keyword["episode"] is not None else None
+    season_to_filter = parsed_keyword["season"]
+    episode_to_filter = parsed_keyword["episode"]
 
-    logger.info(f"用户 '{current_user.username}' 正在搜索: '{keyword}'")
+    episode_info = {
+        "season": season_to_filter,
+        "episode": episode_to_filter
+    } if episode_to_filter is not None else None
+
+    logger.info(f"用户 '{current_user.username}' 正在搜索: '{keyword}' (解析为: title='{search_title}', season={season_to_filter}, episode={episode_to_filter})")
     if not manager.has_enabled_scrapers:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -187,6 +256,18 @@ async def search_anime_provider(
         
         logger.info(f"TMDB别名过滤: 从 {len(results)} 个结果中保留了 {len(filtered_results)} 个。")
         results = filtered_results
+
+    # 如果用户在搜索词中明确指定了季度，则对结果进行过滤
+    if season_to_filter:
+        original_count = len(results)
+        filtered_by_season = []
+        for item in results:
+            # 我们需要从返回的标题中解析季度，因为 ProviderSearchInfo 模型中没有 season 字段
+            item_season = _get_season_from_title(item.title)
+            if item_season == season_to_filter:
+                filtered_by_season.append(item)
+        logger.info(f"根据指定的季度 ({season_to_filter}) 进行过滤，从 {original_count} 个结果中保留了 {len(filtered_by_season)} 个。")
+        results = filtered_by_season
 
     # 修正：在返回结果前，确保 currentEpisodeIndex 与本次请求的 episode_info 一致。
     # 这可以防止因缓存或其他原因导致的状态泄露。
