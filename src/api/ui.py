@@ -15,6 +15,7 @@ from .. import crud, models, security
 from ..log_manager import get_logs
 from ..task_manager import TaskManager, TaskSuccess
 from ..scraper_manager import ScraperManager
+from ..webhook_manager import WebhookManager
 from ..scheduler import SchedulerManager
 from thefuzz import fuzz
 from .tmdb_api import get_tmdb_client
@@ -54,6 +55,10 @@ async def get_task_manager(request: Request) -> TaskManager:
 async def get_scheduler_manager(request: Request) -> SchedulerManager:
     """依赖项：从应用状态获取 Scheduler 管理器"""
     return request.app.state.scheduler_manager
+
+async def get_webhook_manager(request: Request) -> WebhookManager:
+    """依赖项：从应用状态获取 Webhook 管理器"""
+    return request.app.state.webhook_manager
 
 async def update_tmdb_mappings(
     pool: aiomysql.Pool,
