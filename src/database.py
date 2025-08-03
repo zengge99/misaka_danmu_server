@@ -147,7 +147,8 @@ async def _init_default_config(cursor: aiomysql.Cursor):
         ('tmdb_image_base_url', 'https://image.tmdb.org', 'TMDB 图片服务的基础 URL。'),
         ('ua_filter_mode', 'off', 'UA过滤模式: off, blacklist, whitelist'),
         ('douban_cookie', '', '用于访问豆瓣API的Cookie。'),
-        ('webhook_api_key', '', '用于Webhook调用的安全密钥。')
+        ('webhook_api_key', '', '用于Webhook调用的安全密钥。'),
+        ('tvdb_api_key', 'D4DDDAEF21D272F5', '用于访问 TheTVDB API 的密钥。')
     ]
 
     # 1. 获取所有已存在的配置键

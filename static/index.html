@@ -228,7 +228,10 @@
                                 </div>
                                 <div class="form-row">
                                     <label for="edit-anime-tvdbid">TVDB ID</label>
-                                    <input type="text" id="edit-anime-tvdbid" placeholder="例如: 364093">
+                                    <div class="input-with-icon">
+                                        <input type="text" id="edit-anime-tvdbid" placeholder="例如: 364093">
+                                        <button type="button" id="search-tvdbid-btn" class="icon-btn" title="查找">🔍</button>
+                                    </div>
                                 </div>
                                 <div class="form-row">
                                     <label for="edit-anime-doubanid">豆瓣ID</label>
@@ -322,6 +325,17 @@
                         </form>
                         <ul id="tmdb-search-results-list" class="results-list-style">
                         </ul>
+                    </div>
+                    <div id="tvdb-search-view" class="content-view hidden">
+                        <div class="view-header-flexible">
+                            <h2 id="tvdb-search-view-title">搜索 TVDB ID</h2>
+                            <button id="back-to-edit-anime-from-tvdb-search-btn">&lt; 返回编辑</button>
+                        </div>
+                        <form id="tvdb-search-form" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                            <input type="text" id="tvdb-search-keyword" placeholder="输入影视名称..." required style="flex-grow: 1;">
+                            <button type="submit">搜索</button>
+                        </form>
+                        <ul id="tvdb-search-results-list" class="results-list-style"></ul>
                     </div>
                     <div id="imdb-search-view" class="content-view hidden">
                         <div class="view-header-flexible">
@@ -626,6 +640,7 @@
                             <button class="sub-nav-btn" data-subview="bangumi-settings-subview">Bangumi配置</button>
                             <button class="sub-nav-btn" data-subview="tmdb-settings-subview">TMDB配置</button>
                             <button class="sub-nav-btn" data-subview="douban-settings-subview">豆瓣配置</button>
+                            <button class="sub-nav-btn" data-subview="tvdb-settings-subview">TVDB配置</button>
                         </div>
 
                         <div id="account-settings-subview" class="settings-subview">
@@ -733,6 +748,23 @@
                                     </div>
                                 </form>
                                 <p id="douban-save-message" class="message"></p>
+                            </div>
+                        </div>
+
+                        <div id="tvdb-settings-subview" class="settings-subview hidden">
+                            <div class="form-card">
+                                <h3>TVDB API 配置</h3>
+                                <p>此项目使用 TheTVDB 的 V3 API。默认已填入一个可用的公共API Key。如果失效，您可以从 <a href="https://thetvdb.com/subscribe" target="_blank">TheTVDB官网</a> 获取您自己的 Key。</p>
+                                <form id="tvdb-settings-form">
+                                    <div class="form-row">
+                                        <label for="tvdb-api-key">API Key</label>
+                                        <input type="password" id="tvdb-api-key" placeholder="在此输入您的 TVDB API Key">
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit">保存</button>
+                                    </div>
+                                </form>
+                                <p id="tvdb-save-message" class="message"></p>
                             </div>
                         </div>
                     </div>

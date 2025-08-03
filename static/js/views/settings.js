@@ -4,7 +4,7 @@ import { apiFetch } from '../api.js';
 let settingsSubNav, settingsSubViews;
 let passwordChangeMessage;
 let bangumiAuthStateUnauthenticated, bangumiAuthStateAuthenticated, bangumiUserNickname, bangumiUserId, bangumiAuthorizedAt, bangumiExpiresAt, bangumiUserAvatar, bangumiLoginBtn, bangumiLogoutBtn;
-let tmdbSettingsForm, tmdbSaveMessage, doubanSettingsForm, doubanSaveMessage;
+let tmdbSettingsForm, tmdbSaveMessage, doubanSettingsForm, doubanSaveMessage, tvdbSettingsForm, tvdbSaveMessage;
 
 function initializeElements() {
     settingsSubNav = document.querySelector('#settings-view .settings-sub-nav');
@@ -26,6 +26,9 @@ function initializeElements() {
 
     doubanSettingsForm = document.getElementById('douban-settings-form');
     doubanSaveMessage = document.getElementById('douban-save-message');
+
+    tvdbSettingsForm = document.getElementById('tvdb-settings-form');
+    tvdbSaveMessage = document.getElementById('tvdb-save-message');
 }
 
 function handleSettingsSubNav(e) {
@@ -46,6 +49,7 @@ function handleSettingsSubNav(e) {
     if (subViewId === 'webhook-settings-subview') loadWebhookSettings();
     if (subViewId === 'tmdb-settings-subview') loadTmdbSettings();
     if (subViewId === 'douban-settings-subview') loadDoubanSettings();
+    if (subViewId === 'tvdb-settings-subview') loadTvdbSettings();
 }
 
 async function handleChangePassword(e) {
@@ -197,6 +201,40 @@ async function handleSaveDoubanSettings(e) {
     }
 }
 
+async function loadTvdbSettings() {
+    tvdbSaveMessage.textContent = '';
+    try {
+        const data = await apiFetch('/api/ui/config/tvdb_api_key');
+        document.getElementById('tvdb-api-key').value = data.value || '';
+    } catch (error) {
+        tvdbSaveMessage.textContent = `加载TVDB配置失败: ${error.message}`;
+    }
+}
+
+async function handleSaveTvdbSettings(e) {
+    e.preventDefault();
+    const payload = {
+        value: document.getElementById('tvdb-api-key').value.trim(),
+    };
+    const saveBtn = e.target.querySelector('button[type="submit"]');
+    saveBtn.disabled = true;
+    tvdbSaveMessage.textContent = '保存中...';
+    tvdbSaveMessage.className = 'message';
+    try {
+        await apiFetch('/api/ui/config/tvdb_api_key', {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+        });
+        tvdbSaveMessage.textContent = 'TVDB 配置保存成功！';
+        tvdbSaveMessage.classList.add('success');
+    } catch (error) {
+        tvdbSaveMessage.textContent = `保存失败: ${error.message}`;
+        tvdbSaveMessage.classList.add('error');
+    } finally {
+        saveBtn.disabled = false;
+    }
+}
+
 async function loadWebhookSettings() {
     try {
         const [apiKeyData, availableHandlers] = await Promise.all([
@@ -254,6 +292,7 @@ export function setupSettingsEventListeners() {
     bangumiLogoutBtn.addEventListener('click', handleBangumiLogout);
     tmdbSettingsForm.addEventListener('submit', handleSaveTmdbSettings);
     doubanSettingsForm.addEventListener('submit', handleSaveDoubanSettings);
+    tvdbSettingsForm.addEventListener('submit', handleSaveTvdbSettings);
     document.getElementById('regenerate-webhook-key-btn').addEventListener('click', handleRegenerateWebhookKey);
 
     window.addEventListener('message', (event) => {
