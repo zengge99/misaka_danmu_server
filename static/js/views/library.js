@@ -82,12 +82,13 @@ async function handleLibraryAction(e) {
     const title = button.dataset.animeTitle;
 
     if (action === 'delete') {
-        if (confirm(`您确定要删除番剧 '${title}' 吗？\n此操作将删除其所有分集和弹幕，且不可恢复。`)) {
+        if (confirm(`您确定要提交删除作品 '${title}' 的任务吗？\n此操作将在后台执行，请稍后在任务管理器中查看进度。`)) {
             try {
-                await apiFetch(`/api/ui/library/anime/${animeId}`, { method: 'DELETE' });
-                loadLibrary();
+                const response = await apiFetch(`/api/ui/library/anime/${animeId}`, { method: 'DELETE' });
+                alert(response.message || "删除任务已提交。");
+                document.querySelector('.nav-link[data-view="task-manager-view"]').click();
             } catch (error) {
-                alert(`删除失败: ${(error.message || error)}`);
+                alert(`提交删除任务失败: ${(error.message || error)}`);
             }
         }
     } else if (action === 'edit') {
@@ -183,12 +184,13 @@ async function handleSourceAction(e) {
             }
             break;
         case 'delete':
-            if (confirm(`您确定要删除这个数据源吗？\n此操作将删除其所有分集和弹幕，且不可恢复。`)) {
+            if (confirm(`您确定要提交删除这个数据源的任务吗？\n此操作将在后台执行。`)) {
                 try {
-                    await apiFetch(`/api/ui/library/source/${sourceId}`, { method: 'DELETE' });
+                    const response = await apiFetch(`/api/ui/library/source/${sourceId}`, { method: 'DELETE' });
+                    alert(response.message || "删除任务已提交。");
                     showAnimeDetailView(animeId);
                 } catch (error) {
-                    alert(`删除失败: ${error.message}`);
+                    alert(`提交删除任务失败: ${error.message}`);
                 }
             }
             break;
@@ -249,7 +251,7 @@ function renderEpisodeListView(sourceId, animeTitle, episodes, animeId) {
     tableBody.addEventListener('click', handleEpisodeAction);
 }
 
-function handleEpisodeAction(e) {
+async function handleEpisodeAction(e) {
     const button = e.target.closest('.action-btn');
     if (!button) return;
 
@@ -280,10 +282,14 @@ function handleEpisodeAction(e) {
             showDanmakuListView(episodeId, episodeTitle, sourceId, animeTitle, animeId);
             break;
         case 'delete':
-            if (confirm(`您确定要删除分集 '${episodeTitle}' 吗？`)) {
-                apiFetch(`/api/ui/library/episode/${episodeId}`, { method: 'DELETE' })
-                    .then(() => showEpisodeListView(sourceId, animeTitle, animeId))
-                    .catch(error => alert(`删除失败: ${error.message}`));
+            if (confirm(`您确定要提交删除分集 '${episodeTitle}' 的任务吗？`)) {
+                try {
+                    const response = await apiFetch(`/api/ui/library/episode/${episodeId}`, { method: 'DELETE' });
+                    alert(response.message || "删除任务已提交。");
+                    showEpisodeListView(sourceId, animeTitle, animeId);
+                } catch (error) {
+                    alert(`提交删除任务失败: ${error.message}`);
+                }
             }
             break;
     }
@@ -347,16 +353,21 @@ export function setupLibraryEventListeners() {
             alert('请先选择要删除的数据源。');
             return;
         }
-        if (!confirm(`您确定要删除选中的 ${selectedCheckboxes.length} 个数据源吗？此操作不可恢复。`)) return;
+        if (!confirm(`您确定要提交删除选中的 ${selectedCheckboxes.length} 个数据源的任务吗？`)) return;
 
         const sourceIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value, 10));
         const animeId = parseInt(animeDetailView.dataset.animeId, 10);
 
-        for (const sourceId of sourceIds) {
-            await apiFetch(`/api/ui/library/source/${sourceId}`, { method: 'DELETE' }).catch(err => console.error(`删除源ID ${sourceId} 失败:`, err));
+        try {
+            const response = await apiFetch(`/api/ui/library/sources/delete-bulk`, {
+                method: 'POST',
+                body: JSON.stringify({ source_ids: sourceIds })
+            });
+            alert(response.message || "批量删除任务已提交。");
+            if (animeId) showAnimeDetailView(animeId); // Refresh the view
+        } catch (error) {
+            alert(`提交批量删除任务失败: ${error.message}`);
         }
-        alert('批量删除操作完成。');
-        if (animeId) showAnimeDetailView(animeId);
     });
     
     document.addEventListener('viewchange', (e) => {

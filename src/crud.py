@@ -764,15 +764,25 @@ async def delete_anime(pool: aiomysql.Pool, anime_id: int) -> bool:
                 source_ids = [row[0] for row in await cursor.fetchall()]
 
                 if source_ids:
-                    # 2. 删除所有源关联的分集和弹幕
-                    for source_id in source_ids:
-                        await clear_source_data(pool, source_id)
+                    # 2. 获取所有源关联的所有分集ID
+                    format_strings_sources = ','.join(['%s'] * len(source_ids))
+                    await cursor.execute(f"SELECT id FROM episode WHERE source_id IN ({format_strings_sources})", tuple(source_ids))
+                    episode_ids = [row[0] for row in await cursor.fetchall()]
 
-                    # 3. 删除所有源记录
-                    format_strings = ','.join(['%s'] * len(source_ids))
-                    await cursor.execute(f"DELETE FROM anime_sources WHERE id IN ({format_strings})", tuple(source_ids))
+                    if episode_ids:
+                        # 3. 删除所有分集关联的弹幕
+                        format_strings_episodes = ','.join(['%s'] * len(episode_ids))
+                        await cursor.execute(f"DELETE FROM comment WHERE episode_id IN ({format_strings_episodes})", tuple(episode_ids))
+                        # 4. 删除所有分集
+                        await cursor.execute(f"DELETE FROM episode WHERE id IN ({format_strings_episodes})", tuple(episode_ids))
+                    
+                    # 5. 删除所有源记录
+                    await cursor.execute(f"DELETE FROM anime_sources WHERE id IN ({format_strings_sources})", tuple(source_ids))
 
-                # 4. 删除作品本身
+                # 6. 删除元数据 (别名表有级联删除，元数据表没有，需要手动删除)
+                await cursor.execute("DELETE FROM anime_metadata WHERE anime_id = %s", (anime_id,))
+
+                # 7. 删除作品本身
                 affected_rows = await cursor.execute("DELETE FROM anime WHERE id = %s", (anime_id,))
                 await conn.commit()  # 提交事务
                 return affected_rows > 0

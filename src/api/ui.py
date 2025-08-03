@@ -257,18 +257,24 @@ async def reassociate_anime_sources(
     logger.info(f"用户 '{current_user.username}' 将作品 ID {source_anime_id} 的源关联到了 ID {request_data.target_anime_id}。")
     return
 
-@router.delete("/library/source/{source_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除指定的数据源")
+@router.delete("/library/source/{source_id}", status_code=status.HTTP_202_ACCEPTED, summary="提交删除指定数据源的任务")
 async def delete_source_from_anime(
     source_id: int,
     current_user: models.User = Depends(security.get_current_user),
-    pool: aiomysql.Pool = Depends(get_db_pool)
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    task_manager: TaskManager = Depends(get_task_manager)
 ):
-    """删除一个数据源及其所有关联的分集和弹幕。"""
-    deleted = await crud.delete_anime_source(pool, source_id)
-    if not deleted:
+    """提交一个后台任务来删除一个数据源及其所有关联的分集和弹幕。"""
+    source_info = await crud.get_anime_source_info(pool, source_id)
+    if not source_info:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
-    logger.info(f"用户 '{current_user.username}' 删除了数据源 ID: {source_id}。")
-    return
+
+    task_title = f"删除源: {source_info['title']} ({source_info['provider_name']})"
+    task_coro = lambda callback: delete_source_task(source_id, pool, callback)
+    task_id, _ = await task_manager.submit_task(task_coro, task_title)
+
+    logger.info(f"用户 '{current_user.username}' 提交了删除源 ID: {source_id} 的任务 (Task ID: {task_id})。")
+    return {"message": f"删除源 '{source_info['provider_name']}' 的任务已提交。", "task_id": task_id}
 
 @router.put("/library/source/{source_id}/favorite", status_code=status.HTTP_204_NO_CONTENT, summary="切换数据源的精确标记状态")
 async def toggle_source_favorite(
@@ -320,18 +326,24 @@ async def edit_episode_info(
     logger.info(f"用户 '{current_user.username}' 更新了分集 ID: {episode_id} 的信息。")
     return
 
-@router.delete("/library/episode/{episode_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除指定分集")
+@router.delete("/library/episode/{episode_id}", status_code=status.HTTP_202_ACCEPTED, summary="提交删除指定分集的任务")
 async def delete_episode_from_source(
     episode_id: int,
     current_user: models.User = Depends(security.get_current_user),
-    pool: aiomysql.Pool = Depends(get_db_pool)
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    task_manager: TaskManager = Depends(get_task_manager)
 ):
-    """删除一个分集及其所有关联的弹幕。"""
-    deleted = await crud.delete_episode(pool, episode_id)
-    if not deleted:
+    """提交一个后台任务来删除一个分集及其所有关联的弹幕。"""
+    episode_info = await crud.get_episode_for_refresh(pool, episode_id)
+    if not episode_info:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
-    logger.info(f"用户 '{current_user.username}' 删除了分集 ID: {episode_id}。")
-    return
+
+    task_title = f"删除分集: {episode_info['title']}"
+    task_coro = lambda callback: delete_episode_task(episode_id, pool, callback)
+    task_id, _ = await task_manager.submit_task(task_coro, task_title)
+
+    logger.info(f"用户 '{current_user.username}' 提交了删除分集 ID: {episode_id} 的任务 (Task ID: {task_id})。")
+    return {"message": f"删除分集 '{episode_info['title']}' 的任务已提交。", "task_id": task_id}
 
 @router.post("/library/episode/{episode_id}/refresh", status_code=status.HTTP_202_ACCEPTED, summary="刷新单个分集的弹幕")
 async def refresh_single_episode(
@@ -374,21 +386,46 @@ async def refresh_anime(
 
     return {"message": f"番剧 '{source_info['title']}' 的全量刷新任务已提交。", "task_id": task_id}
 
-@router.delete("/library/anime/{anime_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除媒体库中的番剧")
+@router.delete("/library/anime/{anime_id}", status_code=status.HTTP_202_ACCEPTED, summary="提交删除媒体库中番剧的任务")
 async def delete_anime_from_library(
     anime_id: int,
     current_user: models.User = Depends(security.get_current_user),
-    pool: aiomysql.Pool = Depends(get_db_pool)
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    task_manager: TaskManager = Depends(get_task_manager)
 ):
-    """删除一个番剧及其所有关联数据（分集、弹幕）。"""
-    try:
-        deleted = await crud.delete_anime(pool, anime_id)
-        if not deleted:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anime not found or already deleted")
-    except Exception as e:
-        logger.error(f"删除番剧 (ID: {anime_id}) 时发生错误: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An error occurred while deleting the anime.")
-    return
+    """提交一个后台任务来删除一个番剧及其所有关联数据。"""
+    # Get title for task name
+    anime_details = await crud.get_anime_full_details(pool, anime_id)
+    if not anime_details:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anime not found")
+    
+    task_title = f"删除作品: {anime_details['title']}"
+    task_coro = lambda callback: delete_anime_task(anime_id, pool, callback)
+    task_id, _ = await task_manager.submit_task(task_coro, task_title)
+
+    logger.info(f"用户 '{current_user.username}' 提交了删除作品 ID: {anime_id} 的任务 (Task ID: {task_id})。")
+    return {"message": f"删除作品 '{anime_details['title']}' 的任务已提交。", "task_id": task_id}
+
+class BulkDeleteRequest(models.BaseModel):
+    source_ids: List[int]
+
+@router.post("/library/sources/delete-bulk", status_code=status.HTTP_202_ACCEPTED, summary="提交批量删除数据源的任务")
+async def delete_bulk_sources(
+    request_data: BulkDeleteRequest,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    task_manager: TaskManager = Depends(get_task_manager)
+):
+    """提交一个后台任务来批量删除多个数据源。"""
+    if not request_data.source_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Source IDs list cannot be empty.")
+
+    task_title = f"批量删除 {len(request_data.source_ids)} 个数据源"
+    task_coro = lambda callback: delete_bulk_sources_task(request_data.source_ids, pool, callback)
+    task_id, _ = await task_manager.submit_task(task_coro, task_title)
+
+    logger.info(f"用户 '{current_user.username}' 提交了批量删除 {len(request_data.source_ids)} 个源的任务 (Task ID: {task_id})。")
+    return {"message": task_title + "的任务已提交。", "task_id": task_id}
 
 @router.get("/scrapers", response_model=List[models.ScraperSetting], summary="获取所有爬虫源的设置")
 async def get_scraper_settings(
@@ -602,6 +639,48 @@ async def get_comments(
     comments = [models.Comment(cid=item["cid"], p=item["p"], m=item["m"]) for item in comments_data]
     return models.CommentResponse(count=len(comments), comments=comments)
 
+async def delete_anime_task(anime_id: int, pool: aiomysql.Pool, progress_callback: Callable):
+    """Background task to delete an anime and all its related data."""
+    progress_callback(0, "开始删除...")
+    try:
+        deleted = await crud.delete_anime(pool, anime_id)
+        if deleted:
+            progress_callback(100, "删除成功。")
+        else:
+            progress_callback(100, "删除失败：未找到作品。")
+    except Exception as e:
+        logger.error(f"删除作品任务 (ID: {anime_id}) 失败: {e}", exc_info=True)
+        progress_callback(100, f"删除失败: {e}")
+        raise
+
+async def delete_source_task(source_id: int, pool: aiomysql.Pool, progress_callback: Callable):
+    """Background task to delete a source and all its related data."""
+    progress_callback(0, "开始删除...")
+    try:
+        deleted = await crud.delete_anime_source(pool, source_id)
+        if deleted:
+            progress_callback(100, "删除成功。")
+        else:
+            progress_callback(100, "删除失败：未找到源。")
+    except Exception as e:
+        logger.error(f"删除源任务 (ID: {source_id}) 失败: {e}", exc_info=True)
+        progress_callback(100, f"删除失败: {e}")
+        raise
+
+async def delete_episode_task(episode_id: int, pool: aiomysql.Pool, progress_callback: Callable):
+    """Background task to delete an episode and its comments."""
+    progress_callback(0, "开始删除...")
+    try:
+        deleted = await crud.delete_episode(pool, episode_id)
+        if deleted:
+            progress_callback(100, "删除成功。")
+        else:
+            progress_callback(100, "删除失败：未找到分集。")
+    except Exception as e:
+        logger.error(f"删除分集任务 (ID: {episode_id}) 失败: {e}", exc_info=True)
+        progress_callback(100, f"删除失败: {e}")
+        raise
+
 async def generic_import_task(
     provider: str,
     media_id: str,
@@ -722,6 +801,19 @@ async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: Scrape
         progress_callback=progress_callback,
         pool=pool,
         manager=manager)
+
+async def delete_bulk_sources_task(source_ids: List[int], pool: aiomysql.Pool, progress_callback: Callable):
+    """Background task to delete multiple sources."""
+    total = len(source_ids)
+    for i, source_id in enumerate(source_ids):
+        progress = int((i / total) * 100)
+        progress_callback(progress, f"正在删除源 {i+1}/{total} (ID: {source_id})...")
+        try:
+            await crud.delete_anime_source(pool, source_id)
+        except Exception as e:
+            logger.error(f"批量删除源任务中，删除源 (ID: {source_id}) 失败: {e}", exc_info=True)
+            # Continue to the next one
+    progress_callback(100, "批量删除完成。")
 
 async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: ScraperManager, progress_callback: Callable):
     """后台任务：刷新单个分集的弹幕"""
