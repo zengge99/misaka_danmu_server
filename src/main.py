@@ -1,5 +1,6 @@
 import uvicorn
 import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends
 import logging
 from fastapi.staticfiles import StaticFiles
@@ -18,11 +19,45 @@ from .config import settings
 from . import crud, security
 from .log_manager import setup_logging
 
-app = FastAPI(
-    title="Danmaku API",
-    description="一个基于dandanplay API风格的弹幕服务",
-    version="1.0.0",
-)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    应用生命周期管理器。
+    - `yield` 之前的部分在应用启动时执行。
+    - `yield` 之后的部分在应用关闭时执行。
+    """
+    # --- Startup Logic ---
+    setup_logging()
+    pool = await create_db_pool(app)
+    await init_db_tables(app)
+    app.state.scraper_manager = ScraperManager(pool)
+    await app.state.scraper_manager.load_and_sync_scrapers()
+    app.state.task_manager = TaskManager(pool)
+    app.state.task_manager.start()
+    await create_initial_admin_user(app)
+    app.state.cleanup_task = asyncio.create_task(cleanup_task(app))
+    app.state.scheduler_manager = SchedulerManager(pool, app.state.task_manager)
+    await app.state.scheduler_manager.start()
+    
+    yield
+    
+    # --- Shutdown Logic ---
+    if hasattr(app.state, "cleanup_task"):
+        app.state.cleanup_task.cancel()
+        try:
+            await app.state.cleanup_task
+        except asyncio.CancelledError:
+            pass
+    await close_db_pool(app)
+    if hasattr(app.state, "scraper_manager"):
+        await app.state.scraper_manager.close_all()
+    if hasattr(app.state, "task_manager"):
+        await app.state.task_manager.stop()
+    if hasattr(app.state, "scheduler_manager"):
+        await app.state.scheduler_manager.stop()
+
+
+app = FastAPI(title="Danmaku API", description="一个基于dandanplay API风格的弹幕服务", version="1.0.0", lifespan=lifespan)
 
 @app.middleware("http")
 async def log_not_found_requests(request: Request, call_next):
@@ -59,46 +94,6 @@ async def cleanup_task(app: FastAPI):
             break
         except Exception as e:
             logging.getLogger(__name__).error(f"缓存清理任务出错: {e}")
-
-@app.on_event("startup")
-async def startup_event():
-    """应用启动时，创建数据库连接池、Scraper管理器并初始化表"""
-    # 初始化日志系统
-    setup_logging()
-    # 创建数据库连接池
-    pool = await create_db_pool(app)
-    # 在进行任何依赖表的数据库操作前，先确保表已存在
-    await init_db_tables(app)
-    # 创建 Scraper 管理器
-    app.state.scraper_manager = ScraperManager(pool)
-    await app.state.scraper_manager.load_and_sync_scrapers()
-    # 创建并启动任务管理器
-    app.state.task_manager = TaskManager(pool)
-    app.state.task_manager.start()
-    # 创建初始管理员用户（如果需要）
-    await create_initial_admin_user(app)
-    # 启动缓存清理后台任务
-    app.state.cleanup_task = asyncio.create_task(cleanup_task(app))
-    # 创建并启动定时任务调度器
-    app.state.scheduler_manager = SchedulerManager(pool, app.state.task_manager)
-    await app.state.scheduler_manager.start()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """应用关闭时，关闭数据库连接池和Scraper"""
-    if hasattr(app.state, "cleanup_task"):
-        app.state.cleanup_task.cancel()
-        try:
-            await app.state.cleanup_task
-        except asyncio.CancelledError:
-            pass
-    await close_db_pool(app)
-    if hasattr(app.state, "scraper_manager"):
-        await app.state.scraper_manager.close_all()
-    if hasattr(app.state, "task_manager"):
-        await app.state.task_manager.stop()
-    if hasattr(app.state, "scheduler_manager"):
-        await app.state.scheduler_manager.stop()
 
 # 挂载静态文件目录
 # 注意：这应该在项目根目录运行，以便能找到 'static' 文件夹

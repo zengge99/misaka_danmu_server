@@ -2,6 +2,7 @@ import collections
 import logging
 import logging.handlers
 from pathlib import Path
+import re
 from typing import List
 
 # 这个双端队列将用于在内存中存储最新的日志，以供Web界面展示
@@ -37,6 +38,22 @@ class BilibiliInfoFilter(logging.Filter):
                 return False
         return True  # 其他所有日志都通过
 
+# 新增：一个过滤器，用于翻译 apscheduler 的日志
+class ApschedulerLogTranslatorFilter(logging.Filter):
+    def filter(self, record):
+        if record.name.startswith('apscheduler'):
+            msg = record.getMessage()
+            if msg == 'Scheduler started':
+                record.msg = '调度器已启动'
+                return True
+            
+            match = re.match(r'Added job "(.+?)" to job store "(.+?)"', msg)
+            if match:
+                job_id, store = match.groups()
+                record.msg = f'已添加任务 "{job_id}" 到任务存储 "{store}"'
+                return True
+        return True
+
 def setup_logging():
     """
     配置根日志记录器，使其能够将日志输出到控制台、一个可轮转的文件，
@@ -61,6 +78,9 @@ def setup_logging():
     # 清理已存在的处理器，以避免在热重载时重复添加
     if logger.hasHandlers():
         logger.handlers.clear()
+
+    # 添加新的过滤器到根日志记录器，以便翻译所有输出
+    logger.addFilter(ApschedulerLogTranslatorFilter())
 
     logger.addHandler(logging.StreamHandler()) # 控制台处理器
     logger.addHandler(logging.handlers.RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=5, encoding='utf-8')) # 文件处理器
