@@ -13,7 +13,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from .. import crud, models, security
 from ..log_manager import get_logs
-from ..task_manager import TaskManager
+from ..task_manager import TaskManager, TaskSuccess
 from ..scraper_manager import ScraperManager
 from ..scheduler import SchedulerManager
 from .tmdb_api import get_tmdb_client
@@ -645,12 +645,11 @@ async def delete_anime_task(anime_id: int, pool: aiomysql.Pool, progress_callbac
     try:
         deleted = await crud.delete_anime(pool, anime_id)
         if deleted:
-            progress_callback(100, "删除成功。")
+            raise TaskSuccess("删除成功。")
         else:
-            progress_callback(100, "删除失败：未找到作品。")
+            raise TaskSuccess("作品未找到，无需删除。")
     except Exception as e:
         logger.error(f"删除作品任务 (ID: {anime_id}) 失败: {e}", exc_info=True)
-        progress_callback(100, f"删除失败: {e}")
         raise
 
 async def delete_source_task(source_id: int, pool: aiomysql.Pool, progress_callback: Callable):
@@ -659,12 +658,11 @@ async def delete_source_task(source_id: int, pool: aiomysql.Pool, progress_callb
     try:
         deleted = await crud.delete_anime_source(pool, source_id)
         if deleted:
-            progress_callback(100, "删除成功。")
+            raise TaskSuccess("删除成功。")
         else:
-            progress_callback(100, "删除失败：未找到源。")
+            raise TaskSuccess("数据源未找到，无需删除。")
     except Exception as e:
         logger.error(f"删除源任务 (ID: {source_id}) 失败: {e}", exc_info=True)
-        progress_callback(100, f"删除失败: {e}")
         raise
 
 async def delete_episode_task(episode_id: int, pool: aiomysql.Pool, progress_callback: Callable):
@@ -673,12 +671,11 @@ async def delete_episode_task(episode_id: int, pool: aiomysql.Pool, progress_cal
     try:
         deleted = await crud.delete_episode(pool, episode_id)
         if deleted:
-            progress_callback(100, "删除成功。")
+            raise TaskSuccess("删除成功。")
         else:
-            progress_callback(100, "删除失败：未找到分集。")
+            raise TaskSuccess("分集未找到，无需删除。")
     except Exception as e:
         logger.error(f"删除分集任务 (ID: {episode_id}) 失败: {e}", exc_info=True)
-        progress_callback(100, f"删除失败: {e}")
         raise
 
 async def generic_import_task(
@@ -805,15 +802,17 @@ async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: Scrape
 async def delete_bulk_sources_task(source_ids: List[int], pool: aiomysql.Pool, progress_callback: Callable):
     """Background task to delete multiple sources."""
     total = len(source_ids)
+    deleted_count = 0
     for i, source_id in enumerate(source_ids):
         progress = int((i / total) * 100)
         progress_callback(progress, f"正在删除源 {i+1}/{total} (ID: {source_id})...")
         try:
-            await crud.delete_anime_source(pool, source_id)
+            if await crud.delete_anime_source(pool, source_id):
+                deleted_count += 1
         except Exception as e:
             logger.error(f"批量删除源任务中，删除源 (ID: {source_id}) 失败: {e}", exc_info=True)
             # Continue to the next one
-    progress_callback(100, "批量删除完成。")
+    raise TaskSuccess(f"批量删除完成，共处理 {total} 个，成功删除 {deleted_count} 个。")
 
 async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: ScraperManager, progress_callback: Callable):
     """后台任务：刷新单个分集的弹幕"""
@@ -896,8 +895,14 @@ async def import_from_provider(
         manager=scraper_manager
     )
     
+    # 构造任务标题
+    task_title = f"导入: {request_data.anime_title}"
+    # 如果是电视剧且指定了单集导入，则在标题中追加季和集信息
+    if request_data.type == "tv_series" and request_data.current_episode_index is not None and request_data.season is not None:
+        task_title += f" - S{request_data.season:02d}E{request_data.current_episode_index:02d}"
+
     # 提交任务并获取任务ID
-    task_id = await task_manager.submit_task(task_coro, f"导入: {request_data.anime_title}")
+    task_id, _ = await task_manager.submit_task(task_coro, task_title)
 
     return {"message": f"'{request_data.anime_title}' 的导入任务已提交。请在任务管理器中查看进度。", "task_id": task_id}
 

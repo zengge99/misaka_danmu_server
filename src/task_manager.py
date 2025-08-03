@@ -16,6 +16,10 @@ class TaskStatus(str, Enum):
     COMPLETED = "已完成"
     FAILED = "失败"
 
+class TaskSuccess(Exception):
+    """自定义异常，用于表示任务成功完成并附带一条最终消息。"""
+    pass
+
 class Task:
     def __init__(self, task_id: str, title: str, coro_factory: Callable[[Callable], Coroutine]):
         self.task_id = task_id
@@ -64,10 +68,18 @@ class TaskManager:
                 actual_coroutine = task.coro_factory(progress_callback)
                 await actual_coroutine
                 
+                # 对于没有引发 TaskSuccess 异常而正常结束的任务，使用通用成功消息
                 await crud.finalize_task_in_history(
                     self._pool, task.task_id, TaskStatus.COMPLETED, "任务成功完成"
                 )
                 logger.info(f"任务 '{task.title}' (ID: {task.task_id}) 已成功完成。")
+            except TaskSuccess as e:
+                # 捕获 TaskSuccess 异常，使用其消息作为最终描述
+                final_message = str(e) if str(e) else "任务成功完成"
+                await crud.finalize_task_in_history(
+                    self._pool, task.task_id, TaskStatus.COMPLETED, final_message
+                )
+                logger.info(f"任务 '{task.title}' (ID: {task.task_id}) 已成功完成，消息: {final_message}")
             except Exception:
                 error_message = "任务执行失败"
                 await crud.finalize_task_in_history(
