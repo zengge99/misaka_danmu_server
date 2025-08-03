@@ -247,12 +247,11 @@ function renderSearchResults(results) {
         if (item.type !== 'movie') {
             metaParts.push(`总集数: ${item.episodeCount || '未知'}`);
         }
-        let metaHtml = `<p class="title">${item.title}</p><p class="meta">${metaParts.join(' | ')}</p>`;
         
         if (item.currentEpisodeIndex) {
-            metaHtml += `<p class="extra-meta">获取→ | 季: ${String(item.season).padStart(2, '0')} | 集: ${String(item.currentEpisodeIndex).padStart(2, '0')}</p>`;
+            metaParts.push(`获取→ | 季: ${String(item.season).padStart(2, '0')} | 集: ${String(item.currentEpisodeIndex).padStart(2, '0')}`);
         }
-        infoDiv.innerHTML = metaHtml;
+        infoDiv.innerHTML = `<p class="title">${item.title}</p><p class="meta">${metaParts.join(' | ')}</p>`;
 
         leftContainer.appendChild(infoDiv);
         const importBtn = document.createElement('button');

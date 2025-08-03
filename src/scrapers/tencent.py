@@ -106,10 +106,12 @@ class TencentScraper(BaseScraper):
 
     async def search(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:
         """通过腾讯搜索API查找番剧。"""
-        cache_key = f"search_{self.provider_name}_{keyword}"
+        # 修正：缓存键必须包含分集信息，以区分对同一标题的不同分集搜索
+        cache_key_suffix = f"_s{episode_info['season']}e{episode_info['episode']}" if episode_info else ""
+        cache_key = f"search_{self.provider_name}_{keyword}{cache_key_suffix}"
         cached_results = await self._get_from_cache(cache_key)
         if cached_results is not None:
-            self.logger.info(f"Tencent: 从缓存中命中搜索结果 '{keyword}'")
+            self.logger.info(f"Tencent: 从缓存中命中搜索结果 '{keyword}{cache_key_suffix}'")
             return [models.ProviderSearchInfo.model_validate(r) for r in cached_results]
 
         url = "https://pbaccess.video.qq.com/trpc.videosearch.mobile_search.HttpMobileRecall/MbSearchHttp"
