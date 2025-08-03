@@ -3,6 +3,7 @@ import httpx
 import aiomysql
 import re
 import logging
+import json
 from typing import List, Dict, Any, Optional, Union, Callable
 from pydantic import BaseModel, Field, ValidationError
 from collections import defaultdict
@@ -116,8 +117,10 @@ class TencentScraper(BaseScraper):
             self.logger.info(f"Tencent: 正在搜索 '{keyword}'...")
             response = await self.client.post(url, json=payload)
             response.raise_for_status()
-            self.logger.debug(f"Tencent: 收到 '{keyword}' 的原始搜索响应: {response.text}")
-            data = TencentSearchResult.model_validate(response.json())
+            response_json = response.json()
+            # 将原始响应的日志级别提升到 INFO，并使用json格式化，方便调试
+            self.logger.info(f"Tencent: 收到 '{keyword}' 的原始搜索响应:\n{json.dumps(response_json, indent=2, ensure_ascii=False)}")
+            data = TencentSearchResult.model_validate(response_json)
 
             if data.data and data.data.normal_list:
                 self.logger.info(f"Tencent: API为 '{keyword}' 返回了 {len(data.data.normal_list.item_list)} 个原始条目，开始过滤...")
