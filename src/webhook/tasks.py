@@ -6,7 +6,7 @@ import aiomysql
 from thefuzz import fuzz
 
 from .. import crud
-from ..api.ui import generic_import_task
+from ..api.ui import generic_import_task, parse_search_keyword
 from ..scraper_manager import ScraperManager
 from ..task_manager import TaskManager, TaskSuccess
 
@@ -71,8 +71,13 @@ async def webhook_search_and_dispatch_task(
         logger.info(f"Webhook 任务: 未找到收藏源，开始并发搜索所有启用的源...")
         progress_callback(20, "并发搜索所有源...")
 
+        # 关键修复：像UI一样，先解析搜索关键词，分离出纯标题
+        parsed_keyword = parse_search_keyword(search_keyword)
+        search_title_only = parsed_keyword["title"]
+        logger.info(f"Webhook 任务: 已将搜索词 '{search_keyword}' 解析为标题 '{search_title_only}' 进行搜索。")
+
         all_search_results = await manager.search_all(
-            [search_keyword], episode_info={"season": season, "episode": current_episode_index}
+            [search_title_only], episode_info={"season": season, "episode": current_episode_index}
         )
 
         if not all_search_results:
