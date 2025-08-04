@@ -263,7 +263,7 @@ async def search_anime_provider(
 
     # 新增逻辑：根据标题关键词修正媒体类型
     for item in results:
-        if item.type == 'tv_series' and _is_movie_by_title(item.title):
+        if item.type == 'tv_series' and is_movie_by_title(item.title):
             logger.info(f"标题 '{item.title}' 包含电影关键词，类型从 'tv_series' 修正为 'movie'。")
             item.type = 'movie'
 
