@@ -14,7 +14,7 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from .. import models
-from .base import BaseScraper
+from .base import BaseScraper, get_season_from_title
 
 # --- Pydantic Models for Youku API ---
 
@@ -145,21 +145,24 @@ class YoukuScraper(BaseScraper):
                 year_match = self.year_reg.search(common_data.feature)
                 year = int(year_match.group(0)) if year_match else None
                 
-                cleaned_title = self.unused_words_reg.sub("", title).strip()
+                cleaned_title = self.unused_words_reg.sub("", title).strip().replace(":", "：")
                 media_type = "movie" if "电影" in common_data.feature else "tv_series"
                 
                 current_episode = episode_info.get("episode") if episode_info else None
 
-                results.append(models.ProviderSearchInfo(
+                provider_search_info = models.ProviderSearchInfo(
                     provider=self.provider_name,
                     mediaId=common_data.show_id,
-                    title=cleaned_title.replace(":", "："),
+                    title=cleaned_title,
                     type=media_type,
+                    season=get_season_from_title(cleaned_title),
                     year=year,
                     imageUrl=common_data.poster_dto.v_thumb_url if common_data.poster_dto else None,
                     episodeCount=common_data.episode_total,
                     currentEpisodeIndex=current_episode
-                ))
+                )
+                self.logger.debug(f"Youku: 创建的 ProviderSearchInfo: {provider_search_info.model_dump_json(indent=2, ensure_ascii=False)}")
+                results.append(provider_search_info)
 
         except Exception as e:
             self.logger.error(f"Youku search failed for '{keyword}': {e}", exc_info=True)

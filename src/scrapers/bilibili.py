@@ -79,7 +79,7 @@ DmSegMobileReply = factory.GetPrototype(dm_seg_reply_descriptor)
 # --- End of merged dm_dynamic.py content ---
 
 from .. import models
-from .base import BaseScraper
+from .base import BaseScraper, get_season_from_title
 
 # --- Pydantic Models for Bilibili API ---
 
@@ -373,7 +373,6 @@ class BilibiliScraper(BaseScraper):
             response.raise_for_status()
             
             response_json = response.json()
-            #self.logger.info(f"Bilibili: 收到 '{search_type}' 类型的原始JSON响应: {json.dumps(response_json, indent=2, ensure_ascii=False)}")
             api_result = BiliApiResult.model_validate(response_json)
 
             if api_result.code == 0 and api_result.data and api_result.data.result:
@@ -410,16 +409,21 @@ class BilibiliScraper(BaseScraper):
 
                     # 修正：先进行HTML解码，以处理 &lt;em&gt; 这样的实体编码
                     unescaped_title = html.unescape(item.title)
-                    results.append(models.ProviderSearchInfo(
+                    cleaned_title = re.sub(r'<[^>]+>', '', unescaped_title).replace(":", "：")
+                    
+                    provider_search_info = models.ProviderSearchInfo(
                         provider=self.provider_name,
                         mediaId=media_id,
-                        title=re.sub(r'<[^>]+>', '', unescaped_title).replace(":", "："),
+                        title=cleaned_title,
                         type=media_type,
+                        season=get_season_from_title(cleaned_title),
                         year=year,
                         imageUrl=item.cover,
                         episodeCount=item.ep_size,
                         currentEpisodeIndex=episode_info.get("episode") if episode_info else None
-                    ))
+                    )
+                    self.logger.debug(f"Bilibili: 创建的 ProviderSearchInfo: {provider_search_info.model_dump_json(indent=2, ensure_ascii=False)}")
+                    results.append(provider_search_info)
             else:
                 # 修正：将日志级别从 WARNING 改为 INFO，因为这不是一个真正的错误，
                 # 只是B站API表示“无结果”的一种方式。

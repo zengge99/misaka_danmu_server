@@ -12,7 +12,7 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from .. import models
-from .base import BaseScraper
+from .base import BaseScraper, get_season_from_title
 
 # --- Pydantic Models for iQiyi API ---
 
@@ -167,17 +167,21 @@ class IqiyiScraper(BaseScraper):
                 media_type = "movie" if channel_name == "电影" else "tv_series"
 
                 current_episode = episode_info.get("episode") if episode_info else None
-                results.append(models.ProviderSearchInfo(
+                cleaned_title = re.sub(r'<[^>]+>', '', album.album_title).replace(":", "：")
+                provider_search_info = models.ProviderSearchInfo(
                     provider=self.provider_name,
                     mediaId=link_id,
-                    title=re.sub(r'<[^>]+>', '', album.album_title).replace(":", "："),
+                    title=cleaned_title,
                     type=media_type,
+                    season=get_season_from_title(cleaned_title),
                     year=album.year,
                     imageUrl=album.album_img,
                     douban_id=douban_id,
                     episodeCount=album.item_total_number,
                     currentEpisodeIndex=current_episode,
-                ))
+                )
+                self.logger.debug(f"爱奇艺: 创建的 ProviderSearchInfo: {provider_search_info.model_dump_json(indent=2, ensure_ascii=False)}")
+                results.append(provider_search_info)
 
         except Exception as e:
             self.logger.error(f"爱奇艺: 搜索 '{keyword}' 失败: {e}", exc_info=True)

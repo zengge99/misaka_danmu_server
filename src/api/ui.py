@@ -931,7 +931,8 @@ async def generic_import_task(
             added_count = await crud.bulk_insert_comments(pool, episode_db_id, comments)
             total_comments_added += added_count
             logger.info(f"分集 '{episode.title}' (DB ID: {episode_db_id}) 新增 {added_count} 条弹幕。")
-
+    except TaskSuccess:
+        raise # 重新抛出以被 TaskManager 正确处理
     except Exception as e:
         logger.error(f"导入任务发生严重错误: {e}", exc_info=True)
         raise  # 重新抛出异常，以便任务管理器能捕获并标记任务为“失败”

@@ -1,5 +1,6 @@
 import logging
 import time
+import re
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, Type
 
@@ -7,6 +8,46 @@ import aiomysql
 from .. import crud
 from .. import models
 
+
+def _roman_to_int(s: str) -> int:
+    """将罗马数字字符串转换为整数。"""
+    roman_map = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
+    s = s.upper()
+    result = 0
+    i = 0
+    while i < len(s):
+        # 处理减法规则 (e.g., IV, IX)
+        if i + 1 < len(s) and roman_map[s[i]] < roman_map[s[i+1]]:
+            result += roman_map[s[i+1]] - roman_map[s[i]]
+            i += 2
+        else:
+            result += roman_map[s[i]]
+            i += 1
+    return result
+
+def get_season_from_title(title: str) -> int:
+    """从标题中解析季度信息，返回季度数。"""
+    if not title:
+        return 1
+    
+    # 模式的顺序很重要
+    patterns = [
+        (re.compile(r"(?:S|Season)\s*(\d+)", re.I), lambda m: int(m.group(1))),
+        (re.compile(r"第\s*([一二三四五六七八九十\d]+)\s*[季部]", re.I), 
+         lambda m: {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}.get(m.group(1)) or int(m.group(1))),
+        (re.compile(r"\s+([Ⅰ-Ⅻ])\b", re.I), 
+         lambda m: {'Ⅰ': 1, 'Ⅱ': 2, 'Ⅲ': 3, 'Ⅳ': 4, 'Ⅴ': 5, 'Ⅵ': 6, 'Ⅶ': 7, 'Ⅷ': 8, 'Ⅸ': 9, 'Ⅹ': 10, 'Ⅺ': 11, 'Ⅻ': 12}.get(m.group(1).upper())),
+        (re.compile(r"\s+([IVXLCDM]+)$", re.I), lambda m: _roman_to_int(m.group(1))),
+    ]
+
+    for pattern, handler in patterns:
+        match = pattern.search(title)
+        if match:
+            try:
+                if season := handler(match): return season
+            except (ValueError, KeyError, IndexError):
+                continue
+    return 1 # Default to season 1
 
 class BaseScraper(ABC):
     """

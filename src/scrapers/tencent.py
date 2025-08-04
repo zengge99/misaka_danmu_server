@@ -9,8 +9,7 @@ from typing import List, Dict, Any, Optional, Union, Callable
 from pydantic import BaseModel, Field, ValidationError
 from collections import defaultdict
 from datetime import datetime
-
-from .base import BaseScraper
+from .base import BaseScraper, get_season_from_title
 from .. import models
 
 # --- Pydantic 模型，用于解析腾讯API的响应 ---
@@ -119,7 +118,6 @@ class TencentScraper(BaseScraper):
             response = await self.client.post(url, json=payload)
             response.raise_for_status()
             response_json = response.json()
-            self.logger.debug(f"Tencent: 收到 '{keyword}' 的原始搜索响应: {response.text}")
             data = TencentSearchResult.model_validate(response_json)
 
             if data.data and data.data.normal_list:
@@ -158,18 +156,19 @@ class TencentScraper(BaseScraper):
                     # 在返回前统一冒号
                     final_title = cleaned_title.replace(":", "：")
 
-                    results.append(
-                        models.ProviderSearchInfo(
-                            provider=self.provider_name,
-                            mediaId=item.doc.id,
-                            title=final_title,
-                            type=media_type,
-                            year=video_info.year,
-                            imageUrl=video_info.img_url,
-                            episodeCount=episode_count,
-                            currentEpisodeIndex=current_episode
-                        )
+                    provider_search_info = models.ProviderSearchInfo(
+                        provider=self.provider_name,
+                        mediaId=item.doc.id,
+                        title=final_title,
+                        type=media_type,
+                        season=get_season_from_title(final_title),
+                        year=video_info.year,
+                        imageUrl=video_info.img_url,
+                        episodeCount=episode_count,
+                        currentEpisodeIndex=current_episode
                     )
+                    self.logger.debug(f"Tencent: 创建的 ProviderSearchInfo: {provider_search_info.model_dump_json(indent=2, ensure_ascii=False)}")
+                    results.append(provider_search_info)
         except httpx.HTTPStatusError as e:
             self.logger.error(f"搜索请求失败: {e}")
         except (ValidationError, KeyError) as e:

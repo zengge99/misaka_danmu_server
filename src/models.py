@@ -51,6 +51,7 @@ class ProviderSearchInfo(BaseModel):
     mediaId: str = Field(..., description="该数据源中的媒体ID (e.g., tencent的cid)")
     title: str = Field(..., description="节目名称")
     type: str = Field(..., description="节目类型, e.g., 'tv_series', 'movie'")
+    season: int = Field(1, description="季度, 默认为1")
     year: Optional[int] = Field(None, description="发行年份")
     imageUrl: Optional[str] = Field(None, description="封面图片URL")
     douban_id: Optional[str] = Field(None, description="豆瓣ID (如果可用)")
