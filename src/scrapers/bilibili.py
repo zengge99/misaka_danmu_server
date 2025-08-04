@@ -217,7 +217,7 @@ class BilibiliScraper(BaseScraper):
         if force_refresh:
             self.logger.info("Bilibili: 强制刷新会话Cookie (buvid3)...")
         else:
-            self.logger.info("Bilibili: buvid3 cookie未找到，开始获取...")
+            self.logger.debug("Bilibili: buvid3 cookie未找到，开始获取...")
 
         # 步骤 1: 优先尝试访问首页，模拟真实浏览器行为以获取完整的会话cookie
         try:
@@ -238,7 +238,7 @@ class BilibiliScraper(BaseScraper):
             }
             await self._request_with_rate_limit("GET", "https://www.bilibili.com/", headers=homepage_headers)
             if "buvid3" in self.client.cookies:
-                self.logger.info("Bilibili: 已成功从首页获取 buvid3 cookie。")
+                self.logger.debug("Bilibili: 已成功从首页获取 buvid3 cookie。")
                 return
         except Exception as e:
             self.logger.warning(f"Bilibili: 从首页获取 cookie 失败，将使用 API 后备方案。错误: {e}")
