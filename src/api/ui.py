@@ -871,53 +871,56 @@ async def generic_import_task(
                 await task_manager.submit_task(task_coro, task_title)
                 raise TaskSuccess(f"Webhook: 已为收藏源 '{favorited_source['provider_name']}' 创建导入任务。")
 
-            # 2. 如果没有收藏源，则按顺序搜索
-            logger.info(f"Webhook 任务: 未找到收藏源，开始按顺序搜索...")
-            progress_callback(20, "按顺序搜索...")
+            # 2. 如果没有收藏源，则并发搜索所有启用的源
+            logger.info(f"Webhook 任务: 未找到收藏源，开始并发搜索所有启用的源...")
+            progress_callback(20, "并发搜索所有源...")
             search_keyword = media_id # 对于 Webhook, media_id 是搜索关键词
             
-            provider_name, search_results = await manager.search_sequentially(
+            all_search_results = await manager.search_all(
                 search_keyword, episode_info={"season": season, "episode": current_episode_index}
             )
             
-            if not search_results:
+            if not all_search_results:
                 raise TaskSuccess(f"Webhook 任务失败: 未找到 '{anime_title}' 的任何可用源。")
 
-            # 3. 从返回的结果中，根据类型、季度和标题相似度选择最佳匹配项
+            # 3. 从所有源的返回结果中，根据类型、季度和标题相似度选择最佳匹配项
             best_match = None
-            highest_score = -1
-            target_season = season
-            target_media_type = media_type
+            
+            # 获取搜索源的顺序，用于在分数相同时进行排序
+            ordered_settings = await crud.get_all_scraper_settings(pool)
+            provider_order = {s['provider_name']: s['display_order'] for s in ordered_settings}
 
-            for item in search_results:
+            valid_candidates = []
+            for item in all_search_results:
                 # 修正：根据标题中的关键词再次修正媒体类型，以防数据源标记错误
                 if item.type == 'tv_series' and _is_movie_by_title(item.title):
                     item.type = 'movie'
                     item.season = 1 # 电影/剧场版统一为第一季
 
-                # 使用更健壮的模糊匹配算法
-                score = fuzz.token_set_ratio(anime_title, item.title)
-
                 # 检查类型和季度是否匹配
-                type_match = (item.type == target_media_type)
-                season_match = (item.season == target_season) if target_media_type == 'tv_series' else True
+                type_match = (item.type == media_type)
+                season_match = (item.season == season) if media_type == 'tv_series' else True
 
-                if type_match and season_match and score > highest_score:
-                    highest_score = score
-                    best_match = item
+                if type_match and season_match:
+                    valid_candidates.append(item)
             
-            if not best_match:
-                log_msg = f"Webhook 任务: 未能在 '{provider_name}' 的结果中找到与 '{anime_title}' (类型: {target_media_type}, 季: {target_season}) 完全匹配的项。候选列表:\n"
-                for item in search_results:
-                    log_msg += f"  - 候选: '{item.title}' (类型: {item.type}, 季: {item.season})\n"
+            if not valid_candidates:
+                log_msg = f"Webhook 任务: 在所有源的结果中未找到与 '{anime_title}' (类型: {media_type}, 季: {season}) 匹配的项。"
                 logger.warning(log_msg)
                 raise TaskSuccess(f"Webhook 任务失败: 未找到 '{anime_title}' 的精确匹配项。")
 
-            logger.info(f"Webhook 任务: 在 '{provider_name}' 中找到最佳匹配项 '{best_match.title}'，将为其创建导入任务。")
-            progress_callback(50, f"在 {provider_name} 中找到匹配项")
+            # 对有效候选者进行评分和排序
+            valid_candidates.sort(
+                key=lambda item: (fuzz.token_set_ratio(anime_title, item.title), -provider_order.get(item.provider, 999)),
+                reverse=True
+            )
+            best_match = valid_candidates[0]
+            
+            logger.info(f"Webhook 任务: 在所有源中找到最佳匹配项 '{best_match.title}' (来自: {best_match.provider})，将为其创建导入任务。")
+            progress_callback(50, f"在 {best_match.provider} 中找到最佳匹配项")
             
             # 4. 为这个唯一的最佳匹配项提交导入任务
-            task_title = f"Webhook自动导入: {best_match.title} ({provider_name})"
+            task_title = f"Webhook自动导入: {best_match.title} ({best_match.provider})"
             task_coro = lambda cb: generic_import_task(
                 provider=best_match.provider, media_id=best_match.mediaId,
                 anime_title=best_match.title, media_type=best_match.type,
@@ -931,7 +934,7 @@ async def generic_import_task(
                 task_manager=task_manager, is_webhook=False
             )
             await task_manager.submit_task(task_coro, task_title)
-            raise TaskSuccess(f"Webhook: 已为源 '{provider_name}' 创建导入任务。")
+            raise TaskSuccess(f"Webhook: 已为源 '{best_match.provider}' 创建导入任务。")
 
         # --- 原有的导入逻辑 ---
         scraper = manager.get_scraper(provider)
