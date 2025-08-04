@@ -2,8 +2,8 @@ import logging
 from typing import Any, Dict
 
 from .base import BaseWebhook
-from ..api.ui import generic_import_task
 from ..scraper_manager import ScraperManager
+from .tasks import webhook_search_and_dispatch_task
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +72,20 @@ class EmbyWebhook(BaseWebhook):
         scraper_manager = ScraperManager(self.pool)
         await scraper_manager.load_and_sync_scrapers()
 
-        # 复用通用的导入任务逻辑
-        task_coro = lambda callback: generic_import_task(
-            provider=None, # provider=None 会触发全网搜索
-            media_id=search_keyword, anime_title=anime_title, media_type=media_type,
-            season=season_number, current_episode_index=episode_number, image_url=None,
-            douban_id=str(douban_id) if douban_id else None, tmdb_id=str(tmdb_id) if tmdb_id else None, 
-            imdb_id=str(imdb_id) if imdb_id else None, tvdb_id=str(tvdb_id) if tvdb_id else None,
-            progress_callback=callback, pool=self.pool, manager=scraper_manager, task_manager=self.task_manager, is_webhook=True
+        # 使用新的、专门的 webhook 任务
+        task_coro = lambda callback: webhook_search_and_dispatch_task(
+            anime_title=anime_title,
+            media_type=media_type,
+            season=season_number,
+            current_episode_index=episode_number,
+            search_keyword=search_keyword,
+            douban_id=str(douban_id) if douban_id else None,
+            tmdb_id=str(tmdb_id) if tmdb_id else None,
+            imdb_id=str(imdb_id) if imdb_id else None,
+            tvdb_id=str(tvdb_id) if tvdb_id else None,
+            progress_callback=callback,
+            pool=self.pool,
+            manager=scraper_manager,
+            task_manager=self.task_manager
         )
         await self.task_manager.submit_task(task_coro, task_title)

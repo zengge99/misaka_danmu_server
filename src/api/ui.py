@@ -43,17 +43,6 @@ def _roman_to_int(s: str) -> int:
             i += 1
     return result
 
-def _is_movie_by_title(title: str) -> bool:
-    """
-    通过标题中的关键词（如“剧场版”）判断是否为电影。
-    """
-    if not title:
-        return False
-    # 关键词列表，不区分大小写
-    movie_keywords = ["剧场版", "劇場版", "movie", "映画"]
-    title_lower = title.lower()
-    return any(keyword in title_lower for keyword in movie_keywords)
-
 def parse_search_keyword(keyword: str) -> Dict[str, Any]:
     """
     解析搜索关键词，提取标题、季数和集数。
@@ -194,6 +183,7 @@ async def search_anime_provider(
 ):
     """
     从所有已配置的数据源（如腾讯、B站等）搜索节目信息。
+    从所有已配置的数据源（如腾讯、B站等）搜索节目信息。
     支持 "标题 SXXEXX" 格式来指定集数。
     新增TMDB辅助搜索：如果配置了TMDB，会先用关键词搜索TMDB获取别名，然后用原始关键词搜索所有弹幕源，最后用获取到的别名集对搜索结果进行过滤。
     """
@@ -261,6 +251,15 @@ async def search_anime_provider(
             filtered_results.append(item)
     logger.info(f"别名过滤: 从 {len(all_results)} 个原始结果中，保留了 {len(filtered_results)} 个相关结果。")
     results = filtered_results
+
+    # 辅助函数，用于根据标题修正媒体类型
+    def is_movie_by_title(title: str) -> bool:
+        if not title:
+            return False
+        # 关键词列表，不区分大小写
+        movie_keywords = ["剧场版", "劇場版", "movie", "映画"]
+        title_lower = title.lower()
+        return any(keyword in title_lower for keyword in movie_keywords)
 
     # 新增逻辑：根据标题关键词修正媒体类型
     for item in results:
@@ -835,108 +834,15 @@ async def generic_import_task(
     imdb_id: Optional[str],
     tvdb_id: Optional[str],
     progress_callback: Callable,
-    pool: aiomysql.Pool,
-    manager: ScraperManager,
-    task_manager: TaskManager,
-    is_webhook: bool = False
+    pool: aiomysql.Pool, 
+    manager: ScraperManager, 
+    task_manager: TaskManager
 ):
     """
     后台任务：执行从指定数据源导入弹幕的完整流程。
-    如果 is_webhook=True 且 provider=None，则会搜索所有源并为最佳匹配项分发新的导入任务。
     """
     total_comments_added = 0
     try:
-        # --- Webhook 触发的全新导入逻辑 ---
-        if is_webhook and provider is None:
-            logger.info(f"Webhook 任务: 开始为 '{anime_title}' (S{season:02d}E{current_episode_index:02d}) 查找最佳源...")
-            progress_callback(5, "正在检查已收藏的源...")
-
-            # 1. 优先查找已收藏的源
-            favorited_source = await crud.find_favorited_source_for_anime(pool, anime_title, season)
-            if favorited_source:
-                logger.info(f"Webhook 任务: 找到已收藏的源 '{favorited_source['provider_name']}'，将直接使用此源。")
-                progress_callback(10, f"找到已收藏的源: {favorited_source['provider_name']}")
-                
-                # 直接使用这个源的信息创建导入任务
-                task_title = f"Webhook自动导入: {favorited_source['anime_title']} ({favorited_source['provider_name']})"
-                task_coro = lambda cb: generic_import_task(
-                    provider=favorited_source['provider_name'], media_id=favorited_source['media_id'],
-                    anime_title=favorited_source['anime_title'], media_type=favorited_source['media_type'],
-                    season=season, current_episode_index=current_episode_index,
-                    image_url=favorited_source['image_url'], douban_id=douban_id,
-                    tmdb_id=tmdb_id, imdb_id=imdb_id, tvdb_id=tvdb_id,
-                    progress_callback=cb, pool=pool, manager=manager,
-                    task_manager=task_manager, is_webhook=False
-                )
-                await task_manager.submit_task(task_coro, task_title)
-                raise TaskSuccess(f"Webhook: 已为收藏源 '{favorited_source['provider_name']}' 创建导入任务。")
-
-            # 2. 如果没有收藏源，则并发搜索所有启用的源
-            logger.info(f"Webhook 任务: 未找到收藏源，开始并发搜索所有启用的源...")
-            progress_callback(20, "并发搜索所有源...")
-            search_keyword = media_id # 对于 Webhook, media_id 是搜索关键词
-            
-            all_search_results = await manager.search_all(
-                search_keyword, episode_info={"season": season, "episode": current_episode_index}
-            )
-            
-            if not all_search_results:
-                raise TaskSuccess(f"Webhook 任务失败: 未找到 '{anime_title}' 的任何可用源。")
-
-            # 3. 从所有源的返回结果中，根据类型、季度和标题相似度选择最佳匹配项
-            best_match = None
-            
-            # 获取搜索源的顺序，用于在分数相同时进行排序
-            ordered_settings = await crud.get_all_scraper_settings(pool)
-            provider_order = {s['provider_name']: s['display_order'] for s in ordered_settings}
-
-            valid_candidates = []
-            for item in all_search_results:
-                # 修正：根据标题中的关键词再次修正媒体类型，以防数据源标记错误
-                if item.type == 'tv_series' and _is_movie_by_title(item.title):
-                    item.type = 'movie'
-                    item.season = 1 # 电影/剧场版统一为第一季
-
-                # 检查类型和季度是否匹配
-                type_match = (item.type == media_type)
-                season_match = (item.season == season) if media_type == 'tv_series' else True
-
-                if type_match and season_match:
-                    valid_candidates.append(item)
-            
-            if not valid_candidates:
-                log_msg = f"Webhook 任务: 在所有源的结果中未找到与 '{anime_title}' (类型: {media_type}, 季: {season}) 匹配的项。"
-                logger.warning(log_msg)
-                raise TaskSuccess(f"Webhook 任务失败: 未找到 '{anime_title}' 的精确匹配项。")
-
-            # 对有效候选者进行评分和排序
-            valid_candidates.sort(
-                key=lambda item: (fuzz.token_set_ratio(anime_title, item.title), -provider_order.get(item.provider, 999)),
-                reverse=True
-            )
-            best_match = valid_candidates[0]
-            
-            logger.info(f"Webhook 任务: 在所有源中找到最佳匹配项 '{best_match.title}' (来自: {best_match.provider})，将为其创建导入任务。")
-            progress_callback(50, f"在 {best_match.provider} 中找到最佳匹配项")
-            
-            # 4. 为这个唯一的最佳匹配项提交导入任务
-            task_title = f"Webhook自动导入: {best_match.title} ({best_match.provider})"
-            task_coro = lambda cb: generic_import_task(
-                provider=best_match.provider, media_id=best_match.mediaId,
-                anime_title=best_match.title, media_type=best_match.type,
-                # 修正：这里必须使用从 Webhook 传入的原始 season，
-                # 而不是从搜索结果标题中解析出的不一定准确的 best_match.season。
-                # 这样可以确保即使搜索结果标题不含季度信息，也能正确地按第三季入库。
-                season=season, current_episode_index=best_match.currentEpisodeIndex,
-                image_url=best_match.imageUrl, douban_id=douban_id,
-                tmdb_id=tmdb_id, imdb_id=imdb_id, tvdb_id=tvdb_id,
-                progress_callback=cb, pool=pool, manager=manager,
-                task_manager=task_manager, is_webhook=False
-            )
-            await task_manager.submit_task(task_coro, task_title)
-            raise TaskSuccess(f"Webhook: 已为源 '{best_match.provider}' 创建导入任务。")
-
-        # --- 原有的导入逻辑 ---
         scraper = manager.get_scraper(provider)
 
         # 统一将标题中的英文冒号替换为中文冒号，作为写入数据库前的最后保障
@@ -1004,10 +910,7 @@ async def generic_import_task(
     except Exception as e:
         logger.error(f"导入任务发生严重错误: {e}", exc_info=True)
         raise  # 重新抛出异常，以便任务管理器能捕获并标记任务为“失败”
-    finally:
-        # 这个 finally 块只对单个导入任务有意义，对于分发任务来说，它的日志会产生误导
-        if not (is_webhook and provider is None):
-             logger.info(f"--- {provider} 导入任务完成 (media_id={media_id})。总共新增 {total_comments_added} 条弹幕。 ---")
+    logger.info(f"--- {provider} 导入任务完成 (media_id={media_id})。总共新增 {total_comments_added} 条弹幕。 ---")
 
 async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: ScraperManager, task_manager: TaskManager, progress_callback: Callable):
     """
@@ -1133,7 +1036,7 @@ async def import_from_provider(
         douban_id=request_data.douban_id,
         tmdb_id=request_data.tmdb_id,
         imdb_id=None, tvdb_id=None, # 手动导入时这些ID为空,
-        task_manager=task_manager,
+        task_manager=task_manager, # 传递 task_manager
         progress_callback=callback,
         pool=pool,
         manager=scraper_manager
