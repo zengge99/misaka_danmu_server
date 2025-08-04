@@ -4,7 +4,7 @@ import { apiFetch } from '../api.js';
 let settingsSubNav, settingsSubViews;
 let passwordChangeMessage;
 let bangumiAuthStateUnauthenticated, bangumiAuthStateAuthenticated, bangumiUserNickname, bangumiUserId, bangumiAuthorizedAt, bangumiExpiresAt, bangumiUserAvatar, bangumiLoginBtn, bangumiLogoutBtn;
-let tmdbSettingsForm, tmdbSaveMessage, doubanSettingsForm, doubanSaveMessage, tvdbSettingsForm, tvdbSaveMessage;
+let tmdbSettingsForm, tmdbSaveMessage, doubanSettingsForm, doubanSaveMessage, tvdbSettingsForm, tvdbSaveMessage, usePublicTvdbKeyBtn;
 
 function initializeElements() {
     settingsSubNav = document.querySelector('#settings-view .settings-sub-nav');
@@ -29,6 +29,7 @@ function initializeElements() {
 
     tvdbSettingsForm = document.getElementById('tvdb-settings-form');
     tvdbSaveMessage = document.getElementById('tvdb-save-message');
+    usePublicTvdbKeyBtn = document.getElementById('use-public-tvdb-key-btn');
 }
 
 function handleSettingsSubNav(e) {
@@ -235,6 +236,19 @@ async function handleSaveTvdbSettings(e) {
     }
 }
 
+function handleUsePublicTvdbKey() {
+    const encodedKey = 'ZWQyYWE2NmItNzg5OS00Njc3LTkyYTctNjdiYzljZTNkOTNh';
+    try {
+        const decodedKey = atob(encodedKey);
+        document.getElementById('tvdb-api-key').value = decodedKey;
+        tvdbSaveMessage.textContent = '已填入公共Key，请点击保存。';
+        tvdbSaveMessage.className = 'message';
+    } catch (e) {
+        console.error("Failed to decode public TVDB key:", e);
+        alert("无法解码公共Key，请联系管理员。");
+    }
+}
+
 async function loadWebhookSettings() {
     try {
         const [apiKeyData, availableHandlers] = await Promise.all([
@@ -293,6 +307,7 @@ export function setupSettingsEventListeners() {
     tmdbSettingsForm.addEventListener('submit', handleSaveTmdbSettings);
     doubanSettingsForm.addEventListener('submit', handleSaveDoubanSettings);
     tvdbSettingsForm.addEventListener('submit', handleSaveTvdbSettings);
+    usePublicTvdbKeyBtn.addEventListener('click', handleUsePublicTvdbKey);
     document.getElementById('regenerate-webhook-key-btn').addEventListener('click', handleRegenerateWebhookKey);
 
     window.addEventListener('message', (event) => {

@@ -1,10 +1,11 @@
 import logging
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
+import re
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import crud, models, security
 from ..database import get_db_pool
@@ -27,11 +28,11 @@ async def get_tvdb_token(pool, client: httpx.AsyncClient) -> str:
     logger.info("TVDB token 已过期或未找到，正在请求新的令牌。")
     api_key = await crud.get_config_value(pool, "tvdb_api_key", "")
     if not api_key:
-        raise HTTPException(status_code=500, detail="TVDB API Key 未配置。")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="TVDB API Key 未配置。")
 
     try:
-        # TVDB V3 API的登录端点
-        response = await client.post("https://api.thetvdb.com/login", json={"apikey": api_key})
+        # TVDB V4 API 的登录端点
+        response = await client.post("/login", json={"apikey": api_key})
         response.raise_for_status()
         token = response.json().get("token")
         if not token:
@@ -44,7 +45,7 @@ async def get_tvdb_token(pool, client: httpx.AsyncClient) -> str:
         return token
     except Exception as e:
         logger.error(f"获取TVDB令牌失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="TVDB认证失败。")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="TVDB认证失败。")
 
 
 async def get_tvdb_client(
@@ -52,7 +53,7 @@ async def get_tvdb_client(
     pool=Depends(get_db_pool),
 ) -> httpx.AsyncClient:
     """依赖项：获取一个经过认证的TVDB客户端。"""
-    client = httpx.AsyncClient(base_url="https://api.thetvdb.com", timeout=20.0)
+    client = httpx.AsyncClient(base_url="https://api4.thetvdb.com/v4", timeout=20.0)
     token = await get_tvdb_token(pool, client)
     client.headers.update(
         {"Authorization": f"Bearer {token}", "User-Agent": "DanmuApiServer/1.0"}
@@ -62,20 +63,33 @@ async def get_tvdb_client(
 
 # --- Pydantic Models for TVDB ---
 class TvdbSearchResult(BaseModel):
-    id: int
-    seriesName: str
+    tvdb_id: str
+    name: str
     image: Optional[str] = None
     overview: Optional[str] = None
-    firstAired: Optional[str] = None
-
+    first_aired: Optional[str] = Field(None, alias="firstAired")
+    year: Optional[str] = None
 
 class TvdbSearchResponse(BaseModel):
     data: List[TvdbSearchResult]
 
+class TvdbAlias(BaseModel):
+    language: str
+    name: str
 
 class TvdbDetailsResponse(BaseModel):
-    data: Dict[str, Any]
+    id: str
+    name: str
+    aliases: Optional[List[TvdbAlias]] = None
+    overview: Optional[str] = None
+    image: Optional[str] = None
+    first_aired: Optional[str] = Field(None, alias="firstAired")
+    last_aired: Optional[str] = Field(None, alias="lastAired")
+    year: Optional[str] = None
+    remote_ids: Optional[List[Dict[str, str]]] = Field(None, alias="remoteIds")
 
+class TvdbExtendedDetailsResponse(BaseModel):
+    data: TvdbDetailsResponse
 
 # --- API Endpoints ---
 @router.get("/search", response_model=List[Dict[str, Any]], summary="搜索 TVDB 作品")
@@ -85,49 +99,56 @@ async def search_tvdb(
 ):
     """通过关键词在 TheTVDB 上搜索电视剧。"""
     try:
-        response = await client.get("/search/series", params={"name": keyword})
+        response = await client.get("/search", params={"query": keyword, "type": "series"})
         response.raise_for_status()
         results = TvdbSearchResponse.model_validate(response.json()).data
 
         formatted_results = []
         for item in results:
-            details = f"首播: {item.firstAired}" if item.firstAired else "无首播日期"
+            details = f"首播: {item.first_aired}" if item.first_aired else "无首播日期"
             if item.overview:
                 details += f" / {item.overview[:100]}..."
 
             formatted_results.append(
                 {
-                    "id": str(item.id),
-                    "title": item.seriesName,
+                    "id": item.tvdb_id,
+                    "title": item.name,
                     "details": details,
-                    "image_url": f"https://artworks.thetvdb.com/banners/{item.image}" if item.image else None,
+                    "image_url": item.image,
                 }
             )
         return formatted_results
     except Exception as e:
         logger.error(f"TVDB 搜索失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="TVDB 搜索失败。")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="TVDB 搜索失败。")
 
 
-@router.get("/details/{tvdb_id}", response_model=Dict[str, Any], summary="获取 TVDB 作品详情")
+@router.get("/details/{tvdb_id}", response_model=Dict[str, Any], summary="获取 TVDB 作品详情(扩展)")
 async def get_tvdb_details(
     tvdb_id: str = Path(...), client: httpx.AsyncClient = Depends(get_tvdb_client)
 ):
     """获取指定 TVDB ID 的作品详情，主要用于提取别名和IMDb ID。"""
     try:
-        response = await client.get(f"/series/{tvdb_id}")
+        response = await client.get(f"/series/{tvdb_id}/extended")
         response.raise_for_status()
-        details = TvdbDetailsResponse.model_validate(response.json()).data
+        details = TvdbExtendedDetailsResponse.model_validate(response.json()).data
+
+        imdb_id = None
+        if details.remote_ids:
+            for remote_id in details.remote_ids:
+                if remote_id.get("sourceName") == "IMDB":
+                    imdb_id = remote_id.get("id")
+                    break
 
         return {
-            "id": details.get("id"),
-            "tvdb_id": details.get("id"),
-            "name_en": details.get("seriesName"),
-            "aliases_cn": details.get("aliases", []),
+            "id": details.id,
+            "tvdb_id": details.id,
+            "name_en": details.name,
+            "aliases_cn": [alias.name for alias in details.aliases] if details.aliases else [],
             "name_jp": None,
             "name_romaji": None,
-            "imdb_id": details.get("imdbId"),
+            "imdb_id": imdb_id,
         }
     except Exception as e:
         logger.error(f"获取 TVDB 详情失败 (ID: {tvdb_id}): {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"获取 TVDB 详情失败 (ID: {tvdb_id})。")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"获取 TVDB 详情失败 (ID: {tvdb_id})。")

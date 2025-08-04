@@ -754,13 +754,14 @@
                         <div id="tvdb-settings-subview" class="settings-subview hidden">
                             <div class="form-card">
                                 <h3>TVDB API 配置</h3>
-                                <p>此项目使用 TheTVDB 的 V3 API。默认已填入一个可用的公共API Key。如果失效，您可以从 <a href="https://thetvdb.com/subscribe" target="_blank">TheTVDB官网</a> 获取您自己的 Key。</p>
+                                <p>此项目需要 TheTVDB V4 API Key。您可以从 <a href="https://thetvdb.com/subscribe" target="_blank">TheTVDB官网</a> 获取您自己的 Key，或使用下方的公共 Key。</p>
                                 <form id="tvdb-settings-form">
                                     <div class="form-row">
                                         <label for="tvdb-api-key">API Key</label>
                                         <input type="password" id="tvdb-api-key" placeholder="在此输入您的 TVDB API Key">
                                     </div>
                                     <div class="form-actions">
+                                        <button type="button" id="use-public-tvdb-key-btn" class="secondary-btn">使用公共Key</button>
                                         <button type="submit">保存</button>
                                     </div>
                                 </form>

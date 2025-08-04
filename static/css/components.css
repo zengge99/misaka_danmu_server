@@ -193,3 +193,11 @@ th {
     align-items: center;
     gap: 8px;
 }
+
+.secondary-btn {
+    background-color: #6c757d;
+}
+
+.secondary-btn:hover {
+    background-color: #5a6268;
+}
