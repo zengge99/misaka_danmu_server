@@ -92,35 +92,30 @@ class ScraperManager:
         """检查是否有任何已启用的爬虫。"""
         return bool(self.scrapers)
 
-    async def search_all(self, keywords: List[str], episode_info: Optional[Dict[str, Any]] = None) -> List[ProviderSearchInfo]:
+    async def search_sequentially(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> Optional[tuple[str, List[ProviderSearchInfo]]]:
         """
-        在所有已注册的搜索源上并发搜索关键词列表。
+        按用户定义的顺序，在已启用的搜索源上顺序搜索。
+        一旦找到任何结果，立即停止并返回提供方名称和结果列表。
         """
         if not self.scrapers:
-            return []
+            return None, None
 
-        tasks = []
-        for keyword in keywords:
-            for scraper in self.scrapers.values():
-                tasks.append(scraper.search(keyword, episode_info=episode_info))
+        # 从数据库获取有序且已启用的搜索源列表
+        ordered_settings = await crud.get_all_scraper_settings(self.pool)
+        enabled_providers = [s['provider_name'] for s in ordered_settings if s['is_enabled']]
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for provider_name in enabled_providers:
+            scraper = self.scrapers.get(provider_name)
+            if not scraper: continue
 
-        all_search_results = []
-        seen_results = set() # 用于去重
-
-        for result in results:
-            if isinstance(result, Exception):
-                logging.getLogger(__name__).error(f"搜索任务中出现错误: {result}")
-            elif result:
-                for item in result:
-                    # 使用 (provider, mediaId) 作为唯一标识符
-                    unique_id = (item.provider, item.mediaId)
-                    if unique_id not in seen_results:
-                        all_search_results.append(item)
-                        seen_results.add(unique_id)
-
-        return all_search_results
+            try:
+                results = await scraper.search(keyword, episode_info=episode_info)
+                if results:
+                    return provider_name, results
+            except Exception as e:
+                logging.getLogger(__name__).error(f"顺序搜索时，提供方 '{provider_name}' 发生错误: {e}", exc_info=True)
+        
+        return None, None
 
     async def close_all(self):
         """关闭所有搜索源的客户端。"""

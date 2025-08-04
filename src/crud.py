@@ -112,6 +112,34 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
             await cursor.execute(query_like, tuple(like_params + params_episode + params_season))
             return await cursor.fetchall()
 
+async def find_favorited_source_for_anime(pool: aiomysql.Pool, title: str, season: int) -> Optional[Dict[str, Any]]:
+    """
+    通过标题和季度查找已存在于库中且被标记为“精确”的数据源。
+    """
+    query = """
+        SELECT
+            s.provider_name,
+            s.media_id,
+            a.id as anime_id,
+            a.title as anime_title,
+            a.type as media_type,
+            a.image_url
+        FROM anime a
+        JOIN anime_sources s ON a.id = s.anime_id
+        WHERE a.title = %s AND a.season = %s AND s.is_favorited = TRUE
+        LIMIT 1
+    """
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            # 1. 尝试精确匹配标题和季度
+            await cursor.execute(query, (title, season))
+            result = await cursor.fetchone()
+            if result:
+                return result
+            # 2. 如果精确匹配失败，可以添加更宽松的模糊匹配逻辑（如果需要）
+            # ...
+    return None
+
 async def search_animes_for_dandan(pool: aiomysql.Pool, keyword: str) -> List[Dict[str, Any]]:
     """
     在本地库中通过番剧标题搜索匹配的番剧，用于 /search/anime 接口。

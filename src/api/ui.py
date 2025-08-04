@@ -827,46 +827,63 @@ async def generic_import_task(
     """
     total_comments_added = 0
     try:
-        # Webhook 触发的特殊逻辑: 搜索所有源并为最佳匹配项创建新任务
+        # --- Webhook 触发的全新导入逻辑 ---
         if is_webhook and provider is None:
-            logger.info(f"Webhook 任务: 正在为 '{anime_title}' 搜索所有源...")
-            # media_id 在这里是搜索关键词
-            search_results = await manager.search_all([media_id], episode_info={"season": season, "episode": current_episode_index})
+            logger.info(f"Webhook 任务: 开始为 '{anime_title}' (S{season:02d}E{current_episode_index:02d}) 查找最佳源...")
+            progress_callback(5, "正在检查已收藏的源...")
+
+            # 1. 优先查找已收藏的源
+            favorited_source = await crud.find_favorited_source_for_anime(pool, anime_title, season)
+            if favorited_source:
+                logger.info(f"Webhook 任务: 找到已收藏的源 '{favorited_source['provider_name']}'，将直接使用此源。")
+                progress_callback(10, f"找到已收藏的源: {favorited_source['provider_name']}")
+                
+                # 直接使用这个源的信息创建导入任务
+                task_title = f"Webhook自动导入: {favorited_source['anime_title']} ({favorited_source['provider_name']})"
+                task_coro = lambda cb: generic_import_task(
+                    provider=favorited_source['provider_name'], media_id=favorited_source['media_id'],
+                    anime_title=favorited_source['anime_title'], media_type=favorited_source['media_type'],
+                    season=season, current_episode_index=current_episode_index,
+                    image_url=favorited_source['image_url'], douban_id=douban_id,
+                    tmdb_id=tmdb_id, imdb_id=imdb_id, tvdb_id=tvdb_id,
+                    progress_callback=cb, pool=pool, manager=manager,
+                    task_manager=task_manager, is_webhook=False
+                )
+                await task_manager.submit_task(task_coro, task_title)
+                raise TaskSuccess(f"Webhook: 已为收藏源 '{favorited_source['provider_name']}' 创建导入任务。")
+
+            # 2. 如果没有收藏源，则按顺序搜索
+            logger.info(f"Webhook 任务: 未找到收藏源，开始按顺序搜索...")
+            progress_callback(20, "按顺序搜索...")
+            search_keyword = media_id # 对于 Webhook, media_id 是搜索关键词
+            
+            provider_name, search_results = await manager.search_sequentially(
+                search_keyword, episode_info={"season": season, "episode": current_episode_index}
+            )
             
             if not search_results:
                 raise TaskSuccess(f"Webhook 任务失败: 未找到 '{anime_title}' 的任何可用源。")
 
-            # 按与原始标题的相似度对结果进行排序
+            # 3. 从找到的第一个源中选择最佳匹配项
             search_results.sort(key=lambda r: fuzz.ratio(anime_title, r.title), reverse=True)
-
-            # 按 provider 分组，并为每个 provider 选择最佳匹配（即排序后的第一个）
-            best_results_per_provider: Dict[str, models.ProviderSearchInfo] = {}
-            for result in search_results:
-                if result.provider not in best_results_per_provider:
-                    best_results_per_provider[result.provider] = result
+            best_match = search_results[0]
             
-            logger.info(f"Webhook 任务: 找到 {len(best_results_per_provider)} 个源的最佳匹配项，将为每个源创建导入任务。")
-
-            # 为每个最佳匹配项提交一个新的、具体的导入任务
-            for prov, item in best_results_per_provider.items():
-                specific_task_title = f"Webhook自动导入: {item.title} ({prov})"
-                
-                # 使用闭包来捕获当前循环的 `item`
-                def create_task_coro(captured_item):
-                    return lambda callback: generic_import_task(
-                        provider=captured_item.provider, media_id=captured_item.mediaId,
-                        anime_title=captured_item.title, media_type=captured_item.type,
-                        season=captured_item.season, current_episode_index=captured_item.currentEpisodeIndex,
-                        image_url=captured_item.imageUrl, douban_id=douban_id,
-                        tmdb_id=tmdb_id, imdb_id=imdb_id, tvdb_id=tvdb_id,
-                        progress_callback=callback, pool=pool, manager=manager,
-                        task_manager=task_manager, is_webhook=False
-                    )
-                
-                await task_manager.submit_task(create_task_coro(item), specific_task_title)
-
-            # 主 webhook 任务成功完成
-            raise TaskSuccess(f"Webhook: 已为 {len(best_results_per_provider)} 个源创建导入任务。")
+            logger.info(f"Webhook 任务: 在 '{provider_name}' 中找到最佳匹配项 '{best_match.title}'，将为其创建导入任务。")
+            progress_callback(50, f"在 {provider_name} 中找到匹配项")
+            
+            # 4. 为这个唯一的最佳匹配项提交导入任务
+            task_title = f"Webhook自动导入: {best_match.title} ({provider_name})"
+            task_coro = lambda cb: generic_import_task(
+                provider=best_match.provider, media_id=best_match.mediaId,
+                anime_title=best_match.title, media_type=best_match.type,
+                season=best_match.season, current_episode_index=best_match.currentEpisodeIndex,
+                image_url=best_match.imageUrl, douban_id=douban_id,
+                tmdb_id=tmdb_id, imdb_id=imdb_id, tvdb_id=tvdb_id,
+                progress_callback=cb, pool=pool, manager=manager,
+                task_manager=task_manager, is_webhook=False
+            )
+            await task_manager.submit_task(task_coro, task_title)
+            raise TaskSuccess(f"Webhook: 已为源 '{provider_name}' 创建导入任务。")
 
         # --- 原有的导入逻辑 ---
         scraper = manager.get_scraper(provider)

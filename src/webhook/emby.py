@@ -28,7 +28,7 @@ class EmbyWebhook(BaseWebhook):
         # 提取通用信息
         provider_ids = item.get("ProviderIds", {})
         tmdb_id = provider_ids.get("Tmdb")
-        imdb_id = provider_ids.get("Imdb")
+        imdb_id = provider_ids.get("IMDB") # 修正：Emby 使用大写的 "IMDB"
         tvdb_id = provider_ids.get("Tvdb")
         douban_id = provider_ids.get("DoubanID") # Emby 可能使用 DoubanID
         
