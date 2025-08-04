@@ -229,33 +229,10 @@ async def search_anime_provider(
     except Exception as e:
         logger.warning(f"TMDB辅助搜索失败: {e}", exc_info=True)
 
-    # 1. 使用原始关键词搜索所有源
-    results = await manager.search_all([search_title], episode_info=episode_info)
-    
-    # 2. 如果从TMDB获取了别名，则使用别名集对结果进行过滤
-    if len(search_aliases) > 1:
-        def normalize_title_for_filter(title: str) -> str:
-            if not title:
-                return ""
-            # 移除括号内容、转小写、去空格、归一化冒号
-            title = re.sub(r'[\[【(（].*?[\]】)）]', '', title)
-            return title.lower().replace(" ", "").replace("：", ":").strip()
-
-        # 准备一个标准化的别名集合
-        normalized_aliases = {normalize_title_for_filter(alias) for alias in search_aliases if alias}
-        
-        filtered_results = []
-        for item in results:
-            normalized_item_title = normalize_title_for_filter(item.title)
-            if not normalized_item_title:
-                continue
-            
-            # 如果item的标题是任何一个别名的子串，或者任何一个别名是item标题的子串，则保留
-            if any((alias in normalized_item_title) or (normalized_item_title in alias) for alias in normalized_aliases):
-                filtered_results.append(item)
-        
-        logger.info(f"TMDB别名过滤: 从 {len(results)} 个结果中保留了 {len(filtered_results)} 个。")
-        results = filtered_results
+    # 1. 使用原始关键词和从TMDB获取的别名进行全网搜索
+    # search_all 方法内部会处理并发和去重
+    logger.info(f"将使用以下关键词进行全网搜索: {list(search_aliases)}")
+    results = await manager.search_all(list(search_aliases), episode_info=episode_info)
 
     # 如果用户在搜索词中明确指定了季度，则对结果进行过滤
     if season_to_filter:
