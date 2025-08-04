@@ -8,7 +8,7 @@ import logging
 from datetime import timedelta, datetime, timezone
 import aiomysql
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, Response
 from fastapi.security import OAuth2PasswordRequestForm
 
 from .. import crud, models, security
@@ -18,7 +18,9 @@ from ..scraper_manager import ScraperManager
 from ..webhook_manager import WebhookManager
 from ..scheduler import SchedulerManager
 from thefuzz import fuzz
-from .tmdb_api import get_tmdb_client
+from .tmdb_api import get_tmdb_client, _get_robust_image_base_url
+from .douban_api import get_douban_client
+from .imdb_api import get_imdb_client
 from ..config import settings
 from ..config import settings
 from ..database import get_db_pool
@@ -179,6 +181,8 @@ async def search_anime_provider(
     manager: ScraperManager = Depends(get_scraper_manager),
     current_user: models.User = Depends(security.get_current_user),
     tmdb_client: httpx.AsyncClient = Depends(get_tmdb_client),
+    douban_client: httpx.AsyncClient = Depends(get_douban_client),
+    imdb_client: httpx.AsyncClient = Depends(get_imdb_client),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
     """
@@ -204,34 +208,72 @@ async def search_anime_provider(
             detail="没有启用的搜索源，请在“搜索源”页面中启用至少一个。"
         )
 
-    # --- TMDB 辅助搜索 ---
+    # --- 元数据辅助搜索 (重构) ---
     filter_aliases = {search_title}
-    try:
-        # 尝试同时搜索 tv 和 movie
-        tv_task = tmdb_client.get("/search/tv", params={"query": search_title, "language": "zh-CN"})
-        movie_task = tmdb_client.get("/search/movie", params={"query": search_title, "language": "zh-CN"})
-        tv_res, movie_res = await asyncio.gather(tv_task, movie_task, return_exceptions=True)
 
-        tmdb_results = []
-        if isinstance(tv_res, httpx.Response) and tv_res.status_code == 200:
-            tmdb_results.extend(tv_res.json().get("results", []))
-        if isinstance(movie_res, httpx.Response) and movie_res.status_code == 200:
-            tmdb_results.extend(movie_res.json().get("results", []))
+    async def _get_tmdb_aliases() -> set:
+        """从TMDB获取别名。"""
+        local_aliases = set()
+        try:
+            tv_task = tmdb_client.get("/search/tv", params={"query": search_title, "language": "zh-CN"})
+            movie_task = tmdb_client.get("/search/movie", params={"query": search_title, "language": "zh-CN"})
+            tv_res, movie_res = await asyncio.gather(tv_task, movie_task, return_exceptions=True)
 
-        if tmdb_results:
-            best_match = tmdb_results[0]
-            media_type = "tv" if "name" in best_match else "movie"
-            details_res = await tmdb_client.get(f"/{media_type}/{best_match['id']}", params={"append_to_response": "alternative_titles"})
-            if details_res.status_code == 200:
-                details = details_res.json()
-                alt_titles = details.get("alternative_titles", {}).get("titles", [])
-                for title_info in alt_titles:
-                    filter_aliases.add(title_info['title'])
-                filter_aliases.add(details.get('name') or details.get('title'))
-                filter_aliases.add(details.get('original_name') or details.get('original_title'))
-                logger.info(f"TMDB辅助搜索成功，将使用以下别名进行过滤: {filter_aliases}")
-    except Exception as e:
-        logger.warning(f"TMDB辅助搜索失败: {e}", exc_info=True)
+            tmdb_results = []
+            if isinstance(tv_res, httpx.Response) and tv_res.status_code == 200:
+                tmdb_results.extend(tv_res.json().get("results", []))
+            if isinstance(movie_res, httpx.Response) and movie_res.status_code == 200:
+                tmdb_results.extend(movie_res.json().get("results", []))
+
+            if tmdb_results:
+                best_match = tmdb_results[0]
+                media_type = "tv" if "name" in best_match else "movie"
+                details_res = await tmdb_client.get(f"/{media_type}/{best_match['id']}", params={"append_to_response": "alternative_titles"})
+                if details_res.status_code == 200:
+                    details = details_res.json()
+                    alt_titles = details.get("alternative_titles", {}).get("titles", [])
+                    for title_info in alt_titles:
+                        local_aliases.add(title_info['title'])
+                    local_aliases.add(details.get('name') or details.get('title'))
+                    local_aliases.add(details.get('original_name') or details.get('original_title'))
+                    logger.info(f"TMDB辅助搜索成功，找到别名: {[a for a in local_aliases if a]}")
+        except Exception as e:
+            logger.warning(f"TMDB辅助搜索失败: {e}")
+        return {alias for alias in local_aliases if alias}
+
+    async def _get_metadata_aliases(source_name: str, client: httpx.AsyncClient, search_path: str, details_path_template: str) -> set:
+        """从豆瓣或IMDb等源获取别名。"""
+        local_aliases = set()
+        try:
+            search_res = await client.get(search_path, params={"keyword": search_title})
+            if search_res.status_code != 200: return set()
+            search_results = search_res.json()
+            if not search_results: return set()
+            best_match = search_results[0]
+            media_id = best_match.get("id")
+            if not media_id: return set()
+            details_res = await client.get(details_path_template.format(id=media_id))
+            if details_res.status_code != 200: return set()
+            details = details_res.json()
+            local_aliases.add(details.get("name_en"))
+            local_aliases.add(details.get("name_jp"))
+            if isinstance(details.get("aliases_cn"), list):
+                local_aliases.update(details.get("aliases_cn"))
+            logger.info(f"{source_name}辅助搜索成功，找到别名: {[a for a in local_aliases if a]}")
+        except Exception as e:
+            logger.warning(f"{source_name}辅助搜索时发生错误: {e}")
+        return {alias for alias in local_aliases if alias}
+
+    # 并发执行所有辅助搜索
+    tasks = [
+        _get_tmdb_aliases(),
+        _get_metadata_aliases("Douban", douban_client, "/search", "/details/{id}"),
+        _get_metadata_aliases("IMDb", imdb_client, "/search", "/details/{id}"),
+    ]
+    results = await asyncio.gather(*tasks)
+    for alias_set in results:
+        filter_aliases.update(alias_set)
+    logger.info(f"所有辅助搜索完成，最终别名集大小: {len(filter_aliases)}")
 
     # 1. 仅使用解析后的主标题搜索所有弹幕源
     logger.info(f"将使用解析后的标题 '{search_title}' 进行全网搜索...")
