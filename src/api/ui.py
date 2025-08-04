@@ -43,6 +43,17 @@ def _roman_to_int(s: str) -> int:
             i += 1
     return result
 
+def _is_movie_by_title(title: str) -> bool:
+    """
+    通过标题中的关键词（如“剧场版”）判断是否为电影。
+    """
+    if not title:
+        return False
+    # 关键词列表，不区分大小写
+    movie_keywords = ["剧场版", "劇場版", "movie", "映画"]
+    title_lower = title.lower()
+    return any(keyword in title_lower for keyword in movie_keywords)
+
 def parse_search_keyword(keyword: str) -> Dict[str, Any]:
     """
     解析搜索关键词，提取标题、季数和集数。
@@ -245,6 +256,12 @@ async def search_anime_provider(
             filtered_results.append(item)
     logger.info(f"别名过滤: 从 {len(all_results)} 个原始结果中，保留了 {len(filtered_results)} 个相关结果。")
     results = filtered_results
+
+    # 新增逻辑：根据标题关键词修正媒体类型
+    for item in results:
+        if item.type == 'tv_series' and _is_movie_by_title(item.title):
+            logger.info(f"标题 '{item.title}' 包含电影关键词，类型从 'tv_series' 修正为 'movie'。")
+            item.type = 'movie'
 
     # 如果用户在搜索词中明确指定了季度，则对结果进行过滤
     if season_to_filter:
