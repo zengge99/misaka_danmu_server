@@ -29,22 +29,36 @@ def get_season_from_title(title: str) -> int:
     """从标题中解析季度信息，返回季度数。"""
     if not title:
         return 1
-    
+
+    # A map for Chinese numerals, including formal and simple.
+    chinese_num_map = {
+        '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
+        '壹': 1, '贰': 2, '叁': 3, '肆': 4, '伍': 5, '陆': 6, '柒': 7, '捌': 8, '玖': 9, '拾': 10
+    }
+
     # 模式的顺序很重要
     patterns = [
+        # 格式: S01, Season 1
         (re.compile(r"(?:S|Season)\s*(\d+)", re.I), lambda m: int(m.group(1))),
-        (re.compile(r"第\s*([一二三四五六七八九十\d]+)\s*[季部]", re.I), 
-         lambda m: {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}.get(m.group(1)) or int(m.group(1))),
-        (re.compile(r"\s+([Ⅰ-Ⅻ])\b", re.I), 
+        # 格式: 第 X 季/部/幕 (支持中文和阿拉伯数字)
+        (re.compile(r"第\s*([一二三四五六七八九十壹贰叁肆伍陆柒捌玖拾\d])\s*[季部幕]", re.I),
+         lambda m: chinese_num_map.get(m.group(1)) if not m.group(1).isdigit() else int(m.group(1))),
+        # 格式: X之章 (支持简繁中文数字)
+        (re.compile(r"([一二三四五六七八九十壹贰叁肆伍陆柒捌玖拾])\s*之\s*章", re.I),
+         lambda m: chinese_num_map.get(m.group(1))),
+        # 格式: Unicode 罗马数字, e.g., Ⅲ
+        (re.compile(r"\s+([Ⅰ-Ⅻ])(?=\s|$)", re.I), 
          lambda m: {'Ⅰ': 1, 'Ⅱ': 2, 'Ⅲ': 3, 'Ⅳ': 4, 'Ⅴ': 5, 'Ⅵ': 6, 'Ⅶ': 7, 'Ⅷ': 8, 'Ⅸ': 9, 'Ⅹ': 10, 'Ⅺ': 11, 'Ⅻ': 12}.get(m.group(1).upper())),
-        (re.compile(r"\s+([IVXLCDM]+)$", re.I), lambda m: _roman_to_int(m.group(1))),
+        # 格式: ASCII 罗马数字, e.g., III
+        (re.compile(r"\s+([IVXLCDM]+)\b", re.I), lambda m: _roman_to_int(m.group(1))),
     ]
 
     for pattern, handler in patterns:
         match = pattern.search(title)
         if match:
             try:
-                if season := handler(match): return season
+                season = handler(match)
+                if season is not None: return season
             except (ValueError, KeyError, IndexError):
                 continue
     return 1 # Default to season 1
