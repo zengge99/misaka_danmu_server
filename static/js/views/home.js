@@ -136,55 +136,14 @@ async function handleSearch(e) {
 
     try {
         const data = await apiFetch(`/api/ui/search/provider?keyword=${encodeURIComponent(keyword)}`);
-        const processedResults = (data.results || []).map(item => ({
-            ...item,
-            season: parseTitleForSeason(item.title)
-        }));
-        displayResults(processedResults);
+        const processedResults = data.results || [];
+        const searchSeason = data.search_season;
+        displayResults(processedResults, searchSeason);
     } catch (error) {
         alert(`搜索失败: ${(error.message || error)}`);
     } finally {
         toggleLoader(false);
     }
-}
-
-function parseTitleForSeason(title) {
-    if (!title) return 1;
-
-    const patterns = [
-        /(?:S|Season)\s*(\d+)/i,
-        /第\s*([一二三四五六七八九十\d]+)\s*[季部]/,
-        /第\s*([一二三四五六七八九十\d]+)\s*(?:部分|篇|章|幕)/,
-        // 新增：匹配Unicode罗马数字 (e.g., Ⅲ)
-        /\s+([Ⅰ-Ⅻ])\b/i,
-        /\s+([IVXLCDM]+)$/i, // Roman numerals at the end of the string
-        /\s(\d{1,2})$/ // 匹配末尾的独立数字作为季度, e.g., "Title 2"
-    ];
-
-    const chineseNumMap = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
-    // 新增：Unicode罗马数字到整数的映射
-    const unicodeRomanMap = { 'Ⅰ': 1, 'Ⅱ': 2, 'Ⅲ': 3, 'Ⅳ': 4, 'Ⅴ': 5, 'Ⅵ': 6, 'Ⅶ': 7, 'Ⅷ': 8, 'Ⅸ': 9, 'Ⅹ': 10, 'Ⅺ': 11, 'Ⅻ': 12 };
-
-    for (const pattern of patterns) {
-        const match = title.match(pattern);
-        if (match && match[1]) {
-            const numStr = match[1];
-            if (numStr.match(/^\d+$/)) {
-                return parseInt(numStr, 10);
-            } else if (chineseNumMap[numStr]) {
-                return chineseNumMap[numStr];
-            } else if (unicodeRomanMap[numStr.toUpperCase()]) {
-                return unicodeRomanMap[numStr.toUpperCase()];
-            } else { // Fallback for ASCII Roman numerals
-                try {
-                    return romanToInt(numStr.toUpperCase());
-                } catch {
-                    // ignore if not a valid roman numeral
-                }
-            }
-        }
-    }
-    return 1; // Default to season 1
 }
 
 function getBaseTitle(title) {
@@ -213,8 +172,8 @@ function romanToInt(s) {
     return result;
 }
 
-function displayResults(results) {
-    originalSearchResults = results;
+function displayResults(results, searchSeason) {
+    originalSearchResults = { results, searchSeason };
 
     // 智能排序：首先按基础标题分组，然后在组内按季度升序排列
     originalSearchResults.sort((a, b) => {
@@ -236,26 +195,26 @@ function displayResults(results) {
         document.getElementById('filter-btn-tv_series').classList.add('active');
         document.getElementById('filter-btn-tv_series').querySelector('.status-icon').textContent = '✅';
         document.getElementById('results-filter-input').value = '';
-        applyFiltersAndRender();
+        applyFiltersAndRender(searchSeason);
     } else {
         document.getElementById('results-list').innerHTML = '<li>未找到结果。</li>';
     }
 }
 
-function applyFiltersAndRender() {
-    if (!originalSearchResults) return;
+function applyFiltersAndRender(searchSeason) {
+    if (!originalSearchResults || !originalSearchResults.results) return;
     const activeTypes = new Set();
     if (document.getElementById('filter-btn-movie').classList.contains('active')) activeTypes.add('movie');
     if (document.getElementById('filter-btn-tv_series').classList.contains('active')) activeTypes.add('tv_series');
-    let filteredResults = originalSearchResults.filter(item => activeTypes.has(item.type));
+    let filteredResults = originalSearchResults.results.filter(item => activeTypes.has(item.type));
     const filterText = document.getElementById('results-filter-input').value.toLowerCase();
     if (filterText) {
         filteredResults = filteredResults.filter(item => item.title.toLowerCase().includes(filterText));
     }
-    renderSearchResults(filteredResults);
+    renderSearchResults(filteredResults, searchSeason);
 }
 
-function renderSearchResults(results) {
+function renderSearchResults(results, searchSeason) {
     const resultsList = document.getElementById('results-list');
     resultsList.innerHTML = '';
     if (results.length === 0) {
@@ -310,14 +269,14 @@ function renderSearchResults(results) {
         li.appendChild(leftContainer);
         importBtn.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent the li click event from firing
-            handleImportClick(importBtn, item)
+            handleImportClick(importBtn, item, searchSeason)
         });
         li.appendChild(importBtn);
         resultsList.appendChild(li);
     });
 }
 
-async function handleImportClick(button, item) {
+async function handleImportClick(button, item, searchSeason) {
     button.disabled = true;
     button.textContent = '导入中...';
     try {
@@ -328,7 +287,9 @@ async function handleImportClick(button, item) {
                 media_id: item.mediaId,
                 anime_title: item.title,
                 type: item.type,
-                season: item.season, // Pass detected season
+                // 关键修正：如果用户搜索时指定了季度，则优先使用该季度
+                // 否则，使用从单个结果中解析出的季度
+                season: searchSeason !== null ? searchSeason : item.season,
                 image_url: item.imageUrl,
                 douban_id: item.douban_id,
                 current_episode_index: item.currentEpisodeIndex,
@@ -394,7 +355,7 @@ async function handleBulkImport() {
     }
 
     const selectedMediaIds = new Set(Array.from(selectedCheckboxes).map(cb => cb.value));
-    itemsForBulkImport = originalSearchResults.filter(item => selectedMediaIds.has(item.mediaId));
+    itemsForBulkImport = originalSearchResults.results.filter(item => selectedMediaIds.has(item.mediaId));
 
     // Always show the bulk import view
     _showBulkImportView(itemsForBulkImport);

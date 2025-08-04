@@ -175,9 +175,14 @@ async def search_anime_local(
     ]
     return models.AnimeSearchResponse(animes=animes)
 
+class UIProviderSearchResponse(models.ProviderSearchResponse):
+    """扩展了 ProviderSearchResponse 以包含原始搜索的上下文。"""
+    search_season: Optional[int] = None
+    search_episode: Optional[int] = None
 @router.get(
     "/search/provider",
-    response_model=models.ProviderSearchResponse,
+    #response_model=models.ProviderSearchResponse,
+    response_model=UIProviderSearchResponse,
     summary="从外部数据源搜索节目",
 )
 async def search_anime_provider(
@@ -285,7 +290,11 @@ async def search_anime_provider(
     for item in results:
         item.currentEpisodeIndex = current_episode_index_for_this_request
 
-    return models.ProviderSearchResponse(results=results)
+    return UIProviderSearchResponse(
+        results=results,
+        search_season=season_to_filter,
+        search_episode=episode_to_filter
+    )
 
 @router.get("/library", response_model=models.LibraryResponse, summary="获取媒体库内容")
 async def get_library(
@@ -886,7 +895,10 @@ async def generic_import_task(
             task_coro = lambda cb: generic_import_task(
                 provider=best_match.provider, media_id=best_match.mediaId,
                 anime_title=best_match.title, media_type=best_match.type,
-                season=best_match.season, current_episode_index=best_match.currentEpisodeIndex,
+                # 修正：这里必须使用从 Webhook 传入的原始 season，
+                # 而不是从搜索结果标题中解析出的不一定准确的 best_match.season。
+                # 这样可以确保即使搜索结果标题不含季度信息，也能正确地按第三季入库。
+                season=season, current_episode_index=best_match.currentEpisodeIndex,
                 image_url=best_match.imageUrl, douban_id=douban_id,
                 tmdb_id=tmdb_id, imdb_id=imdb_id, tvdb_id=tvdb_id,
                 progress_callback=cb, pool=pool, manager=manager,
