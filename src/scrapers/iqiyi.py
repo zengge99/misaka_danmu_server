@@ -180,7 +180,7 @@ class IqiyiScraper(BaseScraper):
                     episodeCount=album.item_total_number,
                     currentEpisodeIndex=current_episode,
                 )
-                self.logger.debug(f"爱奇艺: 创建的 ProviderSearchInfo: {provider_search_info.model_dump_json(indent=2, ensure_ascii=False)}")
+                self.logger.debug(f"爱奇艺: 创建的 ProviderSearchInfo: {provider_search_info.model_dump_json(indent=2)}")
                 results.append(provider_search_info)
 
         except Exception as e:

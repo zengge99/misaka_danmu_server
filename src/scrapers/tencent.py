@@ -167,7 +167,7 @@ class TencentScraper(BaseScraper):
                         episodeCount=episode_count,
                         currentEpisodeIndex=current_episode
                     )
-                    self.logger.debug(f"Tencent: 创建的 ProviderSearchInfo: {provider_search_info.model_dump_json(indent=2, ensure_ascii=False)}")
+                    self.logger.debug(f"Tencent: 创建的 ProviderSearchInfo: {provider_search_info.model_dump_json(indent=2)}")
                     results.append(provider_search_info)
         except httpx.HTTPStatusError as e:
             self.logger.error(f"搜索请求失败: {e}")

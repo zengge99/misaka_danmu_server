@@ -422,7 +422,7 @@ class BilibiliScraper(BaseScraper):
                         episodeCount=item.ep_size,
                         currentEpisodeIndex=episode_info.get("episode") if episode_info else None
                     )
-                    self.logger.debug(f"Bilibili: 创建的 ProviderSearchInfo: {provider_search_info.model_dump_json(indent=2, ensure_ascii=False)}")
+                    self.logger.debug(f"Bilibili: 创建的 ProviderSearchInfo: {provider_search_info.model_dump_json(indent=2)}")
                     results.append(provider_search_info)
             else:
                 # 修正：将日志级别从 WARNING 改为 INFO，因为这不是一个真正的错误，

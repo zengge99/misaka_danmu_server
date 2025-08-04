@@ -161,7 +161,7 @@ class YoukuScraper(BaseScraper):
                     episodeCount=common_data.episode_total,
                     currentEpisodeIndex=current_episode
                 )
-                self.logger.debug(f"Youku: 创建的 ProviderSearchInfo: {provider_search_info.model_dump_json(indent=2, ensure_ascii=False)}")
+                self.logger.debug(f"Youku: 创建的 ProviderSearchInfo: {provider_search_info.model_dump_json(indent=2)}")
                 results.append(provider_search_info)
 
         except Exception as e:
