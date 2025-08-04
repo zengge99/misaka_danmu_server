@@ -883,10 +883,36 @@ async def generic_import_task(
             if not search_results:
                 raise TaskSuccess(f"Webhook 任务失败: 未找到 '{anime_title}' 的任何可用源。")
 
-            # 3. 从找到的第一个源中选择最佳匹配项
-            search_results.sort(key=lambda r: fuzz.ratio(anime_title, r.title), reverse=True)
-            best_match = search_results[0]
+            # 3. 从返回的结果中，根据类型、季度和标题相似度选择最佳匹配项
+            best_match = None
+            highest_score = -1
+            target_season = season
+            target_media_type = media_type
+
+            for item in search_results:
+                # 修正：根据标题中的关键词再次修正媒体类型，以防数据源标记错误
+                if item.type == 'tv_series' and _is_movie_by_title(item.title):
+                    item.type = 'movie'
+                    item.season = 1 # 电影/剧场版统一为第一季
+
+                # 使用更健壮的模糊匹配算法
+                score = fuzz.token_set_ratio(anime_title, item.title)
+
+                # 检查类型和季度是否匹配
+                type_match = (item.type == target_media_type)
+                season_match = (item.season == target_season) if target_media_type == 'tv_series' else True
+
+                if type_match and season_match and score > highest_score:
+                    highest_score = score
+                    best_match = item
             
+            if not best_match:
+                log_msg = f"Webhook 任务: 未能在 '{provider_name}' 的结果中找到与 '{anime_title}' (类型: {target_media_type}, 季: {target_season}) 完全匹配的项。候选列表:\n"
+                for item in search_results:
+                    log_msg += f"  - 候选: '{item.title}' (类型: {item.type}, 季: {item.season})\n"
+                logger.warning(log_msg)
+                raise TaskSuccess(f"Webhook 任务失败: 未找到 '{anime_title}' 的精确匹配项。")
+
             logger.info(f"Webhook 任务: 在 '{provider_name}' 中找到最佳匹配项 '{best_match.title}'，将为其创建导入任务。")
             progress_callback(50, f"在 {provider_name} 中找到匹配项")
             
