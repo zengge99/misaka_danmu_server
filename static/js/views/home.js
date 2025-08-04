@@ -173,10 +173,8 @@ function romanToInt(s) {
 }
 
 function displayResults(results, searchSeason) {
-    originalSearchResults = { results, searchSeason };
-
     // 智能排序：首先按基础标题分组，然后在组内按季度升序排列
-    originalSearchResults.sort((a, b) => {
+    results.sort((a, b) => {
         const baseTitleA = getBaseTitle(a.title);
         const baseTitleB = getBaseTitle(b.title);
 
@@ -185,6 +183,8 @@ function displayResults(results, searchSeason) {
         }
         return a.season - b.season;
     });
+
+    originalSearchResults = { results, searchSeason };
 
     const resultsFilterControls = document.getElementById('results-filter-controls');
     resultsFilterControls.classList.toggle('hidden', results.length === 0);
@@ -195,14 +195,15 @@ function displayResults(results, searchSeason) {
         document.getElementById('filter-btn-tv_series').classList.add('active');
         document.getElementById('filter-btn-tv_series').querySelector('.status-icon').textContent = '✅';
         document.getElementById('results-filter-input').value = '';
-        applyFiltersAndRender(searchSeason);
+        applyFiltersAndRender();
     } else {
         document.getElementById('results-list').innerHTML = '<li>未找到结果。</li>';
     }
 }
 
-function applyFiltersAndRender(searchSeason) {
+function applyFiltersAndRender() {
     if (!originalSearchResults || !originalSearchResults.results) return;
+    const searchSeason = originalSearchResults.searchSeason;
     const activeTypes = new Set();
     if (document.getElementById('filter-btn-movie').classList.contains('active')) activeTypes.add('movie');
     if (document.getElementById('filter-btn-tv_series').classList.contains('active')) activeTypes.add('tv_series');
