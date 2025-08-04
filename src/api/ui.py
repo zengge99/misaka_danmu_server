@@ -199,14 +199,13 @@ async def search_anime_provider(
         )
 
     # --- TMDB 辅助搜索 ---
-    search_aliases = {search_title}
+    filter_aliases = {search_title}
     try:
         # 尝试同时搜索 tv 和 movie
         tv_task = tmdb_client.get("/search/tv", params={"query": search_title, "language": "zh-CN"})
         movie_task = tmdb_client.get("/search/movie", params={"query": search_title, "language": "zh-CN"})
         tv_res, movie_res = await asyncio.gather(tv_task, movie_task, return_exceptions=True)
 
-        # 优先处理TV结果
         tmdb_results = []
         if isinstance(tv_res, httpx.Response) and tv_res.status_code == 200:
             tmdb_results.extend(tv_res.json().get("results", []))
@@ -214,7 +213,6 @@ async def search_anime_provider(
             tmdb_results.extend(movie_res.json().get("results", []))
 
         if tmdb_results:
-            # 选择最相关的TMDB结果（这里简化为第一个）
             best_match = tmdb_results[0]
             media_type = "tv" if "name" in best_match else "movie"
             details_res = await tmdb_client.get(f"/{media_type}/{best_match['id']}", params={"append_to_response": "alternative_titles"})
@@ -222,38 +220,34 @@ async def search_anime_provider(
                 details = details_res.json()
                 alt_titles = details.get("alternative_titles", {}).get("titles", [])
                 for title_info in alt_titles:
-                    search_aliases.add(title_info['title'])
-                search_aliases.add(details.get('name') or details.get('title'))
-                search_aliases.add(details.get('original_name') or details.get('original_title'))
-                logger.info(f"TMDB辅助搜索成功，将使用以下别名进行过滤: {search_aliases}")
+                    filter_aliases.add(title_info['title'])
+                filter_aliases.add(details.get('name') or details.get('title'))
+                filter_aliases.add(details.get('original_name') or details.get('original_title'))
+                logger.info(f"TMDB辅助搜索成功，将使用以下别名进行过滤: {filter_aliases}")
     except Exception as e:
         logger.warning(f"TMDB辅助搜索失败: {e}", exc_info=True)
 
-    # 1. 使用原始关键词和从TMDB获取的别名进行全网搜索
-    # search_all 方法内部会处理并发和去重
-    logger.info(f"将使用以下关键词进行全网搜索: {list(search_aliases)}")
-    all_results = await manager.search_all(list(search_aliases), episode_info=episode_info)
+    # 3. 仅使用解析后的主标题搜索所有弹幕源
+    logger.info(f"将使用解析后的标题 '{search_title}' 进行全网搜索...")
+    all_results = await manager.search_all([search_title], episode_info=episode_info)
 
-    # 2. 对结果进行排序和过滤，以提高相关性
-    # 使用原始的、未经解析的搜索词 `keyword` 作为基准，因为它最能代表用户的意图。
-    # 如果原始搜索词包含 SxxExx，则使用解析后的 `search_title`
-    base_title_for_scoring = search_title if (season_to_filter and episode_to_filter) else keyword
+    # 4. 使用TMDB获取的别名集合对结果进行过滤
+    def normalize_for_filtering(title: str) -> str:
+        if not title: return ""
+        title = re.sub(r'[\[【(（].*?[\]】)）]', '', title)
+        return title.lower().replace(" ", "").replace("：", ":").strip()
 
-    # 计算每个结果与基准标题的相似度得分
-    scored_results = []
+    normalized_filter_aliases = {normalize_for_filtering(alias) for alias in filter_aliases if alias}
+    
+    filtered_results = []
     for item in all_results:
-        # token_set_ratio 对于语序不同、有额外词语的情况更健壮
-        score = fuzz.token_set_ratio(base_title_for_scoring, item.title)
-        scored_results.append((item, score))
-
-    # 按得分降序排序
-    scored_results.sort(key=lambda x: x[1], reverse=True)
-
-    # 过滤掉得分过低的结果，例如低于45分
-    SIMILARITY_THRESHOLD = 45
-    results = [item for item, score in scored_results if score >= SIMILARITY_THRESHOLD]
-
-    logger.info(f"结果排序与过滤: 从 {len(all_results)} 个原始结果中，保留了 {len(results)} 个相似度高于 {SIMILARITY_THRESHOLD} 的结果。")
+        normalized_item_title = normalize_for_filtering(item.title)
+        if not normalized_item_title: continue
+        if any((alias in normalized_item_title) or (normalized_item_title in alias) for alias in normalized_filter_aliases):
+            filtered_results.append(item)
+    
+    logger.info(f"别名过滤: 从 {len(all_results)} 个原始结果中，保留了 {len(filtered_results)} 个相关结果。")
+    results = filtered_results
 
     # 如果用户在搜索词中明确指定了季度，则对结果进行过滤
     if season_to_filter:
