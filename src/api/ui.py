@@ -232,7 +232,28 @@ async def search_anime_provider(
     # 1. 使用原始关键词和从TMDB获取的别名进行全网搜索
     # search_all 方法内部会处理并发和去重
     logger.info(f"将使用以下关键词进行全网搜索: {list(search_aliases)}")
-    results = await manager.search_all(list(search_aliases), episode_info=episode_info)
+    all_results = await manager.search_all(list(search_aliases), episode_info=episode_info)
+
+    # 2. 对结果进行排序和过滤，以提高相关性
+    # 使用原始的、未经解析的搜索词 `keyword` 作为基准，因为它最能代表用户的意图。
+    # 如果原始搜索词包含 SxxExx，则使用解析后的 `search_title`
+    base_title_for_scoring = search_title if (season_to_filter and episode_to_filter) else keyword
+
+    # 计算每个结果与基准标题的相似度得分
+    scored_results = []
+    for item in all_results:
+        # token_set_ratio 对于语序不同、有额外词语的情况更健壮
+        score = fuzz.token_set_ratio(base_title_for_scoring, item.title)
+        scored_results.append((item, score))
+
+    # 按得分降序排序
+    scored_results.sort(key=lambda x: x[1], reverse=True)
+
+    # 过滤掉得分过低的结果，例如低于45分
+    SIMILARITY_THRESHOLD = 45
+    results = [item for item, score in scored_results if score >= SIMILARITY_THRESHOLD]
+
+    logger.info(f"结果排序与过滤: 从 {len(all_results)} 个原始结果中，保留了 {len(results)} 个相似度高于 {SIMILARITY_THRESHOLD} 的结果。")
 
     # 如果用户在搜索词中明确指定了季度，则对结果进行过滤
     if season_to_filter:
