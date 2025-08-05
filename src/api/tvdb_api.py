@@ -78,8 +78,13 @@ class TvdbAlias(BaseModel):
     language: str
     name: str
 
-class TvdbDetailsResponse(BaseModel):
+class TvdbRemoteId(BaseModel):
     id: str
+    type: int
+    sourceName: str
+
+class TvdbDetailsResponse(BaseModel):
+    id: int
     name: str
     translations: Optional[Dict[str, Optional[str]]] = None
     aliases: Optional[List[TvdbAlias]] = None
@@ -88,7 +93,7 @@ class TvdbDetailsResponse(BaseModel):
     first_aired: Optional[str] = Field(None, alias="firstAired")
     last_aired: Optional[str] = Field(None, alias="lastAired")
     year: Optional[str] = None
-    remote_ids: Optional[List[Dict[str, str]]] = Field(None, alias="remoteIds")
+    remote_ids: Optional[List[TvdbRemoteId]] = Field(None, alias="remoteIds")
 
 class TvdbExtendedDetailsResponse(BaseModel):
     data: TvdbDetailsResponse
@@ -148,11 +153,10 @@ async def get_tvdb_details(
         tmdb_id = None
         if details.remote_ids:
             for remote_id in details.remote_ids:
-                source_name = remote_id.get("sourceName")
-                if source_name == "IMDB":
-                    imdb_id = remote_id.get("id")
-                elif source_name == "TheMovieDB.com":
-                    tmdb_id = remote_id.get("id")
+                if remote_id.sourceName == "IMDB":
+                    imdb_id = remote_id.id
+                elif remote_id.sourceName == "TheMovieDB.com":
+                    tmdb_id = remote_id.id
 
         # 初始化所有名称字段
         name_cn = None
@@ -191,8 +195,8 @@ async def get_tvdb_details(
             name_cn = details.name
         
         return {
-            "id": details.id,
-            "tvdb_id": details.id,
+            "id": str(details.id),
+            "tvdb_id": str(details.id),
             "title": name_cn,  # 将中文名作为主要标题返回
             "name_en": name_en,
             "name_jp": name_jp,

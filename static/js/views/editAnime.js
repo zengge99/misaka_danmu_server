@@ -443,11 +443,15 @@ function renderDoubanSearchResults(results) {
             <button class="select-btn">选择</button>
         `;
         li.querySelector('.select-btn').addEventListener('click', async () => {
-            const details = await apiFetch(`/api/douban/details/${result.id}`);
-            details._source = 'douban';
-            _currentSearchSelectionData = details;
-            handleBackToEditAnime();
-            setTimeout(applySearchSelectionData, 50);
+            try {
+                const details = await apiFetch(`/api/douban/details/${result.id}`);
+                details._source = 'douban';
+                _currentSearchSelectionData = details;
+                handleBackToEditAnime();
+                setTimeout(applySearchSelectionData, 50);
+            } catch (error) {
+                alert(`获取豆瓣详情失败: ${error.message}`);
+            }
         });
         resultsList.appendChild(li);
     });
@@ -505,11 +509,15 @@ function renderImdbSearchResults(results) {
             <button class="select-btn">选择</button>
         `;
         li.querySelector('.select-btn').addEventListener('click', async () => {
-            const details = await apiFetch(`/api/imdb/details/${result.id}`);
-            details._source = 'imdb';
-            _currentSearchSelectionData = details;
-            handleBackToEditAnime();
-            setTimeout(applySearchSelectionData, 50);
+            try {
+                const details = await apiFetch(`/api/imdb/details/${result.id}`);
+                details._source = 'imdb';
+                _currentSearchSelectionData = details;
+                handleBackToEditAnime();
+                setTimeout(applySearchSelectionData, 50);
+            } catch (error) {
+                alert(`获取 IMDb 详情失败: ${error.message}`);
+            }
         });
         resultsList.appendChild(li);
     });
@@ -566,11 +574,15 @@ function renderTvdbSearchResults(results) {
             <button class="select-btn">选择</button>
         `;
         li.querySelector('.select-btn').addEventListener('click', async () => {
-            const details = await apiFetch(`/api/tvdb/details/${result.id}`);
-            details._source = 'tvdb';
-            _currentSearchSelectionData = details;
-            handleBackToEditAnime();
-            setTimeout(applySearchSelectionData, 50);
+            try {
+                const details = await apiFetch(`/api/tvdb/details/${result.id}`);
+                details._source = 'tvdb';
+                _currentSearchSelectionData = details;
+                handleBackToEditAnime();
+                setTimeout(applySearchSelectionData, 50);
+            } catch (error) {
+                alert(`获取 TVDB 详情失败: ${error.message}`);
+            }
         });
         resultsList.appendChild(li);
     });
