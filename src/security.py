@@ -48,11 +48,6 @@ async def _get_user_from_token(token: str, pool: aiomysql.Pool) -> models.User:
     user = await crud.get_user_by_username(pool, username=token_data.username)
     if user is None:
         raise credentials_exception
- 
-    # 检查客户端提供的令牌是否与数据库中存储的最新令牌匹配。
-    # 这可以防止旧的或已泄露的令牌被使用，并实现单点登录（或“踢掉”旧会话）。
-    if user.get("token") != token:
-        raise credentials_exception
 
     return models.User.model_validate(user)
 
