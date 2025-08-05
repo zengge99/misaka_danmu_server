@@ -1095,12 +1095,12 @@ async def delete_ua_rule(pool: aiomysql.Pool, rule_id: int) -> bool:
             affected_rows = await cursor.execute("DELETE FROM ua_rules WHERE id = %s", (rule_id,))
             return affected_rows > 0
 
-async def create_token_access_log(pool: aiomysql.Pool, token_id: int, ip_address: str, user_agent: Optional[str], status: str, path: Optional[str] = None):
+async def create_token_access_log(pool: aiomysql.Pool, token_id: int, ip_address: str, user_agent: Optional[str], log_status: str, path: Optional[str] = None):
     async with pool.acquire() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute(
                 "INSERT INTO token_access_logs (token_id, ip_address, user_agent, status, path) VALUES (%s, %s, %s, %s, %s)",
-                (token_id, ip_address, user_agent, status, path)
+                (token_id, ip_address, user_agent, log_status, path)
             )
 
 async def get_token_access_logs(pool: aiomysql.Pool, token_id: int) -> List[Dict[str, Any]]:
