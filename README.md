@@ -93,17 +93,13 @@
           # !!! 重要：请使用您在步骤1中为数据库设置的用户名和密码 !!!
           - DANMUAPI_DATABASE__USER=danmuapi
           - DANMUAPI_DATABASE__PASSWORD=your_strong_user_password
-          
-          # --- 应用安全配置 ---
-          # !!! 强烈建议生成一个您自己的安全密钥 !!!
-          # 您可以使用 'openssl rand -base64 32' 命令生成
-          - DANMUAPI_JWT__SECRET_KEY=a_very_secret_key_that_should_be_changed
+    
           
           # --- 初始管理员配置 ---
           - DANMUAPI_ADMIN__INITIAL_USER=admin
         volumes:
           # 挂载配置文件目录，用于持久化日志等
-          - ./app-config:/app/config
+          - ./config:/app/config
         networks:
           - danmu-net
 
@@ -115,7 +111,7 @@
 
 2.  **重要**:
     -   确保 `DANMUAPI_DATABASE__PASSWORD` 与您在 `docker-compose.mysql.yml` 中设置的 `MYSQL_PASSWORD` 一致。
-    -   为了安全和稳定的登录体验，请务必修改 `DANMUAPI_JWT__SECRET_KEY` 的值。
+
 
 3.  在同一目录运行命令启动应用：
     ```bash
