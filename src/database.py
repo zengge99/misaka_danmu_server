@@ -110,7 +110,7 @@ async def init_db_tables(app: FastAPI):
                 "anime_aliases": """CREATE TABLE `anime_aliases` (`id` BIGINT NOT NULL AUTO_INCREMENT, `anime_id` BIGINT NOT NULL, `name_en` VARCHAR(255) NULL, `name_jp` VARCHAR(255) NULL, `name_romaji` VARCHAR(255) NULL, `alias_cn_1` VARCHAR(255) NULL, `alias_cn_2` VARCHAR(255) NULL, `alias_cn_3` VARCHAR(255) NULL, PRIMARY KEY (`id`), UNIQUE INDEX `idx_anime_id_unique` (`anime_id` ASC), CONSTRAINT `fk_aliases_anime` FOREIGN KEY (`anime_id`) REFERENCES `anime`(`id`) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
                 "tmdb_episode_mapping": """CREATE TABLE `tmdb_episode_mapping` (`id` BIGINT NOT NULL AUTO_INCREMENT, `tmdb_tv_id` INT NOT NULL, `tmdb_episode_group_id` VARCHAR(50) NOT NULL, `tmdb_episode_id` INT NOT NULL, `tmdb_season_number` INT NOT NULL, `tmdb_episode_number` INT NOT NULL, `custom_season_number` INT NOT NULL, `custom_episode_number` INT NOT NULL, `absolute_episode_number` INT NOT NULL, PRIMARY KEY (`id`), UNIQUE KEY `idx_group_episode_unique` (`tmdb_episode_group_id`, `tmdb_episode_id`), INDEX `idx_custom_season_episode` (`tmdb_tv_id`, `tmdb_episode_group_id`, `custom_season_number`, `custom_episode_number`), INDEX `idx_absolute_episode` (`tmdb_tv_id`, `tmdb_episode_group_id`, `absolute_episode_number`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
                 "scheduled_tasks": """CREATE TABLE `scheduled_tasks` (`id` VARCHAR(100) NOT NULL, `name` VARCHAR(255) NOT NULL, `job_type` VARCHAR(50) NOT NULL, `cron_expression` VARCHAR(100) NOT NULL, `is_enabled` BOOLEAN NOT NULL DEFAULT TRUE, `last_run_at` TIMESTAMP NULL, `next_run_at` TIMESTAMP NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
-                "task_history": """CREATE TABLE `task_history` (`id` VARCHAR(100) NOT NULL, `title` VARCHAR(255) NOT NULL, `status` VARCHAR(20) NOT NULL, `progress` INT NOT NULL DEFAULT 0, `description` TEXT NULL, `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, `finished_at` TIMESTAMP NULL, PRIMARY KEY (`id`), INDEX `idx_created_at` (`created_at` DESC)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
+                "task_history": """CREATE TABLE `task_history` (`id` VARCHAR(100) NOT NULL, `title` VARCHAR(255) NOT NULL, `status` VARCHAR(50) NOT NULL, `progress` INT NOT NULL DEFAULT 0, `description` TEXT NULL, `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, `finished_at` TIMESTAMP NULL, PRIMARY KEY (`id`), INDEX `idx_created_at` (`created_at` DESC)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
             }
 
             # 先获取数据库中所有已存在的表
@@ -128,6 +128,34 @@ async def init_db_tables(app: FastAPI):
                     print(f"数据表 '{table_name}' 创建成功。")
             
             print("数据表检查完成。")
+
+            # --- 步骤 3.2: 检查并修正旧的表结构 ---
+            print("正在检查并修正表结构...")
+            try:
+                # 检查 token_access_logs.status
+                await cursor.execute("""
+                    SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'token_access_logs' AND COLUMN_NAME = 'status'
+                """, (db_name,))
+                status_col_len_row = await cursor.fetchone()
+                if status_col_len_row and status_col_len_row[0] < 50:
+                    print("检测到旧的 'token_access_logs.status' 列定义，正在将其更新为 VARCHAR(50)...")
+                    await cursor.execute("ALTER TABLE token_access_logs MODIFY COLUMN status VARCHAR(50) NOT NULL;")
+                    print("列 'token_access_logs.status' 更新成功。")
+
+                # 检查 task_history.status
+                await cursor.execute("""
+                    SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'task_history' AND COLUMN_NAME = 'status'
+                """, (db_name,))
+                task_status_col_len_row = await cursor.fetchone()
+                if task_status_col_len_row and task_status_col_len_row[0] < 50:
+                    print("检测到旧的 'task_history.status' 列定义，正在将其更新为 VARCHAR(50)...")
+                    await cursor.execute("ALTER TABLE task_history MODIFY COLUMN status VARCHAR(50) NOT NULL;")
+                    print("列 'task_history.status' 更新成功。")
+            except Exception as e:
+                # 仅记录错误，不中断启动流程
+                print(f"检查或更新表结构时发生非致命错误: {e}")
 
             # --- 步骤 3.2: 初始化默认配置 ---
             await _init_default_config(cursor)
