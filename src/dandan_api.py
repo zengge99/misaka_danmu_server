@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import json
 import re
 from typing import List, Optional, Dict, Any
 from typing import Callable
@@ -738,6 +739,17 @@ async def get_comments_for_dandan(
     注意：这里的 episode_id 实际上是我们数据库中的主键 ID。
     """
     comments_data = await crud.fetch_comments(pool, episode_id)
+
+    # 为了避免日志过长，只打印部分弹幕作为示例
+    log_limit = 5
+    comments_to_log = comments_data[:log_limit]
+    log_message = {
+        "total_comments": len(comments_data),
+        "comments_sample": comments_to_log
+    }
+    # UA 已由 get_token_from_path 依赖项记录
+    logger.info(f"弹幕接口响应 (episode_id: {episode_id}):\n{json.dumps(log_message, indent=2, ensure_ascii=False)}")
+
     comments = [models.Comment(cid=item["cid"], p=item["p"], m=item["m"]) for item in comments_data]
     return models.CommentResponse(count=len(comments), comments=comments)
 
