@@ -748,7 +748,7 @@ async def get_comments_for_dandan(
         "comments_sample": comments_to_log
     }
     # UA 已由 get_token_from_path 依赖项记录
-    logger.info(f"弹幕接口响应 (episode_id: {episode_id}):\n{json.dumps(log_message, indent=2, ensure_ascii=False)}")
+    # logger.info(f"弹幕接口响应 (episode_id: {episode_id}):\n{json.dumps(log_message, indent=2, ensure_ascii=False)}")
 
     comments = [models.Comment(cid=item["cid"], p=item["p"], m=item["m"]) for item in comments_data]
     return models.CommentResponse(count=len(comments), comments=comments)
