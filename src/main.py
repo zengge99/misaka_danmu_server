@@ -80,10 +80,7 @@ async def log_not_found_requests(request: Request, call_next):
             "path_params": request.path_params,
             "query_params": dict(request.query_params),
             "client": f"{request.client.host}:{request.client.port}",
-            "headers": {
-                "user-agent": request.headers.get("user-agent"),
-                "referer": request.headers.get("referer"),
-            }
+            "headers": dict(request.headers)
         }
         logging.getLogger(__name__).warning("未处理的请求详情:\n%s", json.dumps(log_details, indent=2, ensure_ascii=False))
     return response
