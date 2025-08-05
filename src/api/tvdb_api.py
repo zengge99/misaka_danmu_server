@@ -66,10 +66,10 @@ async def get_tvdb_client(
 class TvdbSearchResult(BaseModel):
     tvdb_id: str
     name: str
-    image: Optional[str] = None
+    image_url: Optional[str] = None
     overview: Optional[str] = None
-    first_aired: Optional[str] = Field(None, alias="firstAired")
     year: Optional[str] = None
+    type: str
 
 class TvdbSearchResponse(BaseModel):
     data: List[TvdbSearchResult]
@@ -81,6 +81,7 @@ class TvdbAlias(BaseModel):
 class TvdbDetailsResponse(BaseModel):
     id: str
     name: str
+    translations: Optional[Dict[str, Optional[str]]] = None
     aliases: Optional[List[TvdbAlias]] = None
     overview: Optional[str] = None
     image: Optional[str] = None
@@ -98,15 +99,24 @@ async def search_tvdb(
     keyword: str = Query(..., min_length=1),
     client: httpx.AsyncClient = Depends(get_tvdb_client),
 ):
-    """通过关键词在 TheTVDB 上搜索电视剧。"""
+    """通过关键词在 TheTVDB 上搜索影视作品。"""
     try:
-        response = await client.get("/search", params={"query": keyword, "type": "series"})
+        # 移除 type=series 参数以搜索所有类型（电影、电视剧等）
+        response = await client.get("/search", params={"query": keyword})
         response.raise_for_status()
         results = TvdbSearchResponse.model_validate(response.json()).data
 
         formatted_results = []
         for item in results:
-            details = f"首播: {item.first_aired}" if item.first_aired else "无首播日期"
+            # 构建更丰富的详情字符串
+            details_parts = []
+            type_map = {"series": "电视剧", "movie": "电影", "person": "人物", "company": "公司"}
+            details_parts.append(f"类型: {type_map.get(item.type, item.type)}")
+            if item.year:
+                details_parts.append(f"年份: {item.year}")
+            
+            details = " / ".join(details_parts)
+            
             if item.overview:
                 details += f" / {item.overview[:100]}..."
 
@@ -115,7 +125,7 @@ async def search_tvdb(
                     "id": item.tvdb_id,
                     "title": item.name,
                     "details": details,
-                    "image_url": item.image,
+                    "image_url": item.image_url,
                 }
             )
         return formatted_results
@@ -135,20 +145,61 @@ async def get_tvdb_details(
         details = TvdbExtendedDetailsResponse.model_validate(response.json()).data
 
         imdb_id = None
+        tmdb_id = None
         if details.remote_ids:
             for remote_id in details.remote_ids:
-                if remote_id.get("sourceName") == "IMDB":
+                source_name = remote_id.get("sourceName")
+                if source_name == "IMDB":
                     imdb_id = remote_id.get("id")
-                    break
+                elif source_name == "TheMovieDB.com":
+                    tmdb_id = remote_id.get("id")
 
+        # 初始化所有名称字段
+        name_cn = None
+        name_en = None
+        name_jp = None
+        name_romaji = None
+        other_cn_aliases = []
+
+        # 1. 优先从 translations 字典中提取各种语言的名称
+        if details.translations:
+            translations = details.translations
+            name_cn = translations.get("zho")
+            name_en = translations.get("eng")
+            name_jp = translations.get("jpn")
+            # TVDB API 通常使用 'rom' 作为罗马音的键
+            name_romaji = translations.get("rom")
+        
+        # 2. 遍历 aliases 列表，作为备用方案并收集其他中文别名
+        if details.aliases:
+            for alias in details.aliases:
+                lang, name = alias.language, alias.name
+                if lang == 'zh':
+                    # 如果还没有中文名，则使用找到的第一个作为主中文名
+                    if not name_cn:
+                        name_cn = name
+                    # 否则，如果它与主中文名不同，则加入别名列表
+                    elif name != name_cn:
+                        other_cn_aliases.append(name)
+                elif lang == 'en' and not name_en:
+                    name_en = name
+                elif lang == 'ja' and not name_jp:
+                    name_jp = name
+
+        # 3. 如果在 translations 和 aliases 中都找不到中文名，则使用记录的主名称作为最后的备用方案
+        if not name_cn:
+            name_cn = details.name
+        
         return {
             "id": details.id,
             "tvdb_id": details.id,
-            "name_en": details.name,
-            "aliases_cn": [alias.name for alias in details.aliases] if details.aliases else [],
-            "name_jp": None,
-            "name_romaji": None,
+            "title": name_cn,  # 将中文名作为主要标题返回
+            "name_en": name_en,
+            "name_jp": name_jp,
+            "name_romaji": name_romaji,
+            "aliases_cn": list(dict.fromkeys(other_cn_aliases)),  # 去重
             "imdb_id": imdb_id,
+            "tmdb_id": tmdb_id,
         }
     except Exception as e:
         logger.error(f"获取 TVDB 详情失败 (ID: {tvdb_id}): {e}", exc_info=True)
