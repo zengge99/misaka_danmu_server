@@ -1,4 +1,5 @@
-# Danmu API Server
+# 御坂网络弹幕服务
+  
 
 一个功能强大的自托管弹幕（Danmaku）聚合与管理服务，兼容 [dandanplay](https://api.dandanplay.net/swagger/index.html) API 规范。
 
