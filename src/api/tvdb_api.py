@@ -27,6 +27,7 @@ async def get_tvdb_token(pool, client: httpx.AsyncClient) -> str:
 
     logger.info("TVDB token 已过期或未找到，正在请求新的令牌。")
     api_key = await crud.get_config_value(pool, "tvdb_api_key", "")
+
     if not api_key:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="TVDB API Key 未配置。")
 

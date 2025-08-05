@@ -2,31 +2,56 @@ import { apiFetch } from '../api.js';
 
 // DOM Elements
 let settingsSubNav, settingsSubViews;
-let passwordChangeMessage;
-let bangumiAuthStateUnauthenticated, bangumiAuthStateAuthenticated, bangumiUserNickname, bangumiUserId, bangumiAuthorizedAt, bangumiExpiresAt, bangumiUserAvatar, bangumiLoginBtn, bangumiLogoutBtn;
-let tmdbSettingsForm, tmdbSaveMessage, doubanSettingsForm, doubanSaveMessage, tvdbSettingsForm, tvdbSaveMessage, usePublicTvdbKeyBtn;
+// Account
+let changePasswordForm, passwordChangeMessage;
+// Webhook
+let webhookApiKeyInput, regenerateWebhookKeyBtn, webhookHandlersList;
+// Bangumi
+let bangumiLoginBtn, bangumiLogoutBtn, bangumiAuthStateAuthenticated, bangumiAuthStateUnauthenticated;
+let bangumiUserNickname, bangumiUserId, bangumiAuthorizedAt, bangumiExpiresAt, bangumiUserAvatar;
+// TMDB
+let tmdbSettingsForm, tmdbSaveMessage;
+// Douban
+let doubanSettingsForm, doubanSaveMessage;
+// TVDB
+let tvdbSettingsForm, tvdbSaveMessage, usePublicTvdbKeyBtn;
+
+// A popup window reference for OAuth
+let oauthPopup = null;
 
 function initializeElements() {
     settingsSubNav = document.querySelector('#settings-view .settings-sub-nav');
     settingsSubViews = document.querySelectorAll('#settings-view .settings-subview');
+
+    // Account
+    changePasswordForm = document.getElementById('change-password-form');
     passwordChangeMessage = document.getElementById('password-change-message');
-    
-    bangumiAuthStateUnauthenticated = document.getElementById('bangumi-auth-state-unauthenticated');
+
+    // Webhook
+    webhookApiKeyInput = document.getElementById('webhook-api-key');
+    regenerateWebhookKeyBtn = document.getElementById('regenerate-webhook-key-btn');
+    webhookHandlersList = document.getElementById('webhook-handlers-list');
+
+    // Bangumi
+    bangumiLoginBtn = document.getElementById('bangumi-login-btn');
+    bangumiLogoutBtn = document.getElementById('bangumi-logout-btn');
     bangumiAuthStateAuthenticated = document.getElementById('bangumi-auth-state-authenticated');
+    bangumiAuthStateUnauthenticated = document.getElementById('bangumi-auth-state-unauthenticated');
     bangumiUserNickname = document.getElementById('bangumi-user-nickname');
     bangumiUserId = document.getElementById('bangumi-user-id');
     bangumiAuthorizedAt = document.getElementById('bangumi-authorized-at');
     bangumiExpiresAt = document.getElementById('bangumi-expires-at');
     bangumiUserAvatar = document.getElementById('bangumi-user-avatar');
-    bangumiLoginBtn = document.getElementById('bangumi-login-btn');
-    bangumiLogoutBtn = document.getElementById('bangumi-logout-btn');
 
+    // TMDB
     tmdbSettingsForm = document.getElementById('tmdb-settings-form');
     tmdbSaveMessage = document.getElementById('tmdb-save-message');
 
+    // Douban
     doubanSettingsForm = document.getElementById('douban-settings-form');
     doubanSaveMessage = document.getElementById('douban-save-message');
 
+    // TVDB
     tvdbSettingsForm = document.getElementById('tvdb-settings-form');
     tvdbSaveMessage = document.getElementById('tvdb-save-message');
     usePublicTvdbKeyBtn = document.getElementById('use-public-tvdb-key-btn');
@@ -46,13 +71,30 @@ function handleSettingsSubNav(e) {
     const targetSubView = document.getElementById(subViewId);
     if (targetSubView) targetSubView.classList.remove('hidden');
 
-    if (subViewId === 'bangumi-settings-subview') loadBangumiAuthState();
-    if (subViewId === 'webhook-settings-subview') loadWebhookSettings();
-    if (subViewId === 'tmdb-settings-subview') loadTmdbSettings();
-    if (subViewId === 'douban-settings-subview') loadDoubanSettings();
-    if (subViewId === 'tvdb-settings-subview') loadTvdbSettings();
+    // Load data for the selected subview
+    switch (subViewId) {
+        case 'account-settings-subview':
+            // No data to load initially
+            break;
+        case 'webhook-settings-subview':
+            loadWebhookSettings();
+            break;
+        case 'bangumi-settings-subview':
+            loadBangumiAuthState();
+            break;
+        case 'tmdb-settings-subview':
+            loadTmdbSettings();
+            break;
+        case 'douban-settings-subview':
+            loadDoubanSettings();
+            break;
+        case 'tvdb-settings-subview':
+            loadTvdbSettings();
+            break;
+    }
 }
 
+// --- Account Settings ---
 async function handleChangePassword(e) {
     e.preventDefault();
     passwordChangeMessage.textContent = '';
@@ -67,72 +109,124 @@ async function handleChangePassword(e) {
         passwordChangeMessage.classList.add('error');
         return;
     }
+
     if (newPassword !== confirmPassword) {
-        passwordChangeMessage.textContent = '两次输入的新密码不一致。';
+        passwordChangeMessage.textContent = '新密码和确认密码不匹配。';
         passwordChangeMessage.classList.add('error');
         return;
     }
 
+    const saveBtn = e.target.querySelector('button[type="submit"]');
+    saveBtn.disabled = true;
+
     try {
         await apiFetch('/api/ui/auth/users/me/password', {
             method: 'PUT',
-            body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+            body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
         });
         passwordChangeMessage.textContent = '密码修改成功！';
         passwordChangeMessage.classList.add('success');
-        e.target.reset();
+        changePasswordForm.reset();
     } catch (error) {
-        passwordChangeMessage.textContent = `修改失败: ${(error.message || error)}`;
+        passwordChangeMessage.textContent = `修改失败: ${error.message}`;
         passwordChangeMessage.classList.add('error');
+    } finally {
+        saveBtn.disabled = false;
     }
 }
 
+// --- Webhook Settings ---
+async function loadWebhookSettings() {
+    webhookApiKeyInput.value = '加载中...';
+    webhookHandlersList.innerHTML = '<li>加载中...</li>';
+    try {
+        const [keyData, handlersData] = await Promise.all([
+            apiFetch('/api/ui/config/webhook_api_key'),
+            apiFetch('/api/ui/webhooks/available')
+        ]);
+        webhookApiKeyInput.value = keyData.value || '未生成';
+        
+        webhookHandlersList.innerHTML = '';
+        if (handlersData.length > 0) {
+            handlersData.forEach(handler => {
+                const li = document.createElement('li');
+                li.textContent = handler;
+                webhookHandlersList.appendChild(li);
+            });
+        } else {
+            webhookHandlersList.innerHTML = '<li>无可用服务</li>';
+        }
+    } catch (error) {
+        webhookApiKeyInput.value = '加载失败';
+        webhookHandlersList.innerHTML = `<li class="error">加载失败: ${error.message}</li>`;
+    }
+}
+
+async function handleRegenerateWebhookKey() {
+    if (!confirm('确定要重新生成Webhook API Key吗？旧的Key将立即失效。')) return;
+    try {
+        const data = await apiFetch('/api/ui/config/webhook_api_key/regenerate', { method: 'POST' });
+        webhookApiKeyInput.value = data.value;
+        alert('新的Webhook API Key已生成！');
+    } catch (error) {
+        alert(`生成失败: ${error.message}`);
+    }
+}
+
+// --- Bangumi Settings ---
 async function loadBangumiAuthState() {
     try {
         const state = await apiFetch('/api/bgm/auth/state');
-        if (state.is_authenticated) {
-            bangumiUserNickname.textContent = state.nickname;
-            bangumiUserId.textContent = state.bangumi_user_id || 'N/A';
-            bangumiAuthorizedAt.textContent = state.authorized_at ? new Date(state.authorized_at).toLocaleString() : 'N/A';
-            bangumiExpiresAt.textContent = state.expires_at ? new Date(state.expires_at).toLocaleString() : '永不（或未知）';
-            bangumiUserAvatar.src = state.avatar_url || '/static/placeholder.png';
-            bangumiAuthStateAuthenticated.classList.remove('hidden');
-            bangumiAuthStateUnauthenticated.classList.add('hidden');
-            bangumiLoginBtn.classList.add('hidden');
-            bangumiLogoutBtn.classList.remove('hidden');
-        } else {
-            bangumiAuthStateAuthenticated.classList.add('hidden');
-            bangumiAuthStateUnauthenticated.classList.remove('hidden');
-            bangumiLoginBtn.classList.remove('hidden');
-            bangumiLogoutBtn.classList.add('hidden');
-        }
+        updateBangumiAuthStateUI(state);
     } catch (error) {
-        bangumiAuthStateUnauthenticated.innerHTML = `<p class="error">获取授权状态失败: ${error.message}</p>`;
-        bangumiAuthStateAuthenticated.classList.add('hidden');
-        bangumiAuthStateUnauthenticated.classList.remove('hidden');
+        console.error("加载Bangumi授权状态失败:", error);
+        updateBangumiAuthStateUI({ is_authenticated: false });
+    }
+}
+
+function updateBangumiAuthStateUI(state) {
+    const isAuthenticated = state.is_authenticated;
+    bangumiAuthStateAuthenticated.classList.toggle('hidden', !isAuthenticated);
+    bangumiAuthStateUnauthenticated.classList.toggle('hidden', isAuthenticated);
+    bangumiLoginBtn.classList.toggle('hidden', isAuthenticated);
+    bangumiLogoutBtn.classList.toggle('hidden', !isAuthenticated);
+
+    if (isAuthenticated) {
+        bangumiUserNickname.textContent = state.nickname;
+        bangumiUserId.textContent = state.bangumi_user_id;
+        bangumiAuthorizedAt.textContent = new Date(state.authorized_at).toLocaleString();
+        bangumiExpiresAt.textContent = new Date(state.expires_at).toLocaleString();
+        bangumiUserAvatar.src = state.avatar_url || '/static/placeholder.png';
     }
 }
 
 async function handleBangumiLogin() {
     try {
         const { url } = await apiFetch('/api/bgm/auth/url');
-        window.open(url, 'BangumiAuth', 'width=600,height=700');
+        if (oauthPopup && !oauthPopup.closed) {
+            oauthPopup.focus();
+        } else {
+            const width = 600, height = 700;
+            const left = (window.screen.width / 2) - (width / 2);
+            const top = (window.screen.height / 2) - (height / 2);
+            oauthPopup = window.open(url, 'BangumiAuth', `width=${width},height=${height},top=${top},left=${left}`);
+        }
     } catch (error) {
-        alert(`启动 Bangumi 授权失败: ${error.message}`);
+        alert(`获取授权链接失败: ${error.message}`);
     }
 }
 
 async function handleBangumiLogout() {
-    if (confirm("确定要注销 Bangumi 授权吗？")) {
-        try {
-            await apiFetch('/api/bgm/auth', { method: 'DELETE' });
-            loadBangumiAuthState();
-        } catch (error) {
-            alert(`注销失败: ${error.message}`);
-        }
+    if (!confirm('确定要注销Bangumi授权吗？')) return;
+    try {
+        await apiFetch('/api/bgm/auth', { method: 'DELETE' });
+        loadBangumiAuthState();
+    } catch (error) {
+        alert(`注销失败: ${error.message}`);
     }
 }
 
+// --- TMDB Settings ---
 async function loadTmdbSettings() {
     tmdbSaveMessage.textContent = '';
     try {
@@ -142,6 +236,7 @@ async function loadTmdbSettings() {
         document.getElementById('tmdb-image-base-url').value = data.tmdb_image_base_url || '';
     } catch (error) {
         tmdbSaveMessage.textContent = `加载TMDB配置失败: ${error.message}`;
+        tmdbSaveMessage.classList.add('error');
     }
 }
 
@@ -157,7 +252,10 @@ async function handleSaveTmdbSettings(e) {
     tmdbSaveMessage.textContent = '保存中...';
     tmdbSaveMessage.className = 'message';
     try {
-        await apiFetch('/api/ui/config/tmdb', { method: 'PUT', body: JSON.stringify(payload) });
+        await apiFetch('/api/ui/config/tmdb', {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+        });
         tmdbSaveMessage.textContent = 'TMDB 配置保存成功！';
         tmdbSaveMessage.classList.add('success');
     } catch (error) {
@@ -168,13 +266,15 @@ async function handleSaveTmdbSettings(e) {
     }
 }
 
+// --- Douban Settings ---
 async function loadDoubanSettings() {
     doubanSaveMessage.textContent = '';
     try {
         const data = await apiFetch('/api/ui/config/douban_cookie');
         document.getElementById('douban-cookie').value = data.value || '';
     } catch (error) {
-        doubanSaveMessage.textContent = `加载豆瓣Cookie失败: ${error.message}`;
+        doubanSaveMessage.textContent = `加载豆瓣配置失败: ${error.message}`;
+        doubanSaveMessage.classList.add('error');
     }
 }
 
@@ -202,13 +302,16 @@ async function handleSaveDoubanSettings(e) {
     }
 }
 
+// --- TVDB Settings ---
 async function loadTvdbSettings() {
     tvdbSaveMessage.textContent = '';
+    tvdbSaveMessage.className = 'message';
     try {
         const data = await apiFetch('/api/ui/config/tvdb_api_key');
         document.getElementById('tvdb-api-key').value = data.value || '';
     } catch (error) {
         tvdbSaveMessage.textContent = `加载TVDB配置失败: ${error.message}`;
+        tvdbSaveMessage.classList.add('error');
     }
 }
 
@@ -237,87 +340,44 @@ async function handleSaveTvdbSettings(e) {
 }
 
 function handleUsePublicTvdbKey() {
-    const encodedKey = 'ZWQyYWE2NmItNzg5OS00Njc3LTkyYTctNjdiYzljZTNkOTNh';
-    try {
-        const decodedKey = atob(encodedKey);
-        document.getElementById('tvdb-api-key').value = decodedKey;
-        tvdbSaveMessage.textContent = '已填入公共Key，请点击保存。';
-        tvdbSaveMessage.className = 'message';
-    } catch (e) {
-        console.error("Failed to decode public TVDB key:", e);
-        alert("无法解码公共Key，请联系管理员。");
-    }
+    document.getElementById('tvdb-api-key').value = 'ef81406c-7398-4f57-bcad-80b328bb498c';
 }
 
-async function loadWebhookSettings() {
-    try {
-        const [apiKeyData, availableHandlers] = await Promise.all([
-            apiFetch('/api/ui/config/webhook_api_key'),
-            apiFetch('/api/ui/webhooks/available')
-        ]);
-        
-        document.getElementById('webhook-api-key').value = apiKeyData.value || '';
-        renderWebhookHandlers(availableHandlers);
-
-    } catch (error) {
-        alert(`加载Webhook配置失败: ${error.message}`);
-        const container = document.getElementById('webhook-handlers-list-container');
-        if (container) container.innerHTML = `<p class="error">加载可用处理器失败: ${error.message}</p>`;
-    }
-}
-
-function renderWebhookHandlers(handlers) {
-    const list = document.getElementById('webhook-handlers-list');
-    if (!list) return;
-    list.innerHTML = ''; // Clear previous content
-
-    if (handlers.length === 0) {
-        list.innerHTML = '<li>没有找到可用的Webhook处理器。</li>';
-        return;
-    }
-
-    handlers.forEach(handlerType => {
-        const li = document.createElement('li');
-        // 修正：直接使用从后端获取的处理器类型（即文件名），不再进行首字母大写转换。
-        li.textContent = handlerType;
-        list.appendChild(li);
-    });
-}
-
-async function handleRegenerateWebhookKey() {
-    if (!confirm("您确定要重新生成Webhook API Key吗？\n旧的Key将立即失效，您需要更新所有使用它的服务。")) {
-        return;
-    }
-    try {
-        const response = await apiFetch('/api/ui/config/webhook_api_key/regenerate', { method: 'POST' });
-        // After regenerating, reload the settings to update the key
-        loadWebhookSettings();
-        alert("新的Webhook API Key已生成！");
-    } catch (error) {
-        alert(`生成新Key失败: ${error.message}`);
-    }
-}
-
+// --- Main Setup ---
 export function setupSettingsEventListeners() {
     initializeElements();
+
     settingsSubNav.addEventListener('click', handleSettingsSubNav);
-    document.getElementById('change-password-form').addEventListener('submit', handleChangePassword);
+
+    // Account
+    changePasswordForm.addEventListener('submit', handleChangePassword);
+
+    // Webhook
+    regenerateWebhookKeyBtn.addEventListener('click', handleRegenerateWebhookKey);
+
+    // Bangumi
     bangumiLoginBtn.addEventListener('click', handleBangumiLogin);
     bangumiLogoutBtn.addEventListener('click', handleBangumiLogout);
-    tmdbSettingsForm.addEventListener('submit', handleSaveTmdbSettings);
-    doubanSettingsForm.addEventListener('submit', handleSaveDoubanSettings);
-    tvdbSettingsForm.addEventListener('submit', handleSaveTvdbSettings);
-    usePublicTvdbKeyBtn.addEventListener('click', handleUsePublicTvdbKey);
-    document.getElementById('regenerate-webhook-key-btn').addEventListener('click', handleRegenerateWebhookKey);
-
     window.addEventListener('message', (event) => {
         if (event.data === 'BANGUMI-OAUTH-COMPLETE') {
+            if (oauthPopup) oauthPopup.close();
             loadBangumiAuthState();
         }
     });
 
+    // TMDB
+    tmdbSettingsForm.addEventListener('submit', handleSaveTmdbSettings);
+
+    // Douban
+    doubanSettingsForm.addEventListener('submit', handleSaveDoubanSettings);
+
+    // TVDB
+    tvdbSettingsForm.addEventListener('submit', handleSaveTvdbSettings);
+    usePublicTvdbKeyBtn.addEventListener('click', handleUsePublicTvdbKey);
+
     document.addEventListener('viewchange', (e) => {
         if (e.detail.viewId === 'settings-view') {
+            // Automatically click the first sub-nav button to load the default view
             const firstSubNavBtn = settingsSubNav.querySelector('.sub-nav-btn');
             if (firstSubNavBtn) firstSubNavBtn.click();
         }
