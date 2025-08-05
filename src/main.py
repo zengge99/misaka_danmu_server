@@ -33,6 +33,7 @@ async def lifespan(app: FastAPI):
     # --- Startup Logic ---
     setup_logging()
 
+
     pool = await create_db_pool(app)
     await init_db_tables(app)
     app.state.scraper_manager = ScraperManager(pool)
@@ -73,16 +74,27 @@ async def log_not_found_requests(request: Request, call_next):
     """
     response = await call_next(request)
     if response.status_code == 404:
+        # 创建一个可序列化的 ASGI scope 副本以进行详细日志记录
+        scope = request.scope
+        serializable_scope = {
+            "type": scope.get("type"),
+            "http_version": scope.get("http_version"),
+            "server": scope.get("server"),
+            "client": scope.get("client"),
+            "scheme": scope.get("scheme"),
+            "method": scope.get("method"),
+            "root_path": scope.get("root_path"),
+            "path": scope.get("path"),
+            "raw_path": scope.get("raw_path", b"").decode("utf-8", "ignore"),
+            "query_string": scope.get("query_string", b"").decode("utf-8", "ignore"),
+            "headers": {h[0].decode("utf-8", "ignore"): h[1].decode("utf-8", "ignore") for h in scope.get("headers", [])},
+        }
         log_details = {
             "message": "HTTP 404 Not Found - 未找到匹配的API路由",
-            "method": request.method,
             "url": str(request.url),
-            "path_params": request.path_params,
-            "query_params": dict(request.query_params),
-            "client": f"{request.client.host}:{request.client.port}",
-            "headers": dict(request.headers)
+            "raw_request_scope": serializable_scope
         }
-        logging.getLogger(__name__).warning("未处理的请求详情:\n%s", json.dumps(log_details, indent=2, ensure_ascii=False))
+        logging.getLogger(__name__).warning("未处理的请求详情 (原始请求范围):\n%s", json.dumps(log_details, indent=2, ensure_ascii=False))
     return response
 
 async def cleanup_task(app: FastAPI):
