@@ -148,7 +148,9 @@ async def _init_default_config(cursor: aiomysql.Cursor):
         ('ua_filter_mode', 'off', 'UA过滤模式: off, blacklist, whitelist'),
         ('douban_cookie', '', '用于访问豆瓣API的Cookie。'),
         ('webhook_api_key', '', '用于Webhook调用的安全密钥。'),
-        ('tvdb_api_key', '', '用于访问 TheTVDB API 的密钥。')
+        ('tvdb_api_key', '', '用于访问 TheTVDB API 的密钥。'),
+        ('tvdb_token', '', 'TheTVDB API的访问令牌，自动获取和刷新。'),
+        ('tvdb_token_expires_at', '0', 'TheTVDB API令牌的过期时间戳(Unix timestamp)。')
     ]
 
     # 1. 获取所有已存在的配置键
