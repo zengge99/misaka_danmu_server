@@ -27,11 +27,12 @@ from .log_manager import setup_logging
 async def lifespan(app: FastAPI):
     """
     应用生命周期管理器。
-    - `yield` 之前的部分在应用启动时执行。
+    - `yield` 之前的部分在应用启动时执行。 
     - `yield` 之后的部分在应用关闭时执行。
     """
     # --- Startup Logic ---
     setup_logging()
+
     pool = await create_db_pool(app)
     await init_db_tables(app)
     app.state.scraper_manager = ScraperManager(pool)
