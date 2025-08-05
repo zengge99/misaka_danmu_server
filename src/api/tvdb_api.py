@@ -1,7 +1,6 @@
 import logging
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta, timezone
-import asyncio
+from datetime import datetime, timedelta
 import re
 
 import httpx
@@ -14,23 +13,17 @@ from ..database import get_db_pool
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# --- TVDB Token Management ---
+# 使用一个简单的模块级缓存来存储TVDB的JWT令牌
+_tvdb_token_cache: Dict[str, Any] = {"token": None, "expires_at": datetime.utcnow()}
+
 
 async def get_tvdb_token(pool, client: httpx.AsyncClient) -> str:
-    """获取一个有效的TVDB令牌，如果需要则刷新，并将其存储在数据库中。"""
-    # 1. 从数据库读取令牌和过期时间
-    token_task = crud.get_config_value(pool, "tvdb_token", "")
-    expires_at_str_task = crud.get_config_value(pool, "tvdb_token_expires_at", "0")
-    token, expires_at_str = await asyncio.gather(token_task, expires_at_str_task)
-
-    # 2. 检查令牌是否有效
-    try:
-        expires_at_ts = float(expires_at_str)
-        # 使用 aware datetime 对象进行比较
-        if token and datetime.fromtimestamp(expires_at_ts, tz=timezone.utc) > datetime.now(timezone.utc):
-            logger.info("TVDB: 使用数据库中缓存的有效令牌。")
-            return token
-    except (ValueError, TypeError):
-        logger.warning("TVDB: 数据库中的令牌过期时间格式无效，将重新获取。")
+    """获取一个有效的TVDB令牌，如果需要则刷新。"""
+    global _tvdb_token_cache
+    # 如果缓存中的token有效，则直接返回
+    if _tvdb_token_cache["token"] and _tvdb_token_cache["expires_at"] > datetime.utcnow():
+        return _tvdb_token_cache["token"]
 
     logger.info("TVDB token 已过期或未找到，正在请求新的令牌。")
     api_key = await crud.get_config_value(pool, "tvdb_api_key", "")
@@ -42,17 +35,15 @@ async def get_tvdb_token(pool, client: httpx.AsyncClient) -> str:
         response = await client.post("/login", json={"apikey": api_key})
         response.raise_for_status()
         # 根据TVDB API v4文档，token在 'data' 字段下
-        new_token = response.json().get("data", {}).get("token")
-        if not new_token:
+        token = response.json().get("data", {}).get("token")
+        if not token:
             raise ValueError("登录响应中未包含令牌。")
 
         # 令牌有效期为24小时，我们设置一个23小时的缓存
-        new_expires_at = datetime.now(timezone.utc) + timedelta(hours=23)
-        update_token_task = crud.update_config_value(pool, "tvdb_token", new_token)
-        update_expiry_task = crud.update_config_value(pool, "tvdb_token_expires_at", str(new_expires_at.timestamp()))
-        await asyncio.gather(update_token_task, update_expiry_task)
-        logger.info("成功获取新的TVDB令牌并已缓存至数据库。")
-        return new_token
+        _tvdb_token_cache["token"] = token
+        _tvdb_token_cache["expires_at"] = datetime.utcnow() + timedelta(hours=23)
+        logger.info("成功获取新的TVDB令牌。")
+        return token
     except Exception as e:
         logger.error(f"获取TVDB令牌失败: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="TVDB认证失败。")

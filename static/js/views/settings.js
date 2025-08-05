@@ -14,7 +14,7 @@ let tmdbSettingsForm, tmdbSaveMessage;
 // Douban
 let doubanSettingsForm, doubanSaveMessage;
 // TVDB
-let tvdbSettingsForm, tvdbSaveMessage;
+let tvdbSettingsForm, tvdbSaveMessage, usePublicTvdbKeyBtn;
 
 // A popup window reference for OAuth
 let oauthPopup = null;
@@ -54,6 +54,7 @@ function initializeElements() {
     // TVDB
     tvdbSettingsForm = document.getElementById('tvdb-settings-form');
     tvdbSaveMessage = document.getElementById('tvdb-save-message');
+    usePublicTvdbKeyBtn = document.getElementById('use-public-tvdb-key-btn');
 }
 
 function handleSettingsSubNav(e) {
@@ -338,6 +339,10 @@ async function handleSaveTvdbSettings(e) {
     }
 }
 
+function handleUsePublicTvdbKey() {
+    document.getElementById('tvdb-api-key').value = 'ef81406c-7398-4f57-bcad-80b328bb498c';
+}
+
 // --- Main Setup ---
 export function setupSettingsEventListeners() {
     initializeElements();
@@ -368,6 +373,7 @@ export function setupSettingsEventListeners() {
 
     // TVDB
     tvdbSettingsForm.addEventListener('submit', handleSaveTvdbSettings);
+    usePublicTvdbKeyBtn.addEventListener('click', handleUsePublicTvdbKey);
 
     document.addEventListener('viewchange', (e) => {
         if (e.detail.viewId === 'settings-view') {
