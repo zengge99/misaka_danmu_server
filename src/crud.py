@@ -200,7 +200,8 @@ async def find_animes_for_matching(pool: aiomysql.Pool, title: str) -> List[Dict
         SELECT DISTINCT
             a.id as anime_id,
             m.tmdb_id,
-            m.tmdb_episode_group_id
+            m.tmdb_episode_group_id,
+            a.title
         FROM anime a
         LEFT JOIN anime_metadata m ON a.id = m.anime_id
         LEFT JOIN anime_aliases al ON a.id = al.anime_id
