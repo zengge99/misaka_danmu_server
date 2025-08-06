@@ -282,6 +282,9 @@ def _parse_filename_for_match(filename: str) -> Optional[Dict[str, Any]]:
         data = match.groupdict()
         title = data["title"].replace(".", " ").replace("_", " ").strip()
         title = re.sub(r'\[.*?\]', '', title).strip() # 移除字幕组标签
+        # 新增：移除标题中的年份并清理多余空格
+        title = re.sub(r'\b(19|20)\d{2}\b', '', title).strip()
+        title = re.sub(r'\s+', ' ', title).strip(' -')
         return {
             "title": title,
             "season": int(data["season"]),
@@ -302,7 +305,9 @@ def _parse_filename_for_match(filename: str) -> Optional[Dict[str, Any]]:
             title = re.sub(r'\[.*?\]|\(.*?\)|\【.*?\】', '', title).strip()
             title = re.sub(r'1080p|720p|4k|bluray|x264|h\s*\.?\s*264|hevc|x265|h\s*\.?\s*265|aac|flac|web-dl|BDRip|WEBRip|TVRip|DVDrip|AVC|CHT|CHS|BIG5|GB', '', title, flags=re.IGNORECASE).strip()
             title = title.replace("_", " ").replace(".", " ").strip()
-            title = title.strip(' -')
+            # 新增：移除标题中的年份并清理多余空格
+            title = re.sub(r'\b(19|20)\d{2}\b', '', title).strip()
+            title = re.sub(r'\s+', ' ', title).strip(' -')
             return {
                 "title": title,
                 "season": None, # 此模式无法识别季度
@@ -314,8 +319,10 @@ def _parse_filename_for_match(filename: str) -> Optional[Dict[str, Any]]:
     title = re.sub(r'\[.*?\]|\(.*?\)|\【.*?\】', '', title).strip()
     title = re.sub(r'1080p|720p|4k|bluray|x264|h\s*\.?\s*264|hevc|x265|h\s*\.?\s*265|aac|flac|web-dl|BDRip|WEBRip|TVRip|DVDrip|AVC|CHT|CHS|BIG5|GB', '', title, flags=re.IGNORECASE).strip()
     title = title.replace("_", " ").replace(".", " ").strip()
-    title = re.sub(r'\(\d{4}\)', '', title).strip() # 移除年份
-    title = title.strip(' -')
+    # 移除年份, 兼容括号内和独立两种形式
+    title = re.sub(r'\(\s*(19|20)\d{2}\s*\)', '', title).strip()
+    title = re.sub(r'\b(19|20)\d{2}\b', '', title).strip()
+    title = re.sub(r'\s+', ' ', title).strip(' -')
     
     if title:
         return {
