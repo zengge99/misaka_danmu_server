@@ -106,8 +106,6 @@ class GamerScraper(BaseScraper):
         try:
             response = await self._request_with_retry("GET", url, params=params)
             response.raise_for_status()
-            # 新增：打印原始响应内容以供调试
-            self.logger.info(f"Gamer: 收到来自 {url} 的原始响应:\n{response.text}")
             soup = BeautifulSoup(response.text, "lxml")
 
             search_content = soup.find("div", class_="animate-theme-list")
@@ -186,8 +184,6 @@ class GamerScraper(BaseScraper):
         try:
             response = await self._request_with_retry("GET", url)
             response.raise_for_status()
-            # 新增：打印原始响应内容以供调试
-            self.logger.info(f"Gamer: 收到来自 {url} 的原始响应:\n{response.text}")
             soup = BeautifulSoup(response.text, "lxml")
 
             episodes = []
@@ -239,8 +235,6 @@ class GamerScraper(BaseScraper):
             
             await self._ensure_config()
             response = await self.client.post(url, data=data)
-            # 新增：打印原始响应内容以供调试
-            self.logger.info(f"Gamer: 收到来自 {url} 的原始响应: {response.text}")
             try:
                 danmu_data = response.json()
             except json.JSONDecodeError:
@@ -289,7 +283,8 @@ class GamerScraper(BaseScraper):
                     p_string = f"{time_sec:.2f},{mode},{color},[{self.provider_name}]"
                     
                     formatted_comments.append({
-                        "cid": str(comment.get("userid", "0")),
+                        # 修正：使用 'sn' (弹幕流水号) 作为唯一的弹幕ID (cid)，而不是 'userid'，以避免同一用户发送多条弹幕时出现重复键错误。
+                        "cid": str(comment.get("sn", "0")),
                         "p": p_string,
                         "m": text,
                         "t": round(time_sec, 2)
