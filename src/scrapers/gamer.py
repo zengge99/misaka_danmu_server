@@ -25,7 +25,8 @@ class GamerScraper(BaseScraper):
     }
     def __init__(self, pool: aiomysql.Pool):
         super().__init__(pool)
-        self.cc = OpenCC('s2twp')  # Simplified to Traditional Chinese with phrases
+        self.cc_s2t = OpenCC('s2twp')  # Simplified to Traditional Chinese with phrases
+        self.cc_t2s = OpenCC('t2s.json') # Traditional to Simplified
         self.client = httpx.AsyncClient(
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
             timeout=20.0,
@@ -91,7 +92,7 @@ class GamerScraper(BaseScraper):
 
     async def search(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:
         await self._ensure_config()
-        trad_keyword = self.cc.convert(keyword)
+        trad_keyword = self.cc_s2t.convert(keyword)
         self.logger.info(f"Gamer: 正在搜索 '{keyword}' (繁体: '{trad_keyword}')...")
 
         url = "https://ani.gamer.com.tw/search.php"
@@ -116,12 +117,13 @@ class GamerScraper(BaseScraper):
                 
                 media_id = sn_match.group(1)
                 title_tag = item.find("div", class_="theme-name")
-                title = title_tag.text.strip() if title_tag else "未知标题"
+                title_trad = title_tag.text.strip() if title_tag else "未知标题"
+                title_simp = self.cc_t2s.convert(title_trad)
                 
                 time_tag = item.find("div", class_="theme-time")
                 
                 provider_search_info = models.ProviderSearchInfo(
-                    provider=self.provider_name, mediaId=media_id, title=title,
+                    provider=self.provider_name, mediaId=media_id, title=title_simp,
                     type="tv_series", season=1,
                     currentEpisodeIndex=episode_info.get("episode") if episode_info else None
                 )
@@ -156,7 +158,8 @@ class GamerScraper(BaseScraper):
                     
                     episodes.append(models.ProviderEpisodeInfo(
                         provider=self.provider_name, episodeId=sn_match.group(1),
-                        title=link.text.strip(), episodeIndex=i + 1,
+                        title=self.cc_t2s.convert(link.text.strip()),
+                        episodeIndex=i + 1,
                         url=f"https://ani.gamer.com.tw{href}"
                     ))
             else:
@@ -168,7 +171,7 @@ class GamerScraper(BaseScraper):
                         ep_sn = sn_match.group(1)
                         episodes.append(models.ProviderEpisodeInfo(
                             provider=self.provider_name, episodeId=ep_sn,
-                            title=title_match.group(1), episodeIndex=1,
+                            title=self.cc_t2s.convert(title_match.group(1)), episodeIndex=1,
                             url=f"https://ani.gamer.com.tw/animeVideo.php?sn={ep_sn}"
                         ))
 
