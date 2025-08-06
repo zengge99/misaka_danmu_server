@@ -26,7 +26,7 @@ class GamerScraper(BaseScraper):
     def __init__(self, pool: aiomysql.Pool):
         super().__init__(pool)
         self.cc_s2t = OpenCC('s2twp')  # Simplified to Traditional Chinese with phrases
-        self.cc_t2s = OpenCC('t2s.json') # Traditional to Simplified
+        self.cc_t2s = OpenCC('t2s') # Traditional to Simplified
         self.client = httpx.AsyncClient(
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
             timeout=20.0,
