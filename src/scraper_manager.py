@@ -4,7 +4,7 @@ import inspect
 import logging
 import aiomysql
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Type
 
 from .scrapers.base import BaseScraper
 from .models import ProviderSearchInfo
