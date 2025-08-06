@@ -2,9 +2,14 @@ version: '3.8'
 
 services:
   app:
-    # 使用本地 Dockerfile 构建镜像，而不是从 Docker Hub 拉取。
-    # 这可以确保您对代码和依赖项的任何更改都能在运行时生效。
-    build: .
+    # 使用本地 Dockerfile 构建镜像。
+    # build.args 会将 .env 文件中的 PUID 和 PGID 传递给 Dockerfile，
+    # 以便在构建时创建具有正确权限的用户。
+    build:
+      context: .
+      args:
+        - PUID=${PUID:-1000}
+        - PGID=${PGID:-1000}
     # image: l429609201/danmu_api_server:latest # 如果您想使用自己推送的镜像，请取消注释此行并注释掉上面的 'build: .'
     container_name: danmu-api
     restart: unless-stopped

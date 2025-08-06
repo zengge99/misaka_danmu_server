@@ -40,8 +40,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制应用代码
 COPY . .
 
-# 更改应用目录的所有权
-RUN chown -R appuser:appgroup /app
+# 确保日志目录存在，并更改应用目录的所有权
+# /app/config 目录是从源代码复制过来的
+RUN mkdir -p /app/config/logs && \
+    chown -R appuser:appgroup /app
 
 # 切换到非 root 用户
 USER appuser
