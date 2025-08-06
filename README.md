@@ -68,13 +68,11 @@
 
     ```yaml
     # docker-compose.app.yml
-    version: '3.5'
+    version: '3.8'
     services:
       app:
         # 替换为您自己的Docker Hub用户名和镜像名，或使用本地构建
         image: l429609201/misaka_danmu_server:latest
-        # 如果您想从源代码构建，请取消注释下一行并注释掉上面的 'image' 行
-        # build: .
         container_name: misaka-danmu-server
         restart: unless-stopped
         # 使用主机网络模式，容器将直接使用宿主机的网络。
@@ -83,6 +81,10 @@
         # 推荐使用host模式
         network_mode: "host"
         environment:
+          # --- 用户与组ID (用于运行时，与构建时匹配) ---
+          - PUID=1000
+          - PGID=1000
+
           # --- 数据库连接配置 ---
           # '127.0.0.1' 指向宿主机，因为我们使用了主机网络模式
           - DANMUAPI_DATABASE__HOST=127.0.0.1
