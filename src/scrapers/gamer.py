@@ -180,7 +180,8 @@ class GamerScraper(BaseScraper):
         await self._ensure_config()
         self.logger.info(f"Gamer: 正在为 media_id={media_id} 获取分集列表...")
         
-        url = f"https://ani.gamer.com.tw/animeVideo.php?sn={media_id}"
+        # 修正：直接请求作品集页面(animeRef.php)，而不是依赖于播放页(animeVideo.php)的重定向，这与Lua脚本的逻辑一致，更健壮。
+        url = f"https://ani.gamer.com.tw/animeRef.php?sn={media_id}"
         
         try:
             response = await self._request_with_retry("GET", url)
