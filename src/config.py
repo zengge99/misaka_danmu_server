@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, EnvSetti
 
 # 1. 为配置的不同部分创建 Pydantic 模型，提供类型提示和默认值
 class ServerConfig(BaseModel):
-    host: str = "127.0.0.1"
+    host: str = "0.0.0.0"
     port: int = 7768
 
 class DatabaseConfig(BaseModel):

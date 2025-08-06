@@ -53,12 +53,6 @@
           TZ: "Asia/Shanghai"
         ports:
           - "3306:3306"
-        networks:
-          - danmu-net
-
-    networks:
-      danmu-net:
-        driver: bridge
     ```
 
 2.  **重要**: 修改文件中的 `MYSQL_ROOT_PASSWORD` 和 `MYSQL_PASSWORD` 为您自己的安全密码。
@@ -68,7 +62,7 @@
     docker-compose -f docker-compose.mysql.yml up -d
     ```
 
-### 步骤 2: 部署 Danmu API Server 应用
+### 步骤 2: 部署 Misaka Danmu Server 应用
 
 1.  在同一个目录下，创建另一个名为 `docker-compose.app.yml` 的文件，内容如下。
 
@@ -83,12 +77,15 @@
         # build: .
         container_name: danmu-api
         restart: unless-stopped
-        ports:
-          - "7768:7768"
+        # 使用主机网络模式，容器将直接使用宿主机的网络。
+        # 这意味着容器内的 127.0.0.1 就是宿主机的 127.0.0.1。
+        # 应用将直接在宿主机的 7768 端口上可用，无需端口映射。
+        # 推荐使用host模式
+        network_mode: "host"
         environment:
           # --- 数据库连接配置 ---
-          # 'mysql' 是上一个compose文件中定义的服务名
-          - DANMUAPI_DATABASE__HOST=mysql
+          # '127.0.0.1' 指向宿主机，因为我们使用了主机网络模式
+          - DANMUAPI_DATABASE__HOST=127.0.0.1
           - DANMUAPI_DATABASE__PORT=3306
           - DANMUAPI_DATABASE__NAME=danmuapi
           # !!! 重要：请使用您在步骤1中为数据库设置的用户名和密码 !!!
@@ -101,13 +98,6 @@
         volumes:
           # 挂载配置文件目录，用于持久化日志等
           - ./config:/app/config
-        networks:
-          - danmu-net
-
-    networks:
-      danmu-net:
-        external: true
-        name: danmu-api_danmu-net # 名称通常是 <目录名>_<网络名>
     ```
 
 2.  **重要**:
@@ -162,5 +152,3 @@
 ### 3. 关于 Yamby 客户端的兼容性说明
 
 部分版本的 Yamby 客户端在实现上存在一个问题：当它通过 `/search/anime` 接口搜索到作品后，会错误地使用返回结果中的 `animeId` 字段去请求 `/bangumi/{bangumiid}` 接口，而该接口按 dandanplay 规范应使用 `bangumiId` 字段。
-
-
