@@ -148,7 +148,3 @@
     `http://192.168.1.100:7768/api/Q2KHYcveM0SaRKvxomQm/api/v2`
 
 > **兼容性说明**: 本服务已对路由进行特殊处理，无论您使用 `.../api/<Token>` 还是 `.../api/<Token>/api/v2` 格式，服务都能正确响应，以最大程度兼容不同客户端。
-
-### 3. 关于 Yamby 客户端的兼容性说明
-
-部分版本的 Yamby 客户端在实现上存在一个问题：当它通过 `/search/anime` 接口搜索到作品后，会错误地使用返回结果中的 `animeId` 字段去请求 `/bangumi/{bangumiid}` 接口，而该接口按 dandanplay 规范应使用 `bangumiId` 字段。
