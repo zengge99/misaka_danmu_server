@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 from opencc import OpenCC
 
 from .. import crud, models
-from .base import BaseScraper
+from .base import BaseScraper, get_season_from_title
 
 
 class GamerScraper(BaseScraper):
@@ -22,6 +22,7 @@ class GamerScraper(BaseScraper):
     # 值 (value) 是在UI中显示的标签
     configurable_fields: Dict[str, str] = {
         "gamer_cookie": "Cookie",
+        "gamer_user_agent": "User-Agent",
     }
     def __init__(self, pool: aiomysql.Pool):
         super().__init__(pool)
@@ -41,8 +42,12 @@ class GamerScraper(BaseScraper):
             return
         
         self._cookie = await crud.get_config_value(self.pool, "gamer_cookie", "")
+        user_agent = await crud.get_config_value(self.pool, "gamer_user_agent", "")
+
         if self._cookie:
             self.client.headers["Cookie"] = self._cookie
+        if user_agent:
+            self.client.headers["User-Agent"] = user_agent
         
         self._config_loaded = True
 
@@ -151,7 +156,7 @@ class GamerScraper(BaseScraper):
                 
                 provider_search_info = models.ProviderSearchInfo(
                     provider=self.provider_name, mediaId=media_id, title=title_simp,
-                    type=media_type, season=1,
+                    type=media_type, season=get_season_from_title(title_simp),
                     year=year,
                     imageUrl=image_url,
                     episodeCount=episode_count,
