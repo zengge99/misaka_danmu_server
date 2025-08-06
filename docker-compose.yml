@@ -3,13 +3,7 @@ version: '3.8'
 services:
   app:
     # 使用本地 Dockerfile 构建镜像。
-    # build.args 会将 .env 文件中的 PUID 和 PGID 传递给 Dockerfile，
-    # 以便在构建时创建具有正确权限的用户。
-    build:
-      context: .
-      args:
-        - PUID=${PUID:-1000}
-        - PGID=${PGID:-1000}
+    build: .
     # image: l429609201/danmu_api_server:latest # 如果您想使用自己推送的镜像，请取消注释此行并注释掉上面的 'build: .'
     container_name: danmu-api
     restart: unless-stopped
@@ -18,7 +12,7 @@ services:
     # 应用将直接在宿主机的 7768 端口上可用，无需端口映射。
     network_mode: "host"
     environment:
-      # --- 用户与组ID (用于运行时，与构建时匹配) ---
+      # --- 用户与组ID ---
       # 这些值将由 entrypoint.sh 用来设置 /app/config 目录的权限
       - PUID=1000
       - PGID=1000
@@ -37,9 +31,8 @@ services:
       # 初始管理员配置
       - DANMUAPI_ADMIN__INITIAL_USER=admin
     volumes:
-      # (可选) 挂载本地配置文件以覆盖镜像中的默认配置。
-      # 如果您主要使用环境变量进行配置，可以注释掉此行。
-      - ./config/config.yml:/app/config/config.yml:ro
+      # 挂载 config 目录以持久化日志和配置文件。
+      - ./config:/app/config
 
 # 由于不再使用容器化的数据库，db 服务、volumes 和 networks 部分已被移除。
 # 请确保您的宿主机上已经运行了 MySQL 服务，并且：
