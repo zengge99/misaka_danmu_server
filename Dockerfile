@@ -41,8 +41,9 @@ RUN chown -R appuser:appgroup /app
 # 暴露应用运行的端口
 EXPOSE 7768
 
-# 切换到非 root 用户
-USER appuser
+# 切换到非 root 用户。
+# 注释掉此行，让容器的入口脚本来处理用户切换，以确保 PUID/PGID 机制正常工作。
+# USER appuser
 
 # 运行应用的默认命令
 CMD ["python", "-m", "src.main"]

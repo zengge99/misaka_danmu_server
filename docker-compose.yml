@@ -12,8 +12,6 @@ services:
     # image: l429609201/danmu_api_server:latest # 如果您想使用自己推送的镜像，请取消注释此行并注释掉上面的 'build: .'
     container_name: danmu-api
     restart: unless-stopped
-    # 关键：使用 .env 文件中定义的 UID 和 GID 运行容器，以解决挂载卷的权限问题。
-    user: "${PUID:-1000}:${PGID:-1000}"
     # 使用主机网络模式，容器将直接使用宿主机的网络。
     # 这意味着容器内的 127.0.0.1 就是宿主机的 127.0.0.1。
     # 应用将直接在宿主机的 7768 端口上可用，无需端口映射。
