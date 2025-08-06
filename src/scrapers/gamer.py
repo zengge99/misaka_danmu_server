@@ -117,6 +117,9 @@ class GamerScraper(BaseScraper):
                 
                 media_id = sn_match.group(1)
                 title_tag = item.find("div", class_="theme-name")
+                if not title_tag:
+                    self.logger.warning(f"Gamer: 无法为 media_id={media_id} 解析标题。对应的HTML片段: {item}")
+                # 即使找不到标题，也继续处理，但标题会是“未知标题”
                 title_trad = title_tag.text.strip() if title_tag else "未知标题"
                 title_simp = self.cc_t2s.convert(title_trad)
                 
