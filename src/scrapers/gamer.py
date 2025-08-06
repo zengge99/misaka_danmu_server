@@ -124,11 +124,35 @@ class GamerScraper(BaseScraper):
                 title_trad = title_tag.text.strip() if title_tag else "未知标题"
                 title_simp = self.cc_t2s.convert(title_trad)
                 
-                time_tag = item.find("div", class_="theme-time")
+                # 新增：提取年份、集数和海报
+                year = None
+                time_tag = item.find("p", class_="theme-time")
+                if time_tag and time_tag.text:
+                    year_match = re.search(r'(\d{4})', time_tag.text)
+                    if year_match:
+                        year = int(year_match.group(1))
+
+                episode_count = None
+                number_tag = item.find("span", class_="theme-number")
+                if number_tag and number_tag.text:
+                    ep_count_match = re.search(r'(\d+)', number_tag.text)
+                    if ep_count_match:
+                        episode_count = int(ep_count_match.group(1))
+
+                image_url = None
+                img_tag = item.find("img", class_="theme-img")
+                if img_tag and img_tag.get("data-src"):
+                    image_url = img_tag["data-src"]
+
+                # 根据集数判断媒体类型
+                media_type = "movie" if episode_count == 1 else "tv_series"
                 
                 provider_search_info = models.ProviderSearchInfo(
                     provider=self.provider_name, mediaId=media_id, title=title_simp,
-                    type="tv_series", season=1,
+                    type=media_type, season=1,
+                    year=year,
+                    imageUrl=image_url,
+                    episodeCount=episode_count,
                     currentEpisodeIndex=episode_info.get("episode") if episode_info else None
                 )
                 results.append(provider_search_info)
