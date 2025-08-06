@@ -100,7 +100,7 @@ async def init_db_tables(app: FastAPI):
                 "scrapers": """CREATE TABLE `scrapers` (`provider_name` VARCHAR(50) NOT NULL, `is_enabled` BOOLEAN NOT NULL DEFAULT TRUE, `display_order` INT NOT NULL DEFAULT 0, PRIMARY KEY (`provider_name`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
                 "anime_sources": """CREATE TABLE `anime_sources` (`id` BIGINT NOT NULL AUTO_INCREMENT, `anime_id` BIGINT NOT NULL, `provider_name` VARCHAR(50) NOT NULL, `media_id` VARCHAR(255) NOT NULL, `is_favorited` BOOLEAN NOT NULL DEFAULT FALSE, `created_at` TIMESTAMP NULL, PRIMARY KEY (`id`), UNIQUE INDEX `idx_anime_provider_media_unique` (`anime_id` ASC, `provider_name` ASC, `media_id` ASC)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
                 "anime_metadata": """CREATE TABLE `anime_metadata` (`id` BIGINT NOT NULL AUTO_INCREMENT, `anime_id` BIGINT NOT NULL, `tmdb_id` VARCHAR(50) NULL, `tmdb_episode_group_id` VARCHAR(50) NULL, `imdb_id` VARCHAR(50) NULL, `tvdb_id` VARCHAR(50) NULL, `douban_id` VARCHAR(50) NULL, `bangumi_id` VARCHAR(50) NULL, PRIMARY KEY (`id`), UNIQUE INDEX `idx_anime_id_unique` (`anime_id` ASC)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
-                "config": """CREATE TABLE `config` (`config_key` VARCHAR(100) NOT NULL, `config_value` VARCHAR(255) NOT NULL, `description` TEXT NULL, PRIMARY KEY (`config_key`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
+                "config": """CREATE TABLE `config` (`config_key` VARCHAR(100) NOT NULL, `config_value` TEXT NOT NULL, `description` TEXT NULL, PRIMARY KEY (`config_key`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
                 "cache_data": """CREATE TABLE `cache_data` (`cache_provider` VARCHAR(50) NULL, `cache_key` VARCHAR(255) NOT NULL, `cache_value` LONGTEXT NOT NULL, `expires_at` TIMESTAMP NOT NULL, PRIMARY KEY (`cache_key`), INDEX `idx_expires_at` (`expires_at`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
                 "api_tokens": """CREATE TABLE `api_tokens` (`id` INT NOT NULL AUTO_INCREMENT, `name` VARCHAR(100) NOT NULL, `token` VARCHAR(50) NOT NULL, `is_enabled` BOOLEAN NOT NULL DEFAULT TRUE, `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `expires_at` TIMESTAMP NULL DEFAULT NULL, PRIMARY KEY (`id`), UNIQUE INDEX `idx_token_unique` (`token` ASC)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
                 "token_access_logs": """CREATE TABLE `token_access_logs` (`id` BIGINT NOT NULL AUTO_INCREMENT, `token_id` INT NOT NULL, `ip_address` VARCHAR(45) NOT NULL, `user_agent` TEXT NULL, `access_time` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `status` VARCHAR(50) NOT NULL, `path` VARCHAR(512) NULL, PRIMARY KEY (`id`), INDEX `idx_token_id_time` (`token_id` ASC, `access_time` DESC)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
@@ -153,6 +153,17 @@ async def init_db_tables(app: FastAPI):
                     print("检测到旧的 'task_history.status' 列定义，正在将其更新为 VARCHAR(50)...")
                     await cursor.execute("ALTER TABLE task_history MODIFY COLUMN status VARCHAR(50) NOT NULL;")
                     print("列 'task_history.status' 更新成功。")
+
+                # 新增：检查 config.config_value 的类型
+                await cursor.execute("""
+                    SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'config' AND COLUMN_NAME = 'config_value'
+                """, (db_name,))
+                config_value_col_type_row = await cursor.fetchone()
+                if config_value_col_type_row and config_value_col_type_row[0].lower() not in ['text', 'longtext']:
+                    print("检测到旧的 'config.config_value' 列定义，正在将其更新为 TEXT...")
+                    await cursor.execute("ALTER TABLE config MODIFY COLUMN config_value TEXT NOT NULL;")
+                    print("列 'config.config_value' 更新成功。")
             except Exception as e:
                 # 仅记录错误，不中断启动流程
                 print(f"检查或更新表结构时发生非致命错误: {e}")
