@@ -116,7 +116,8 @@ class GamerScraper(BaseScraper):
                     continue
                 
                 media_id = sn_match.group(1)
-                title_tag = item.find("div", class_="theme-name")
+                # 修正：巴哈姆特的页面结构已更改，标题现在位于 <p> 标签中。
+                title_tag = item.find("p", class_="theme-name")
                 if not title_tag:
                     self.logger.warning(f"Gamer: 无法为 media_id={media_id} 解析标题。对应的HTML片段: {item}")
                 # 即使找不到标题，也继续处理，但标题会是“未知标题”
