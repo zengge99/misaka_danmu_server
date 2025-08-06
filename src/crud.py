@@ -1,6 +1,7 @@
 import aiomysql
 import json
 import logging
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
@@ -36,8 +37,11 @@ async def search_anime(pool: aiomysql.Pool, keyword: str) -> List[Dict[str, Any]
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             query = "SELECT id, title, type FROM anime WHERE MATCH(title) AGAINST(%s IN BOOLEAN MODE)"
-            # 为关键词添加通配符以支持前缀匹配
-            await cursor.execute(query, (keyword + '*',))
+            # 清理关键词以避免FULLTEXT语法错误
+            sanitized_keyword = re.sub(r'[+\-><()~*@"]', ' ', keyword).strip()
+            if not sanitized_keyword:
+                return []
+            await cursor.execute(query, (sanitized_keyword + '*',))
             return await cursor.fetchall()
 
 async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, episode_number: Optional[int], season_number: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -84,9 +88,14 @@ async def search_episodes_in_library(pool: aiomysql.Pool, anime_title: str, epis
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             # 1. Try FULLTEXT search
-            query_ft = query_template.format(title_condition="MATCH(a.title) AGAINST(%s IN BOOLEAN MODE)")
-            await cursor.execute(query_ft, tuple([clean_title + '*'] + params_episode + params_season))
-            results = await cursor.fetchall()
+            sanitized_for_ft = re.sub(r'[+\-><()~*@"]', ' ', clean_title).strip()
+            if not sanitized_for_ft:
+                logging.info(f"Skipping FULLTEXT search for '{clean_title}' because it contains only operators/stopwords.")
+                results = []
+            else:
+                query_ft = query_template.format(title_condition="MATCH(a.title) AGAINST(%s IN BOOLEAN MODE)")
+                await cursor.execute(query_ft, tuple([sanitized_for_ft + '*'] + params_episode + params_season))
+                results = await cursor.fetchall()
             if results:
                 return results
 
@@ -167,9 +176,14 @@ async def search_animes_for_dandan(pool: aiomysql.Pool, keyword: str) -> List[Di
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             # 1. Try FULLTEXT search
-            query_ft = query_template.format(title_condition="MATCH(a.title) AGAINST(%s IN BOOLEAN MODE)")
-            await cursor.execute(query_ft, (clean_title + '*',))
-            results = await cursor.fetchall()
+            sanitized_for_ft = re.sub(r'[+\-><()~*@"]', ' ', clean_title).strip()
+            if not sanitized_for_ft:
+                logging.info(f"Skipping FULLTEXT search for '{clean_title}' because it contains only operators/stopwords.")
+                results = []
+            else:
+                query_ft = query_template.format(title_condition="MATCH(a.title) AGAINST(%s IN BOOLEAN MODE)")
+                await cursor.execute(query_ft, (sanitized_for_ft + '*',))
+                results = await cursor.fetchall()
             if results:
                 return results
 
