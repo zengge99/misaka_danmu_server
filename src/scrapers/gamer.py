@@ -101,6 +101,8 @@ class GamerScraper(BaseScraper):
         try:
             response = await self._request_with_retry("GET", url, params=params)
             response.raise_for_status()
+            # 新增：打印原始响应内容以供调试
+            self.logger.info(f"Gamer: 收到来自 {url} 的原始响应:\n{response.text}")
             soup = BeautifulSoup(response.text, "lxml")
 
             search_content = soup.find("div", class_="animate-theme-list")
@@ -178,6 +180,8 @@ class GamerScraper(BaseScraper):
         try:
             response = await self._request_with_retry("GET", url)
             response.raise_for_status()
+            # 新增：打印原始响应内容以供调试
+            self.logger.info(f"Gamer: 收到来自 {url} 的原始响应:\n{response.text}")
             soup = BeautifulSoup(response.text, "lxml")
 
             episodes = []
@@ -229,6 +233,8 @@ class GamerScraper(BaseScraper):
             
             await self._ensure_config()
             response = await self.client.post(url, data=data)
+            # 新增：打印原始响应内容以供调试
+            self.logger.info(f"Gamer: 收到来自 {url} 的原始响应: {response.text}")
             try:
                 danmu_data = response.json()
             except json.JSONDecodeError:
