@@ -261,3 +261,22 @@ th {
     border-top: 1px solid var(--border-color);
     padding-top: 15px;
 }
+
+.modal-help-text {
+    font-size: 0.9em;
+    color: #606266;
+    margin-bottom: 15px;
+    background-color: var(--secondary-color);
+    padding: 10px;
+    border-radius: 4px;
+    line-height: 1.5;
+}
+
+.modal-help-text a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.modal-help-text a:hover {
+    text-decoration: underline;
+}

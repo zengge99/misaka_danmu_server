@@ -207,6 +207,15 @@ function showScraperConfigModal(providerName, fields) {
     apiFetch(`/api/ui/scrapers/${providerName}/config`)
         .then(currentConfig => {
             modalBody.innerHTML = ''; // 清空加载提示
+
+            // 新增：为 gamer 源添加特别说明
+            if (providerName === 'gamer') {
+                const helpText = document.createElement('p');
+                helpText.className = 'modal-help-text';
+                helpText.innerHTML = `仅当无法正常搜索时才需要填写。请先尝试清空配置并保存，如果问题依旧，再从 <a href="https://ani.gamer.com.tw/" target="_blank" rel="noopener noreferrer">巴哈姆特动画疯</a> 获取最新的 User-Agent 和 Cookie。`;
+                modalBody.appendChild(helpText);
+            }
+
             Object.entries(fields).forEach(([key, label]) => {
                 const value = currentConfig[key] || '';
                 const formRow = document.createElement('div');
