@@ -5,6 +5,7 @@ import re
 from typing import List, Optional, Dict, Any
 from typing import Callable
 from datetime import datetime
+from opencc import OpenCC
 
 import aiomysql
 from pydantic import BaseModel, Field
@@ -744,6 +745,11 @@ async def match_batch_files(
 )
 async def get_comments_for_dandan(
     episode_id: int = Path(..., description="分集ID (来自 /search/episodes 响应中的 episodeId)"),
+    # 修正：使用 alias 来匹配 dandanplay API 的 'chConvert' (驼峰命名) 参数。
+    ch_convert: int = Query(0, alias="chConvert", description="中文简繁转换。0-不转换，1-转换为简体，2-转换为繁体。"),
+    # 新增：添加 'from' 和 'withRelated' 参数以提高兼容性，尽管当前实现尚未使用它们。
+    from_time: int = Query(0, alias="from", description="弹幕开始时间(秒)"),
+    with_related: bool = Query(True, alias="withRelated", description="是否包含关联弹幕"),
     token: str = Depends(get_token_from_path),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
@@ -751,7 +757,20 @@ async def get_comments_for_dandan(
     模拟 dandanplay 的弹幕获取接口。
     注意：这里的 episode_id 实际上是我们数据库中的主键 ID。
     """
+    # 注意：当前实现尚未使用 from_time 和 with_related 参数。
     comments_data = await crud.fetch_comments(pool, episode_id)
+
+    # 如果客户端请求了繁简转换，则在此处处理
+    if ch_convert in [1, 2]:
+        converter = None
+        if ch_convert == 1:
+            converter = OpenCC('t2s')  # Traditional to Simplified
+        elif ch_convert == 2:
+            converter = OpenCC('s2t')  # Simplified to Traditional
+        
+        if converter:
+            for comment in comments_data:
+                comment['m'] = converter.convert(comment['m'])
 
     # 为了避免日志过长，只打印部分弹幕作为示例
     log_limit = 5

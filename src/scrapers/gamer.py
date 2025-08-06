@@ -286,7 +286,7 @@ class GamerScraper(BaseScraper):
                         # 修正：使用 'sn' (弹幕流水号) 作为唯一的弹幕ID (cid)，而不是 'userid'，以避免同一用户发送多条弹幕时出现重复键错误。
                         "cid": str(comment.get("sn", "0")),
                         "p": p_string,
-                        "m": text,
+                        "m": text, # 移除采集时的转换，保持数据原始性
                         "t": round(time_sec, 2)
                     })
                 except (ValueError, TypeError) as e:
