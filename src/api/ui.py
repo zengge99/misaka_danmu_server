@@ -603,6 +603,64 @@ async def update_scraper_settings(
     logger.info(f"用户 '{current_user.username}' 更新了搜索源设置，已重新加载。")
     return
 
+class ScraperSettingWithConfig(models.ScraperSetting):
+    configurable_fields: Optional[Dict[str, str]] = None
+
+@router.get("/scrapers", response_model=List[ScraperSettingWithConfig], summary="获取所有搜索源的设置")
+async def get_scraper_settings(
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    manager: ScraperManager = Depends(get_scraper_manager)
+):
+    """获取所有可用搜索源的列表及其配置（启用状态、顺序、可配置字段）。"""
+    settings = await crud.get_all_scraper_settings(pool)
+    
+    full_settings = []
+    for s in settings:
+        scraper_class = manager.get_scraper_class(s['provider_name'])
+        s_with_config = ScraperSettingWithConfig.model_validate(s)
+        if scraper_class:
+            s_with_config.configurable_fields = getattr(scraper_class, 'configurable_fields', None)
+        full_settings.append(s_with_config)
+            
+    return full_settings
+
+@router.get("/scrapers/{provider_name}/config", response_model=Dict[str, str], summary="获取指定搜索源的配置")
+async def get_scraper_config(
+    provider_name: str,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    manager: ScraperManager = Depends(get_scraper_manager)
+):
+    scraper_class = manager.get_scraper_class(provider_name)
+    if not scraper_class or not hasattr(scraper_class, 'configurable_fields'):
+        raise HTTPException(status_code=404, detail="该搜索源不可配置或不存在。")
+    
+    config_keys = scraper_class.configurable_fields.keys()
+    tasks = [crud.get_config_value(pool, key, "") for key in config_keys]
+    values = await asyncio.gather(*tasks)
+    
+    return dict(zip(config_keys, values))
+
+@router.put("/scrapers/{provider_name}/config", status_code=status.HTTP_204_NO_CONTENT, summary="更新指定搜索源的配置")
+async def update_scraper_config(
+    provider_name: str,
+    payload: Dict[str, str],
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    manager: ScraperManager = Depends(get_scraper_manager)
+):
+    scraper_class = manager.get_scraper_class(provider_name)
+    if not scraper_class or not hasattr(scraper_class, 'configurable_fields') or not scraper_class.configurable_fields:
+        raise HTTPException(status_code=404, detail="该搜索源不可配置或不存在。")
+
+    allowed_keys = scraper_class.configurable_fields.keys()
+    tasks = [crud.update_config_value(pool, key, value or "") for key, value in payload.items() if key in allowed_keys]
+    
+    if tasks:
+        await asyncio.gather(*tasks)
+        logger.info(f"用户 '{current_user.username}' 更新了搜索源 '{provider_name}' 的配置。")
+
 @router.get("/logs", response_model=List[str], summary="获取最新的服务器日志")
 async def get_server_logs(current_user: models.User = Depends(security.get_current_user)):
     """获取存储在内存中的最新日志条目。"""

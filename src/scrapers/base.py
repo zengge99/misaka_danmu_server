@@ -94,6 +94,9 @@ class BaseScraper(ABC):
     # 每个子类都必须覆盖这个类属性
     provider_name: str
 
+    # (可选) 子类可以覆盖此字典来声明其可配置的字段
+    configurable_fields: Dict[str, str] = {}
+
     @abstractmethod
     async def search(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:
         """

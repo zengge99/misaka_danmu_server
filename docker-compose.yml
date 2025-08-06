@@ -18,6 +18,10 @@ services:
     # 应用将直接在宿主机的 7768 端口上可用，无需端口映射。
     network_mode: "host"
     environment:
+      # --- 用户与组ID (用于运行时，与构建时匹配) ---
+      # 这些值将由 entrypoint.sh 用来设置 /app/config 目录的权限
+      - PUID=1000
+      - PGID=1000
       # Pydantic-settings 会自动读取这些环境变量
       # 服务配置 (端口在主机网络模式下由应用内部配置决定)
       - DANMUAPI_SERVER__HOST=0.0.0.0

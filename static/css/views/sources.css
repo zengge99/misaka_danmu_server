@@ -40,11 +40,21 @@
     border-bottom: 1px solid var(--border-color);
     cursor: pointer;
     transition: background-color 0.2s;
+    gap: 10px;
 }
 
 #danmaku-sources-list li:last-child,
 #metadata-sources-list li:last-child {
     border-bottom: none;
+}
+
+.source-name {
+    flex-grow: 1;
+}
+
+.config-btn {
+    margin-left: auto;
+    flex-shrink: 0;
 }
 
 #danmaku-sources-list li:hover,
@@ -59,9 +69,9 @@
 }
 
 .status-icon {
-    margin-left: auto;
     font-size: 1.2em;
     padding: 3px 8px;
     border-radius: 12px;
     background-color: #e9ecef;
+    flex-shrink: 0;
 }

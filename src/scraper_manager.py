@@ -14,6 +14,7 @@ from . import crud
 class ScraperManager:
     def __init__(self, pool: aiomysql.Pool):
         self.scrapers: Dict[str, BaseScraper] = {}
+        self._scraper_classes: Dict[str, Type[BaseScraper]] = {}
         self.pool = pool
         # 注意：加载逻辑现在是异步的，将在应用启动时调用
 
@@ -47,6 +48,7 @@ class ScraperManager:
         # 清理现有爬虫以确保全新加载
         await self.close_all()
         self.scrapers.clear()
+        self._scraper_classes.clear()
 
         scrapers_dir = Path(__file__).parent / "scrapers"
         discovered_providers = []
@@ -61,7 +63,7 @@ class ScraperManager:
                     if issubclass(obj, BaseScraper) and obj is not BaseScraper:
                         provider_name = obj.provider_name # 直接访问类属性，避免实例化
                         discovered_providers.append(provider_name)
-                        scraper_classes[provider_name] = obj
+                        self._scraper_classes[provider_name] = obj
             except TypeError as e:
                 if "Couldn't parse file content!" in str(e):
                     # 这是一个针对 protobuf 版本不兼容的特殊情况。
@@ -82,9 +84,9 @@ class ScraperManager:
         settings = await crud.get_all_scraper_settings(self.pool)
 
         for setting in settings:
-            if setting['is_enabled'] and setting['provider_name'] in scraper_classes:
+            if setting['is_enabled'] and setting['provider_name'] in self._scraper_classes:
                 provider_name = setting['provider_name']
-                self.scrapers[provider_name] = scraper_classes[provider_name](self.pool)
+                self.scrapers[provider_name] = self._scraper_classes[provider_name](self.pool)
                 print(f"已启用搜索源 '{provider_name}' (顺序: {setting['display_order']})。")
 
     @property
@@ -158,3 +160,7 @@ class ScraperManager:
         if not scraper:
             raise ValueError(f"未找到提供方为 '{provider}' 的搜索源")
         return scraper
+
+    def get_scraper_class(self, provider_name: str) -> Optional[Type[BaseScraper]]:
+        """获取刮削器的类，而不实例化它。"""
+        return self._scraper_classes.get(provider_name)

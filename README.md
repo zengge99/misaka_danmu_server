@@ -81,10 +81,8 @@
         # 推荐使用host模式
         network_mode: "host"
         environment:
-          # --- 用户与组ID (用于运行时，与构建时匹配) ---
-          - PUID=1000
-          - PGID=1000
-
+            PUID=1000
+            PGID=1000
           # --- 数据库连接配置 ---
           # '127.0.0.1' 指向宿主机，因为我们使用了主机网络模式
           - DANMUAPI_DATABASE__HOST=127.0.0.1
