@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     default-libmysqlclient-dev \
     tzdata \
-    su-exec \
+    gosu \
     && addgroup --gid 1000 appgroup \
     && adduser --shell /bin/sh --disabled-password --uid 1000 --gid 1000 appuser \
     && apt-get clean \
