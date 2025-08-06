@@ -130,6 +130,11 @@ class GamerScraper(BaseScraper):
                 results.append(provider_search_info)
             
             self.logger.info(f"Gamer: 搜索 '{keyword}' 完成，找到 {len(results)} 个结果。")
+            # 新增：打印详细的搜索结果列表
+            if results:
+                log_results = "\n".join([f"  - {r.title} (ID: {r.mediaId})" for r in results])
+                self.logger.info(f"Gamer: 搜索结果列表:\n{log_results}")
+
             return results
 
         except Exception as e:
