@@ -75,7 +75,7 @@
         image: l429609201/misaka_danmu_server:latest
         # 如果您想从源代码构建，请取消注释下一行并注释掉上面的 'image' 行
         # build: .
-        container_name: danmu-api
+        container_name: misaka-danmu-server
         restart: unless-stopped
         # 使用主机网络模式，容器将直接使用宿主机的网络。
         # 这意味着容器内的 127.0.0.1 就是宿主机的 127.0.0.1。
