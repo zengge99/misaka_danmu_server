@@ -68,7 +68,7 @@
 
     ```yaml
     # docker-compose.app.yml
-    version: '3.9'
+    version: '3.8'
     services:
       app:
         # 替换为您自己的Docker Hub用户名和镜像名，或使用本地构建
@@ -76,15 +76,19 @@
         container_name: misaka-danmu-server # 容器名称
         restart: unless-stopped
         # 关键：使用您主机的用户ID和组ID运行容器，以解决挂载卷的权限问题。
-        # 请确保在 .env 文件中或直接在此处设置了 PUID 和 PGID。
+        # 请确保在 .env 文件中或通过环境变量设置了 PUID 和 PGID。
         user: "${PUID:-1000}:${PGID:-1000}"
         # 使用主机网络模式，容器将直接使用宿主机的网络。
         # 这意味着容器内的 127.0.0.1 就是宿主机的 127.0.0.1。
         # 应用将直接在宿主机的 7768 端口上可用，无需端口映射。
-        # 推荐使用host模式
         network_mode: "host"
         environment:
+          # --- 服务配置 ---
+          # 应用将监听在宿主机的 0.0.0.0:7768 上
+          - DANMUAPI_SERVER__HOST=0.0.0.0
+          - DANMUAPI_SERVER__PORT=7768
           # --- 数据库连接配置 ---
+        # 推荐使用host模式
           # '127.0.0.1' 指向宿主机，因为我们使用了主机网络模式
           - DANMUAPI_DATABASE__HOST=127.0.0.1
           - DANMUAPI_DATABASE__PORT=3306
@@ -97,12 +101,14 @@
           # --- 初始管理员配置 ---
           - DANMUAPI_ADMIN__INITIAL_USER=admin
         volumes:
-          # 挂载配置文件目录，用于持久化日志等
+          # 挂载 config 目录以持久化日志和配置文件。
+          # 由于我们使用了 'user' 指令，容器进程将有权限写入此目录。
           - ./config:/app/config
     ```
 
 2.  **重要**:
     -   确保 `DANMUAPI_DATABASE__PASSWORD` 与您在 `docker-compose.mysql.yml` 中设置的 `MYSQL_PASSWORD` 一致。
+
 
 3.  在同一目录运行命令启动应用：
     ```bash
