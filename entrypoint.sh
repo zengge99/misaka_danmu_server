@@ -17,4 +17,4 @@ chown -R "${PUID}:${PGID}" /app/config
 
 # 降权并执行主命令 (例如：python -m src.main)
 echo "正在以 appuser 用户身份执行命令: $@"
-exec gosu appuser "$@"
+exec su-exec appuser "$@"
