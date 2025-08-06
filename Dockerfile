@@ -22,8 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     default-libmysqlclient-dev \
     tzdata \
-    && if getent group ${PGID} &> /dev/null; then delgroup $(getent group ${PGID} | cut -d: -f1); fi \
-    && if getent passwd ${PUID} &> /dev/null; then deluser $(getent passwd ${PUID} | cut -d: -f1); fi \
+    && if getent group ${PGID} >/dev/null 2>&1; then delgroup $(getent group ${PGID} | cut -d: -f1); fi \
+    && if getent passwd ${PUID} >/dev/null 2>&1; then deluser $(getent passwd ${PUID} | cut -d: -f1); fi \
     && addgroup --gid ${PGID} appgroup \
     && adduser --shell /bin/sh --disabled-password --uid ${PUID} --gid ${PGID} appuser \
     && apt-get clean \
