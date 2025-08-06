@@ -461,6 +461,7 @@ async def get_bangumi_details(
         # 我们需要通过 bangumi_id 找到我们自己数据库中的 anime_id
         anime_id_int = await crud.get_anime_id_by_bangumi_id(pool, bangumiId)
 
+
     if anime_id_int is None:
         return BangumiDetailsResponse(
             success=True,
