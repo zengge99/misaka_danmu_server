@@ -71,6 +71,7 @@ class MgtvEpisode(BaseModel):
     title: str = Field(alias="t1")
     title2: str = Field("", alias="t2")
     title3: Optional[str] = Field(None, alias="t3")
+    time: Optional[str] = None
     video_id: str = Field(alias="video_id")
 
 class MgtvEpisodeListTab(BaseModel):
@@ -282,8 +283,15 @@ class MgtvScraper(BaseScraper):
                     continue
                 filtered_episodes.append(ep)
 
-            # Sort and format the filtered episodes
-            sorted_episodes = sorted(filtered_episodes, key=lambda x: int(x.video_id))
+            # 修正：根据媒体类型决定排序方式
+            if db_media_type == 'movie':
+                # 对于电影，按时长倒序排列，确保正片在最前面
+                def get_duration_seconds(time_str: str) -> int:
+                    parts = (time_str or "0").split(':')
+                    return sum(int(p) * 60**i for i, p in enumerate(reversed(parts)))
+                sorted_episodes = sorted(filtered_episodes, key=lambda x: get_duration_seconds(x.time), reverse=True)
+            else:
+                sorted_episodes = sorted(filtered_episodes, key=lambda x: int(x.video_id))
             
             provider_episodes = [
                 models.ProviderEpisodeInfo(
