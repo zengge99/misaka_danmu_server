@@ -1,5 +1,6 @@
 # 使用官方的 Python 3.11 slim 版本作为基础镜像
-FROM python:3.11-slim
+FROM l429609201/su-exec:su-exec
+
 
 # 设置环境变量，防止生成 .pyc 文件并启用无缓冲输出
 # 设置时区为亚洲/上海，以确保日志等时间正确显示
@@ -12,20 +13,15 @@ ENV LC_ALL C.UTF-8
 # 设置工作目录
 WORKDIR /app
 
-# PUID/PGID 将由 entrypoint.sh 在运行时处理。
-# 我们在这里用一个固定的默认ID创建用户。
-
 # 安装系统依赖并创建用户
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    default-libmysqlclient-dev \
-    curl \
-    tzdata \
-    && curl -o /usr/local/bin/su-exec -L "https://github.com/ncopa/su-exec/releases/download/v0.2/su-exec-amd64" \
-    && chmod +x /usr/local/bin/su-exec \
+RUN set -ex \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        default-libmysqlclient-dev \
+        tzdata \
+        iputils-ping \
     && addgroup --gid 1000 appgroup \
     && adduser --shell /bin/sh --disabled-password --uid 1000 --gid 1000 appuser \
-    && apt-get purge -y --auto-remove curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
