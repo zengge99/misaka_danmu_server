@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import aiomysql
 import httpx
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from .. import models
 from .base import BaseScraper, get_season_from_title
@@ -20,6 +20,13 @@ class MgtvSearchItem(BaseModel):
     desc: Optional[List[str]] = None
     source: Optional[str] = None
     video_count: int = Field(0, alias="videoCount")
+
+    @field_validator('title', mode='before')
+    @classmethod
+    def clean_title_html(cls, v: Any) -> str:
+        if isinstance(v, str):
+            return re.sub(r'<[^>]+>', '', v)
+        return str(v)
 
     @property
     def id(self) -> Optional[str]:
