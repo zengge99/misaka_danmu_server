@@ -179,8 +179,6 @@ async def search_anime_provider(
     manager: ScraperManager = Depends(get_scraper_manager),
     current_user: models.User = Depends(security.get_current_user),
     tmdb_client: httpx.AsyncClient = Depends(get_tmdb_client),
-    douban_client: httpx.AsyncClient = Depends(get_douban_client),
-    imdb_client: httpx.AsyncClient = Depends(get_imdb_client),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
     """
@@ -256,59 +254,9 @@ async def search_anime_provider(
             logger.warning(f"TMDB辅助搜索失败: {e}")
         return {alias for alias in local_aliases if alias}
 
-    async def _get_douban_aliases() -> set:
-        """从豆瓣获取别名。"""
-        local_aliases = set()
-        try:
-            # 直接调用重构后的内部抓取函数
-            from .douban_api import _scrape_douban_search, _scrape_douban_details
-            search_results = await _scrape_douban_search(search_title, douban_client)
-            if not search_results: return set()
-            
-            best_match = search_results[0]
-            media_id = best_match.id
-            if not media_id: return set()
-            
-            details = await _scrape_douban_details(media_id, douban_client)
-            
-            local_aliases.add(details.get("name_en"))
-            local_aliases.add(details.get("name_jp"))
-            if isinstance(details.get("aliases_cn"), list):
-                local_aliases.update(details.get("aliases_cn"))
-            logger.info(f"Douban辅助搜索成功，找到别名: {[a for a in local_aliases if a]}")
-        except Exception as e:
-            logger.warning(f"Douban辅助搜索时发生错误: {e}")
-        return {alias for alias in local_aliases if alias}
-
-    async def _get_imdb_aliases() -> set:
-        """从IMDb获取别名。"""
-        local_aliases = set()
-        try:
-            # 直接调用重构后的内部抓取函数
-            from .imdb_api import _scrape_imdb_search, _scrape_imdb_details
-            search_results = await _scrape_imdb_search(search_title, imdb_client)
-            if not search_results: return set()
-            
-            best_match = search_results[0]
-            media_id = best_match.id
-            if not media_id: return set()
-
-            details = await _scrape_imdb_details(media_id, imdb_client)
-
-            local_aliases.add(details.get("name_en"))
-            local_aliases.add(details.get("name_jp"))
-            if isinstance(details.get("aliases_cn"), list):
-                local_aliases.update(details.get("aliases_cn"))
-            logger.info(f"IMDb辅助搜索成功，找到别名: {[a for a in local_aliases if a]}")
-        except Exception as e:
-            logger.warning(f"IMDb辅助搜索时发生错误: {e}")
-        return {alias for alias in local_aliases if alias}
-
     # 并发执行所有辅助搜索
     tasks = [
         _get_tmdb_aliases(),
-        _get_douban_aliases(),
-        _get_imdb_aliases(),
     ]
     results = await asyncio.gather(*tasks)
     for alias_set in results:
