@@ -697,6 +697,7 @@ async def update_bangumi_settings(
     logger.info(f"用户 '{current_user.username}' 更新了 Bangumi 配置。")
 
 @router.post("/cache/clear", status_code=status.HTTP_200_OK, summary="清除所有缓存")
+
 async def clear_all_caches(
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool)

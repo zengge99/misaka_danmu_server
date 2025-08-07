@@ -212,6 +212,7 @@ async function handleSaveBangumiSettings(e) {
     } finally {
         saveBtn.disabled = false;
     }
+        saveBtn.textContent = '保存';
 }
 
 async function loadBangumiAuthState() {
