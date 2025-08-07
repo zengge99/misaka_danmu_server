@@ -84,8 +84,8 @@ class MgtvEpisodeListResult(BaseModel):
     data: MgtvEpisodeListData
 
 class MgtvControlBarrage(BaseModel):
-    cdn_host: str = Field("bullet-ali.hitv.com", alias="cdn_host")
-    cdn_version: str = Field(alias="cdn_version")
+    cdn_host: Optional[str] = Field("bullet-ali.hitv.com", alias="cdn_host")
+    cdn_version: Optional[str] = Field(None, alias="cdn_version")
 
 class MgtvControlBarrageResult(BaseModel):
     data: Optional[MgtvControlBarrage] = None
@@ -128,7 +128,8 @@ class MgtvComment(BaseModel):
     color: Optional[MgtvCommentColor] = Field(None, alias="v2_color")
 
 class MgtvCommentSegmentData(BaseModel):
-    items: List[MgtvComment]
+    # 修正：将 items 设为可选并提供默认空列表，以处理API在无弹幕时可能不返回此字段的情况。
+    items: List[MgtvComment] = []
     next: int = 0
 
 class MgtvCommentSegmentResult(BaseModel):
@@ -139,9 +140,13 @@ class MgtvCommentSegmentResult(BaseModel):
 class MgtvScraper(BaseScraper):
     provider_name = "mgtv"
 
-    # 新增：从Bilibili源借鉴的标题过滤器，用于排除非正片内容
+    # 修正：优化标题过滤器，将需要单词边界的英文缩写与不需要边界的中文关键词分开处理，
+    # 以正确过滤如“幕后纪录片”等标题。
     _JUNK_TITLE_PATTERN = re.compile(
-        r'(\[|\【|\b)(OP|ED|SP|OVA|OAD|CM|PV|MV|BDMenu|Menu|Bonus|Recap|Teaser|Trailer|Preview|特典|预告|广告|菜单|花絮|特辑|速看|资讯|彩蛋|直拍|直播回顾|片头|片尾|映像|纪录片|访谈|OST|BGM)(\d{1,2})?(\s|_ALL)?(\]|\】|\b)',
+        # 英文缩写/单词，需要单词边界或括号
+        r'(\[|\【|\b)(OP|ED|SP|OVA|OAD|CM|PV|MV|BDMenu|Menu|Bonus|Recap|Teaser|Trailer|Preview|OST|BGM)(\d{1,2})?(\s|_ALL)?(\]|\】|\b)'
+        # 中文关键词，直接匹配
+        r'|(特典|预告|广告|菜单|花絮|特辑|速看|资讯|彩蛋|直拍|直播回顾|片头|片尾|映像|纪录片|访谈)',
         re.IGNORECASE
     )
 
