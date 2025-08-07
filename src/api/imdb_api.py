@@ -30,11 +30,8 @@ class ImdbSearchResult(BaseModel):
     image_url: Optional[str] = None
 
 
-@router.get("/search", response_model=List[ImdbSearchResult], summary="搜索 IMDb 作品")
-async def search_imdb(
-    keyword: str = Query(..., min_length=1),
-    client: httpx.AsyncClient = Depends(get_imdb_client),
-):
+async def _scrape_imdb_search(keyword: str, client: httpx.AsyncClient) -> List[ImdbSearchResult]:
+    """从 IMDb 网站抓取搜索结果。"""
     """通过关键词在 IMDb 网站上搜索影视作品。"""
     # s=tt 表示搜索所有标题, ttype=ft 表示只搜索影视剧
     search_url = f"https://www.imdb.com/find/?q={keyword}&s=tt&ttype=ft"
@@ -83,11 +80,17 @@ async def search_imdb(
         raise HTTPException(status_code=500, detail="解析 IMDb 搜索结果失败。")
 
 
-@router.get("/details/{imdb_id}", response_model=Dict[str, Any], summary="获取 IMDb 作品详情")
-async def get_imdb_details(
-    imdb_id: str = Path(...), client: httpx.AsyncClient = Depends(get_imdb_client)
+@router.get("/search", response_model=List[ImdbSearchResult], summary="搜索 IMDb 作品")
+async def search_imdb(
+    keyword: str = Query(..., min_length=1),
+    client: httpx.AsyncClient = Depends(get_imdb_client),
 ):
-    """获取指定 IMDb ID 的作品详情，主要用于提取别名。"""
+    """通过关键词在 IMDb 网站上搜索影视作品。"""
+    return await _scrape_imdb_search(keyword, client)
+
+
+async def _scrape_imdb_details(imdb_id: str, client: httpx.AsyncClient) -> Dict[str, Any]:
+    """从 IMDb 详情页抓取作品信息。"""
     details_url = f"https://www.imdb.com/title/{imdb_id}/"
     try:
         response = await client.get(details_url)
@@ -120,3 +123,11 @@ async def get_imdb_details(
     except Exception as e:
         logger.error(f"解析 IMDb 详情页时发生错误: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="解析 IMDb 详情页失败。")
+
+
+@router.get("/details/{imdb_id}", response_model=Dict[str, Any], summary="获取 IMDb 作品详情")
+async def get_imdb_details(
+    imdb_id: str = Path(...), client: httpx.AsyncClient = Depends(get_imdb_client)
+):
+    """获取指定 IMDb ID 的作品详情，主要用于提取别名。"""
+    return await _scrape_imdb_details(imdb_id, client)

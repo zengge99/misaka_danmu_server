@@ -73,19 +73,24 @@
       app:
         # 替换为您自己的Docker Hub用户名和镜像名，或使用本地构建
         image: l429609201/misaka_danmu_server:latest
-        container_name: misaka-danmu-server
+        container_name: misaka-danmu-server # 容器名称
         restart: unless-stopped
         # 使用主机网络模式，容器将直接使用宿主机的网络。
         # 这意味着容器内的 127.0.0.1 就是宿主机的 127.0.0.1。
         # 应用将直接在宿主机的 7768 端口上可用，无需端口映射。
-        # 推荐使用host模式
         network_mode: "host"
         environment:
-          # --- 用户与组ID (用于运行时，与构建时匹配) ---
+          # --- 权限配置 ---
+          # 设置运行容器的用户和组ID，以匹配您宿主机的用户，避免挂载卷的权限问题。
           - PUID=1000
           - PGID=1000
-
+          - UMASK=0022
+          # --- 服务配置 ---
+          # 应用将监听在宿主机的 0.0.0.0:7768 上
+          - DANMUAPI_SERVER__HOST=0.0.0.0
+          - DANMUAPI_SERVER__PORT=7768
           # --- 数据库连接配置 ---
+        # 推荐使用host模式
           # '127.0.0.1' 指向宿主机，因为我们使用了主机网络模式
           - DANMUAPI_DATABASE__HOST=127.0.0.1
           - DANMUAPI_DATABASE__PORT=3306
@@ -98,7 +103,8 @@
           # --- 初始管理员配置 ---
           - DANMUAPI_ADMIN__INITIAL_USER=admin
         volumes:
-          # 挂载配置文件目录，用于持久化日志等
+          # 挂载 config 目录以持久化日志和配置文件。
+          # 由于我们使用了 'user' 指令，容器进程将有权限写入此目录。
           - ./config:/app/config
     ```
 
@@ -150,4 +156,38 @@
     `http://192.168.1.100:7768/api/Q2KHYcveM0SaRKvxomQm/api/v2`
 
 > **兼容性说明**: 本服务已对路由进行特殊处理，无论您使用 `.../api/<Token>` 还是 `.../api/<Token>/api/v2` 格式，服务都能正确响应，以最大程度兼容不同客户端。
+
+
+## Webhook 配置 
+
+本服务支持通过 Webhook 接收来自 Emby 等媒体服务器的通知，实现新媒体入库后的弹幕自动搜索和导入。
+
+### 1. 获取 Webhook URL
+
+1.  在 Web UI 的 "设置" -> "Webhook" 页面，您会看到一个为您生成的唯一的 **API Key**。
+2.  根据您要集成的服务，复制对应的 Webhook URL。URL 的通用格式为：
+    `http://<服务器IP>:<端口>/api/webhook/{服务名}?api_key=<你的API_Key>`
+
+    -   `<服务器IP>`: 部署本服务的主机 IP 地址。
+    -   `<端口>`: 部署本服务时设置的端口（默认为 `7768`）。
+    -   `{服务名}`: webhook界面中下方已加载的服务名称，例如 `emby`。
+    -   `<你的API_Key>`: 您在 Webhook 设置页面获取的密钥。
+
+### 2. 配置 Emby
+
+在 Emby 中设置 Webhook 以在媒体入库时通知本服务。
+
+1.  登录您的 Emby 服务器管理后台。
+2.  导航到 **通知** (Notifications)。
+3.  点击 **添加通知** (Add Notification)，选择 **Webhook** 类型。
+4.  在 **Webhook URL** 字段中，填入您的 Emby Webhook URL，例如：
+    ```
+    http://192.168.1.100:7768/api/webhook/emby?api_key=your_webhook_api_key_here
+    ```
+5.  **关键步骤**: 在 **事件** (Events) 部分，请务必**只勾选**以下事件：
+    -   **项目已添加 (Item Added)**: 这是新媒体入库的事件，其对应的事件名为 `新媒体添加`。
+6.  确保 **发送内容类型** (Content type) 设置为 `application/json`。
+7.  保存设置。
+
+现在，当有新的电影或剧集添加到您的 Emby 媒体库时，本服务将自动收到通知，并创建一个后台任务来为其搜索和导入弹幕。
 

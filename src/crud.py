@@ -633,22 +633,20 @@ async def update_anime_details(pool: aiomysql.Pool, anime_id: int, update_data: 
                 await cursor.execute("""
                     INSERT INTO anime_metadata (anime_id, tmdb_id, tmdb_episode_group_id, bangumi_id, tvdb_id, douban_id, imdb_id)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    AS new_values
                     ON DUPLICATE KEY UPDATE
-                        tmdb_id = new_values.tmdb_id, tmdb_episode_group_id = new_values.tmdb_episode_group_id,
-                        bangumi_id = new_values.bangumi_id, tvdb_id = new_values.tvdb_id,
-                        douban_id = new_values.douban_id, imdb_id = new_values.imdb_id
+                        tmdb_id = VALUES(tmdb_id), tmdb_episode_group_id = VALUES(tmdb_episode_group_id),
+                        bangumi_id = VALUES(bangumi_id), tvdb_id = VALUES(tvdb_id),
+                        douban_id = VALUES(douban_id), imdb_id = VALUES(imdb_id)
                 """, (anime_id, update_data.tmdb_id, update_data.tmdb_episode_group_id, update_data.bangumi_id, update_data.tvdb_id, update_data.douban_id, update_data.imdb_id))
 
                 # 3. 更新 anime_aliases 表
                 await cursor.execute("""
                     INSERT INTO anime_aliases (anime_id, name_en, name_jp, name_romaji, alias_cn_1, alias_cn_2, alias_cn_3)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    AS new_values
                     ON DUPLICATE KEY UPDATE
-                        name_en = new_values.name_en, name_jp = new_values.name_jp,
-                        name_romaji = new_values.name_romaji, alias_cn_1 = new_values.alias_cn_1,
-                        alias_cn_2 = new_values.alias_cn_2, alias_cn_3 = new_values.alias_cn_3
+                        name_en = VALUES(name_en), name_jp = VALUES(name_jp),
+                        name_romaji = VALUES(name_romaji), alias_cn_1 = VALUES(alias_cn_1),
+                        alias_cn_2 = VALUES(alias_cn_2), alias_cn_3 = VALUES(alias_cn_3)
                 """, (
                     anime_id, update_data.name_en, update_data.name_jp, update_data.name_romaji,
                     update_data.alias_cn_1, update_data.alias_cn_2, update_data.alias_cn_3
@@ -969,11 +967,10 @@ async def set_cache(pool: aiomysql.Pool, key: str, value: Any, ttl_seconds: int,
             query = """
                 INSERT INTO cache_data (cache_provider, cache_key, cache_value, expires_at) 
                 VALUES (%s, %s, %s, NOW() + INTERVAL %s SECOND) 
-                AS new_values
                 ON DUPLICATE KEY UPDATE
-                    cache_provider = new_values.cache_provider,
-                    cache_value = new_values.cache_value,
-                    expires_at = new_values.expires_at
+                    cache_provider = VALUES(cache_provider),
+                    cache_value = VALUES(cache_value),
+                    expires_at = VALUES(expires_at)
             """
             await cursor.execute(query, (provider, key, json_value, ttl_seconds))
 
@@ -984,8 +981,7 @@ async def update_config_value(pool: aiomysql.Pool, key: str, value: str):
             query = """
                 INSERT INTO config (config_key, config_value)
                 VALUES (%s, %s)
-                AS new_values
-                ON DUPLICATE KEY UPDATE config_value = new_values.config_value
+                ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)
             """
             await cursor.execute(query, (key, value))
 
@@ -1197,15 +1193,14 @@ async def save_bangumi_auth(pool: aiomysql.Pool, user_id: int, auth_data: Dict[s
             query = """
                 INSERT INTO bangumi_auth (user_id, bangumi_user_id, nickname, avatar_url, access_token, refresh_token, expires_at, authorized_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                AS new_values
                 ON DUPLICATE KEY UPDATE
-                    bangumi_user_id = new_values.bangumi_user_id,
-                    nickname = new_values.nickname,
-                    avatar_url = new_values.avatar_url,
-                    access_token = new_values.access_token,
-                    refresh_token = new_values.refresh_token,
-                    expires_at = new_values.expires_at,
-                    authorized_at = IF(bangumi_auth.authorized_at IS NULL, new_values.authorized_at, bangumi_auth.authorized_at)
+                    bangumi_user_id = VALUES(bangumi_user_id),
+                    nickname = VALUES(nickname),
+                    avatar_url = VALUES(avatar_url),
+                    access_token = VALUES(access_token),
+                    refresh_token = VALUES(refresh_token),
+                    expires_at = VALUES(expires_at),
+                    authorized_at = IF(bangumi_auth.authorized_at IS NULL, VALUES(authorized_at), bangumi_auth.authorized_at)
             """
             await cursor.execute(query, (
                 user_id, auth_data.get('bangumi_user_id'), auth_data.get('nickname'),

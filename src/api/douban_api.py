@@ -38,12 +38,8 @@ class DoubanSearchResult(BaseModel):
     image_url: Optional[str] = None
 
 
-@router.get("/search", response_model=List[DoubanSearchResult], summary="搜索豆瓣作品")
-async def search_douban(
-    keyword: str = Query(..., min_length=1),
-    client: httpx.AsyncClient = Depends(get_douban_client),
-):
-    """通过关键词在豆瓣网站上搜索影视作品。"""
+async def _scrape_douban_search(keyword: str, client: httpx.AsyncClient) -> List[DoubanSearchResult]:
+    """从豆瓣网站抓取搜索结果。"""
     search_url = f"https://www.douban.com/search?cat=1002&q={keyword}"
     try:
         response = await client.get(search_url)
@@ -92,12 +88,16 @@ async def search_douban(
         logger.error(f"解析豆瓣搜索结果时发生错误: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="解析豆瓣搜索结果失败。")
 
-
-@router.get("/details/{douban_id}", response_model=Dict[str, Any], summary="获取豆瓣作品详情")
-async def get_douban_details(
-    douban_id: str = Path(...), client: httpx.AsyncClient = Depends(get_douban_client)
+@router.get("/search", response_model=List[DoubanSearchResult], summary="搜索豆瓣作品")
+async def search_douban(
+    keyword: str = Query(..., min_length=1),
+    client: httpx.AsyncClient = Depends(get_douban_client),
 ):
-    """获取指定豆瓣ID的作品详情，主要用于提取别名。"""
+    """通过关键词在豆瓣网站上搜索影视作品。"""
+    return await _scrape_douban_search(keyword, client)
+
+async def _scrape_douban_details(douban_id: str, client: httpx.AsyncClient) -> Dict[str, Any]:
+    """从豆瓣详情页抓取作品信息。"""
     details_url = f"https://movie.douban.com/subject/{douban_id}/"
     try:
         response = await client.get(details_url)
@@ -153,3 +153,10 @@ async def get_douban_details(
     except Exception as e:
         logger.error(f"解析豆瓣详情页时发生错误: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="解析豆瓣详情页失败。")
+
+@router.get("/details/{douban_id}", response_model=Dict[str, Any], summary="获取豆瓣作品详情")
+async def get_douban_details(
+    douban_id: str = Path(...), client: httpx.AsyncClient = Depends(get_douban_client)
+):
+    """获取指定豆瓣ID的作品详情，主要用于提取别名。"""
+    return await _scrape_douban_details(douban_id, client)

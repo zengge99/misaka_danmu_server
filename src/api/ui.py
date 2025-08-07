@@ -22,7 +22,6 @@ from .tmdb_api import get_tmdb_client, _get_robust_image_base_url
 from .douban_api import get_douban_client
 from .imdb_api import get_imdb_client
 from ..config import settings
-from ..config import settings
 from ..database import get_db_pool
 
 router = APIRouter()
@@ -172,7 +171,6 @@ class UIProviderSearchResponse(models.ProviderSearchResponse):
     search_episode: Optional[int] = None
 @router.get(
     "/search/provider",
-    #response_model=models.ProviderSearchResponse,
     response_model=UIProviderSearchResponse,
     summary="从外部数据源搜索节目",
 )
@@ -186,7 +184,6 @@ async def search_anime_provider(
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
     """
-    从所有已配置的数据源（如腾讯、B站等）搜索节目信息。
     从所有已配置的数据源（如腾讯、B站等）搜索节目信息。
     支持 "标题 SXXEXX" 格式来指定集数。
     新增TMDB辅助搜索：如果配置了TMDB，会先用关键词搜索TMDB获取别名，然后用原始关键词搜索所有弹幕源，最后用获取到的别名集对搜索结果进行过滤。
@@ -241,34 +238,59 @@ async def search_anime_provider(
             logger.warning(f"TMDB辅助搜索失败: {e}")
         return {alias for alias in local_aliases if alias}
 
-    async def _get_metadata_aliases(source_name: str, client: httpx.AsyncClient, search_path: str, details_path_template: str) -> set:
-        """从豆瓣或IMDb等源获取别名。"""
+    async def _get_douban_aliases() -> set:
+        """从豆瓣获取别名。"""
         local_aliases = set()
         try:
-            search_res = await client.get(search_path, params={"keyword": search_title})
-            if search_res.status_code != 200: return set()
-            search_results = search_res.json()
+            # 直接调用重构后的内部抓取函数
+            from .douban_api import _scrape_douban_search, _scrape_douban_details
+            search_results = await _scrape_douban_search(search_title, douban_client)
             if not search_results: return set()
+            
             best_match = search_results[0]
-            media_id = best_match.get("id")
+            media_id = best_match.id
             if not media_id: return set()
-            details_res = await client.get(details_path_template.format(id=media_id))
-            if details_res.status_code != 200: return set()
-            details = details_res.json()
+            
+            details = await _scrape_douban_details(media_id, douban_client)
+            
             local_aliases.add(details.get("name_en"))
             local_aliases.add(details.get("name_jp"))
             if isinstance(details.get("aliases_cn"), list):
                 local_aliases.update(details.get("aliases_cn"))
-            logger.info(f"{source_name}辅助搜索成功，找到别名: {[a for a in local_aliases if a]}")
+            logger.info(f"Douban辅助搜索成功，找到别名: {[a for a in local_aliases if a]}")
         except Exception as e:
-            logger.warning(f"{source_name}辅助搜索时发生错误: {e}")
+            logger.warning(f"Douban辅助搜索时发生错误: {e}")
+        return {alias for alias in local_aliases if alias}
+
+    async def _get_imdb_aliases() -> set:
+        """从IMDb获取别名。"""
+        local_aliases = set()
+        try:
+            # 直接调用重构后的内部抓取函数
+            from .imdb_api import _scrape_imdb_search, _scrape_imdb_details
+            search_results = await _scrape_imdb_search(search_title, imdb_client)
+            if not search_results: return set()
+            
+            best_match = search_results[0]
+            media_id = best_match.id
+            if not media_id: return set()
+
+            details = await _scrape_imdb_details(media_id, imdb_client)
+
+            local_aliases.add(details.get("name_en"))
+            local_aliases.add(details.get("name_jp"))
+            if isinstance(details.get("aliases_cn"), list):
+                local_aliases.update(details.get("aliases_cn"))
+            logger.info(f"IMDb辅助搜索成功，找到别名: {[a for a in local_aliases if a]}")
+        except Exception as e:
+            logger.warning(f"IMDb辅助搜索时发生错误: {e}")
         return {alias for alias in local_aliases if alias}
 
     # 并发执行所有辅助搜索
     tasks = [
         _get_tmdb_aliases(),
-        _get_metadata_aliases("Douban", douban_client, "/search", "/details/{id}"),
-        _get_metadata_aliases("IMDb", imdb_client, "/search", "/details/{id}"),
+        _get_douban_aliases(),
+        _get_imdb_aliases(),
     ]
     results = await asyncio.gather(*tasks)
     for alias_set in results:
@@ -580,14 +602,27 @@ async def delete_bulk_sources(
     logger.info(f"用户 '{current_user.username}' 提交了批量删除 {len(request_data.source_ids)} 个源的任务 (Task ID: {task_id})。")
     return {"message": task_title + "的任务已提交。", "task_id": task_id}
 
-@router.get("/scrapers", response_model=List[models.ScraperSetting], summary="获取所有搜索源的设置")
+class ScraperSettingWithConfig(models.ScraperSetting):
+    configurable_fields: Optional[Dict[str, str]] = None
+
+@router.get("/scrapers", response_model=List[ScraperSettingWithConfig], summary="获取所有搜索源的设置")
 async def get_scraper_settings(
     current_user: models.User = Depends(security.get_current_user),
-    pool: aiomysql.Pool = Depends(get_db_pool)
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    manager: ScraperManager = Depends(get_scraper_manager)
 ):
-    """获取所有可用搜索源的列表及其配置（启用状态、顺序）。"""
+    """获取所有可用搜索源的列表及其配置（启用状态、顺序、可配置字段）。"""
     settings = await crud.get_all_scraper_settings(pool)
-    return [models.ScraperSetting.model_validate(s) for s in settings]
+    
+    full_settings = []
+    for s in settings:
+        scraper_class = manager.get_scraper_class(s['provider_name'])
+        s_with_config = ScraperSettingWithConfig.model_validate(s)
+        if scraper_class:
+            s_with_config.configurable_fields = getattr(scraper_class, 'configurable_fields', None)
+        full_settings.append(s_with_config)
+            
+    return full_settings
 
 @router.put("/scrapers", status_code=status.HTTP_204_NO_CONTENT, summary="更新搜索源的设置")
 async def update_scraper_settings(
@@ -602,6 +637,42 @@ async def update_scraper_settings(
     await manager.load_and_sync_scrapers()
     logger.info(f"用户 '{current_user.username}' 更新了搜索源设置，已重新加载。")
     return
+
+@router.get("/scrapers/{provider_name}/config", response_model=Dict[str, str], summary="获取指定搜索源的配置")
+async def get_scraper_config(
+    provider_name: str,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    manager: ScraperManager = Depends(get_scraper_manager)
+):
+    scraper_class = manager.get_scraper_class(provider_name)
+    if not scraper_class or not hasattr(scraper_class, 'configurable_fields'):
+        raise HTTPException(status_code=404, detail="该搜索源不可配置或不存在。")
+    
+    config_keys = scraper_class.configurable_fields.keys()
+    tasks = [crud.get_config_value(pool, key, "") for key in config_keys]
+    values = await asyncio.gather(*tasks)
+    
+    return dict(zip(config_keys, values))
+
+@router.put("/scrapers/{provider_name}/config", status_code=status.HTTP_204_NO_CONTENT, summary="更新指定搜索源的配置")
+async def update_scraper_config(
+    provider_name: str,
+    payload: Dict[str, str],
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    manager: ScraperManager = Depends(get_scraper_manager)
+):
+    scraper_class = manager.get_scraper_class(provider_name)
+    if not scraper_class or not hasattr(scraper_class, 'configurable_fields') or not scraper_class.configurable_fields:
+        raise HTTPException(status_code=404, detail="该搜索源不可配置或不存在。")
+
+    allowed_keys = scraper_class.configurable_fields.keys()
+    tasks = [crud.update_config_value(pool, key, value or "") for key, value in payload.items() if key in allowed_keys]
+    
+    if tasks:
+        await asyncio.gather(*tasks)
+        logger.info(f"用户 '{current_user.username}' 更新了搜索源 '{provider_name}' 的配置。")
 
 @router.get("/logs", response_model=List[str], summary="获取最新的服务器日志")
 async def get_server_logs(current_user: models.User = Depends(security.get_current_user)):
@@ -1133,7 +1204,7 @@ async def get_available_job_types(
     current_user: models.User = Depends(security.get_current_user),
     scheduler: SchedulerManager = Depends(get_scheduler_manager)
 ):
-    """获取所有已加载的、可供用户选择的定时任务类型。"""
+    """获取所有已成功加载的、可供用户选择的定时任务类型。"""
     return scheduler.get_available_jobs()
 
 

@@ -56,12 +56,33 @@ function renderDanmakuSources(settings) {
         const li = document.createElement('li');
         li.dataset.providerName = setting.provider_name;
         li.dataset.isEnabled = setting.is_enabled;
-        li.textContent = setting.provider_name;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'source-name';
+        nameSpan.textContent = setting.provider_name;
+        li.appendChild(nameSpan);
+
+        // 新增：如果源是可配置的，则添加配置按钮
+        if (setting.configurable_fields && Object.keys(setting.configurable_fields).length > 0) {
+            const configBtn = document.createElement('button');
+            configBtn.className = 'action-btn config-btn';
+            configBtn.title = `配置 ${setting.provider_name}`;
+            configBtn.textContent = '⚙️';
+            configBtn.dataset.action = 'configure';
+            configBtn.dataset.providerName = setting.provider_name;
+            // 将字段信息存储为JSON字符串以便后续使用
+            configBtn.dataset.fields = JSON.stringify(setting.configurable_fields);
+            li.appendChild(configBtn);
+        }
+
         const statusIcon = document.createElement('span');
         statusIcon.className = 'status-icon';
         statusIcon.textContent = setting.is_enabled ? '✅' : '❌';
         li.appendChild(statusIcon);
-        li.addEventListener('click', () => {
+
+        li.addEventListener('click', (e) => {
+            // 如果点击的是配置按钮，则不触发选中事件
+            if (e.target.closest('.config-btn')) return;
             danmakuSourcesList.querySelectorAll('li').forEach(item => item.classList.remove('selected'));
             li.classList.add('selected');
         });
@@ -161,10 +182,88 @@ function handleSaveMetadataSources() {
     alert('元信息搜索源的排序功能暂未实现后端保存。');
 }
 
+async function handleDanmakuSourceAction(e) {
+    const button = e.target.closest('.config-btn');
+    if (!button || button.dataset.action !== 'configure') return;
+
+    const providerName = button.dataset.providerName;
+    const fields = JSON.parse(button.dataset.fields);
+    
+    showScraperConfigModal(providerName, fields);
+}
+
+let currentProviderForModal = null;
+
+function showScraperConfigModal(providerName, fields) {
+    currentProviderForModal = providerName;
+    const modal = document.getElementById('generic-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalBody = document.getElementById('modal-body');
+
+    modalTitle.textContent = `配置: ${providerName}`;
+    modalBody.innerHTML = '<p>加载中...</p>';
+    modal.classList.remove('hidden');
+
+    apiFetch(`/api/ui/scrapers/${providerName}/config`)
+        .then(currentConfig => {
+            modalBody.innerHTML = ''; // 清空加载提示
+
+            // 新增：为 gamer 源添加特别说明
+            if (providerName === 'gamer') {
+                const helpText = document.createElement('p');
+                helpText.className = 'modal-help-text';
+                helpText.innerHTML = `仅当无法正常搜索时才需要填写。请先尝试清空配置并保存，如果问题依旧，再从 <a href="https://ani.gamer.com.tw/" target="_blank" rel="noopener noreferrer">巴哈姆特动画疯</a> 获取最新的 User-Agent 和 Cookie。`;
+                modalBody.appendChild(helpText);
+            }
+
+            Object.entries(fields).forEach(([key, label]) => {
+                const value = currentConfig[key] || '';
+                const formRow = document.createElement('div');
+                formRow.className = 'form-row';
+                
+                const labelEl = document.createElement('label');
+                labelEl.htmlFor = `config-input-${key}`;
+                labelEl.textContent = label;
+                
+                const isCookie = key.toLowerCase().includes('cookie');
+                const inputEl = document.createElement(isCookie ? 'textarea' : 'input');
+                if (!isCookie) inputEl.type = 'text';
+                inputEl.id = `config-input-${key}`;
+                inputEl.name = key;
+                inputEl.value = value;
+                if (isCookie) inputEl.rows = 4;
+                
+                formRow.appendChild(labelEl);
+                formRow.appendChild(inputEl);
+                modalBody.appendChild(formRow);
+            });
+        })
+        .catch(error => {
+            modalBody.innerHTML = `<p class="error">加载配置失败: ${error.message}</p>`;
+        });
+}
+
+function hideScraperConfigModal() {
+    document.getElementById('generic-modal').classList.add('hidden');
+    currentProviderForModal = null;
+}
+
+async function handleSaveScraperConfig() {
+    if (!currentProviderForModal) return;
+    const payload = {};
+    document.getElementById('modal-body').querySelectorAll('input, textarea').forEach(input => {
+        payload[input.name] = input.value.trim();
+    });
+    await apiFetch(`/api/ui/scrapers/${currentProviderForModal}/config`, { method: 'PUT', body: JSON.stringify(payload) });
+    hideScraperConfigModal();
+    alert('配置已保存！');
+}
+
 export function setupSourcesEventListeners() {
     initializeElements();
     sourcesSubNav.addEventListener('click', handleSourcesSubNav);
 
+    danmakuSourcesList.addEventListener('click', handleDanmakuSourceAction);
     saveDanmakuSourcesBtn.addEventListener('click', handleSaveDanmakuSources);
     toggleDanmakuSourceBtn.addEventListener('click', handleToggleDanmakuSource);
     moveDanmakuSourceUpBtn.addEventListener('click', () => handleMoveDanmakuSource('up'));
@@ -173,6 +272,11 @@ export function setupSourcesEventListeners() {
     saveMetadataSourcesBtn.addEventListener('click', handleSaveMetadataSources);
     moveMetadataSourceUpBtn.addEventListener('click', () => handleMoveMetadataSource('up'));
     moveMetadataSourceDownBtn.addEventListener('click', () => handleMoveMetadataSource('down'));
+
+    // Modal event listeners
+    document.getElementById('modal-close-btn').addEventListener('click', hideScraperConfigModal);
+    document.getElementById('modal-cancel-btn').addEventListener('click', hideScraperConfigModal);
+    document.getElementById('modal-save-btn').addEventListener('click', handleSaveScraperConfig);
 
     document.addEventListener('viewchange', (e) => {
         if (e.detail.viewId === 'sources-view') {
