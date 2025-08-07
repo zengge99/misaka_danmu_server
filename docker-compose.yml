@@ -4,11 +4,7 @@ services:
   app:
     # 使用本地 Dockerfile 构建镜像。
     build:
-      context: .
-      args:
-        # 将 .env 文件中的 PUID/PGID 传递给 Dockerfile，以便在构建时创建用户
-        - PUID=${PUID:-1000}
-        - PGID=${PGID:-1000}
+      context: . # Dockerfile 将创建一个默认用户，权限由 entrypoint.sh 在运行时处理。
     # image: l429609201/danmu_api_server:latest # 如果您想使用自己推送的镜像，请取消注释此行并注释掉上面的 'build: .'
     container_name: danmu-api
     restart: unless-stopped
@@ -18,6 +14,10 @@ services:
     network_mode: "host"
     environment:
       # Pydantic-settings 会自动读取这些环境变量
+      # 将 PUID/PGID 作为环境变量传递给容器，供 entrypoint.sh 使用
+      - PUID=1000
+      - PGID=1000
+      - UMASK=0022 # 设置文件创建掩码，0022 是一个常见的安全默认值
       # 服务配置 (端口在主机网络模式下由应用内部配置决定)
       - DANMUAPI_SERVER__HOST=0.0.0.0
       - DANMUAPI_SERVER__PORT=7768

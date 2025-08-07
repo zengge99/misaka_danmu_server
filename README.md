@@ -154,3 +154,36 @@
     `http://192.168.1.100:7768/api/Q2KHYcveM0SaRKvxomQm/api/v2`
 
 > **兼容性说明**: 本服务已对路由进行特殊处理，无论您使用 `.../api/<Token>` 还是 `.../api/<Token>/api/v2` 格式，服务都能正确响应，以最大程度兼容不同客户端。
+
+## Webhook 配置 (Emby 等)
+
+本服务支持通过 Webhook 接收来自 Emby 等媒体服务器的通知，实现新媒体入库后的弹幕自动搜索和导入。
+
+### 1. 获取 Webhook URL
+
+1.  在 Web UI 的 "设置" -> "Webhook" 页面，您会看到一个为您生成的唯一的 **API Key**。
+2.  根据您要集成的服务，复制对应的 Webhook URL。URL 的通用格式为：
+    `http://<服务器IP>:<端口>/api/webhook/{服务名}?api_key=<你的API_Key>`
+
+    -   `<服务器IP>`: 部署本服务的主机 IP 地址。
+    -   `<端口>`: 部署本服务时设置的端口（默认为 `7768`）。
+    -   `{服务名}`: webhook界面中下方已加载的服务名称，例如 `emby`。
+    -   `<你的API_Key>`: 您在 Webhook 设置页面获取的密钥。
+
+### 2. 配置 Emby
+
+在 Emby 中设置 Webhook 以在媒体入库时通知本服务。
+
+1.  登录您的 Emby 服务器管理后台。
+2.  导航到 **通知** (Notifications)。
+3.  点击 **添加通知** (Add Notification)，选择 **Webhook** 类型。
+4.  在 **Webhook URL** 字段中，填入您的 Emby Webhook URL，例如：
+    ```
+    http://192.168.1.100:7768/api/webhook/emby?api_key=your_webhook_api_key_here
+    ```
+5.  **关键步骤**: 在 **事件** (Events) 部分，请务必**只勾选**以下事件：
+    -   **项目已添加 (Item Added)**: 这是新媒体入库的事件，其对应的事件名为 `新媒体添加`。
+6.  确保 **发送内容类型** (Content type) 设置为 `application/json`。
+7.  保存设置。
+
+现在，当有新的电影或剧集添加到您的 Emby 媒体库时，本服务将自动收到通知，并创建一个后台任务来为其搜索和导入弹幕。

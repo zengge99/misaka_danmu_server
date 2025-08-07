@@ -12,17 +12,17 @@ ENV LC_ALL C.UTF-8
 # 设置工作目录
 WORKDIR /app
 
-# 接收构建时参数，并设置默认值
-ARG PUID=1000
-ARG PGID=1000
+# PUID/PGID 将由 entrypoint.sh 在运行时处理。
+# 我们在这里用一个固定的默认ID创建用户。
 
 # 安装系统依赖并创建用户
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     default-libmysqlclient-dev \
+    su-exec \
     tzdata \
-    && addgroup --gid ${PGID} appgroup \
-    && adduser --shell /bin/sh --disabled-password --uid ${PUID} --gid ${PGID} appuser \
+    && addgroup --gid 1000 appgroup \
+    && adduser --shell /bin/sh --disabled-password --uid 1000 --gid 1000 appuser \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -34,6 +34,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 COPY static/ ./static/
 COPY config/ ./config/
+COPY exec.sh /exec.sh
+COPY run.sh /run.sh
+RUN chmod +x /exec.sh /run.sh
 
 # 更改工作目录所有权为新创建的用户
 RUN chown -R appuser:appgroup /app
@@ -41,7 +44,5 @@ RUN chown -R appuser:appgroup /app
 # 暴露应用运行的端口
 EXPOSE 7768
 
-# 切换到非 root 用户运行应用
-USER appuser
 # 运行应用的默认命令
-CMD ["python", "-m", "src.main"]
+CMD ["/exec.sh"]
