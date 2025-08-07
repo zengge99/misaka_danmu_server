@@ -19,6 +19,7 @@ class MgtvSearchItem(BaseModel):
     url: str
     desc: Optional[List[str]] = None
     source: Optional[str] = None
+    img: Optional[str] = None
     video_count: int = Field(0, alias="videoCount")
 
     @field_validator('title', mode='before')
@@ -76,7 +77,8 @@ class MgtvEpisodeListTab(BaseModel):
 
 class MgtvEpisodeListData(BaseModel):
     list: List[MgtvEpisode]
-    tabs: List[MgtvEpisodeListTab]
+    # 修正：根据API的实际响应，分页标签的字段名是 'tab_m' 而不是 'tabs'
+    tabs: List[MgtvEpisodeListTab] = Field(alias="tab_m")
 
 class MgtvEpisodeListResult(BaseModel):
     data: MgtvEpisodeListData
@@ -137,6 +139,13 @@ class MgtvCommentSegmentResult(BaseModel):
 class MgtvScraper(BaseScraper):
     provider_name = "mgtv"
 
+    # 新增：从Bilibili源借鉴的标题过滤器，用于排除非正片内容
+    _JUNK_TITLE_PATTERN = re.compile(
+        r'(\[|\【|\b)(OP|ED|SP|OVA|OAD|CM|PV|MV|BDMenu|Menu|Bonus|Recap|Teaser|Trailer|Preview|特典|预告|广告|菜单|花絮|特辑|速看|资讯|彩蛋|直拍|直播回顾|片头|片尾|映像|纪录片|访谈|OST|BGM)(\d{1,2})?(\s|_ALL)?(\]|\】|\b)',
+        re.IGNORECASE
+    )
+
+
     def __init__(self, pool: aiomysql.Pool):
         super().__init__(pool)
         self.client = httpx.AsyncClient(
@@ -190,6 +199,11 @@ class MgtvScraper(BaseScraper):
                                 self.logger.debug(f"MGTV: 跳过一个非芒果TV自有的搜索结果: {item.title} (源: {item.source})")
                                 continue
 
+                            # 新增：使用正则表达式过滤掉预告、花絮等非正片内容
+                            if self._JUNK_TITLE_PATTERN.search(item.title):
+                                self.logger.debug(f"MGTV: 过滤掉非正片内容: '{item.title}'")
+                                continue
+
                             if not item.id:
                                 continue
                             
@@ -202,6 +216,7 @@ class MgtvScraper(BaseScraper):
                                 type=media_type,
                                 season=get_season_from_title(item.title),
                                 year=item.year,
+                                imageUrl=item.img,
                                 episodeCount=item.video_count,
                                 currentEpisodeIndex=episode_info.get("episode") if episode_info else None
                             )
