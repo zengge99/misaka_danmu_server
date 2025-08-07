@@ -13,17 +13,42 @@ from .base import BaseScraper, get_season_from_title
 
 # --- Pydantic Models for Mgtv API ---
 
+# 修正：此模型现在严格遵循C#代码的逻辑，通过属性派生出ID、类型和年份，而不是直接解析。
 class MgtvSearchItem(BaseModel):
-    id: str = Field(alias="collection_id")
     title: str
     url: str
-    type_name: str = Field(alias="typeName")
-    year: Optional[int] = None
+    desc: Optional[List[str]] = None
     video_count: int = Field(0, alias="videoCount")
+
+    @property
+    def id(self) -> Optional[str]:
+        if not self.url:
+            return None
+        # 从URL中提取 collection_id, e.g., /b/301218/3605252.html -> 301218
+        match = re.search(r'/b/(\d+)/', self.url)
+        return match.group(1) if match else None
+
+    @property
+    def type_name(self) -> str:
+        if not self.desc or not self.desc[0]:
+            return ""
+        # 从描述字符串中提取类型, e.g., "类型:动漫/..." -> "动漫"
+        return self.desc[0].split('/')[0].replace("类型:", "").strip()
+
+    @property
+    def year(self) -> Optional[int]:
+        if not self.desc or not self.desc[0]:
+            return None
+        match = re.search(r'[12][890][0-9][0-9]', self.desc[0])
+        try:
+            return int(match.group(0)) if match else None
+        except (ValueError, TypeError):
+            return None
 
 class MgtvSearchContent(BaseModel):
     type: str
-    data: List[MgtvSearchItem]
+    # 修正：将data类型改为 List[Dict]，以处理API返回的异构列表
+    data: List[Dict[str, Any]]
 
 class MgtvSearchData(BaseModel):
     contents: List[MgtvSearchContent]
@@ -148,23 +173,30 @@ class MgtvScraper(BaseScraper):
                 for content in search_result.data.contents:
                     if content.type != "media":
                         continue
-                    for item in content.data:
-                        if not item.id:
+                    for item_dict in content.data:
+                        try:
+                            # 修正：在循环内部单独验证每个项目
+                            item = MgtvSearchItem.model_validate(item_dict)
+                            if not item.id:
+                                continue
+                            
+                            media_type = "movie" if item.type_name == "电影" else "tv_series"
+                            
+                            provider_search_info = models.ProviderSearchInfo(
+                                provider=self.provider_name,
+                                mediaId=item.id,
+                                title=item.title.replace(":", "："),
+                                type=media_type,
+                                season=get_season_from_title(item.title),
+                                year=item.year,
+                                episodeCount=item.video_count,
+                                currentEpisodeIndex=episode_info.get("episode") if episode_info else None
+                            )
+                            results.append(provider_search_info)
+                        except ValidationError:
+                            # 安全地跳过不符合我们期望结构的项目（如广告、按钮等）
+                            self.logger.debug(f"MGTV: 跳过一个不符合预期的搜索结果项: {item_dict}")
                             continue
-                        
-                        media_type = "movie" if item.type_name == "电影" else "tv_series"
-                        
-                        provider_search_info = models.ProviderSearchInfo(
-                            provider=self.provider_name,
-                            mediaId=item.id,
-                            title=item.title.replace(":", "："),
-                            type=media_type,
-                            season=get_season_from_title(item.title),
-                            year=item.year,
-                            episodeCount=item.video_count,
-                            currentEpisodeIndex=episode_info.get("episode") if episode_info else None
-                        )
-                        results.append(provider_search_info)
             
             self.logger.info(f"MGTV: 搜索 '{keyword}' 完成，找到 {len(results)} 个结果。")
             return results
