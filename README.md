@@ -75,14 +75,16 @@
         image: l429609201/misaka_danmu_server:latest
         container_name: misaka-danmu-server # 容器名称
         restart: unless-stopped
-        # 关键：使用您主机的用户ID和组ID运行容器，以解决挂载卷的权限问题。
-        # 请确保在 .env 文件中或通过环境变量设置了 PUID 和 PGID。
-        user: "${PUID:-1000}:${PGID:-1000}"
         # 使用主机网络模式，容器将直接使用宿主机的网络。
         # 这意味着容器内的 127.0.0.1 就是宿主机的 127.0.0.1。
         # 应用将直接在宿主机的 7768 端口上可用，无需端口映射。
         network_mode: "host"
         environment:
+          # --- 权限配置 ---
+          # 设置运行容器的用户和组ID，以匹配您宿主机的用户，避免挂载卷的权限问题。
+          - PUID=1000
+          - PGID=1000
+          - UMASK=0022
           # --- 服务配置 ---
           # 应用将监听在宿主机的 0.0.0.0:7768 上
           - DANMUAPI_SERVER__HOST=0.0.0.0
