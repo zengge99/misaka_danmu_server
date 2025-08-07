@@ -70,6 +70,7 @@ class MgtvEpisode(BaseModel):
     clip_id: str = Field(alias="clip_id")
     title: str = Field(alias="t1")
     title2: str = Field("", alias="t2")
+    title3: Optional[str] = Field(None, alias="t3")
     video_id: str = Field(alias="video_id")
 
 class MgtvEpisodeListTab(BaseModel):
@@ -271,8 +272,18 @@ class MgtvScraper(BaseScraper):
                 else:
                     break # No more pages
 
-            # Sort and format episodes
-            sorted_episodes = sorted(all_episodes, key=lambda x: int(x.video_id))
+            # 新增：在排序前，过滤掉预告、花絮等非正片内容
+            filtered_episodes = []
+            for ep in all_episodes:
+                # 优先使用更具描述性的 t3 标题进行检查，如果不存在则使用 t1
+                title_to_check = ep.title3 or ep.title
+                if self._JUNK_TITLE_PATTERN.search(title_to_check):
+                    self.logger.debug(f"MGTV: 在分集列表中过滤掉非正片内容: '{title_to_check}'")
+                    continue
+                filtered_episodes.append(ep)
+
+            # Sort and format the filtered episodes
+            sorted_episodes = sorted(filtered_episodes, key=lambda x: int(x.video_id))
             
             provider_episodes = [
                 models.ProviderEpisodeInfo(
