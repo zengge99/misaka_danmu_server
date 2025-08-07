@@ -165,6 +165,9 @@ class GamerScraper(BaseScraper):
             self.logger.info(f"Gamer: 搜索 '{keyword}' 完成，找到 {len(results)} 个结果。")
             return results
 
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            self.logger.warning(f"Gamer: 搜索 '{keyword}' 时连接超时或网络错误: {e}")
+            return []
         except Exception as e:
             self.logger.error(f"Gamer: 搜索 '{keyword}' 失败: {e}", exc_info=True)
             return []
@@ -214,6 +217,9 @@ class GamerScraper(BaseScraper):
             
             return episodes
 
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            self.logger.warning(f"Gamer: 获取分集列表失败 (media_id={media_id})，连接超时或网络错误: {e}")
+            return []
         except Exception as e:
             self.logger.error(f"Gamer: 获取分集列表失败 (media_id={media_id}): {e}", exc_info=True)
             return []
@@ -291,6 +297,9 @@ class GamerScraper(BaseScraper):
             if progress_callback: progress_callback(100, "弹幕处理完成")
             return formatted_comments
 
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            self.logger.warning(f"Gamer: 获取弹幕失败 (episode_id={episode_id})，连接超时或网络错误: {e}")
+            return []
         except Exception as e:
             self.logger.error(f"Gamer: 获取弹幕失败 (episode_id={episode_id}): {e}", exc_info=True)
             return []

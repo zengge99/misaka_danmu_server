@@ -212,6 +212,7 @@ async def search_anime_provider(
         """从TMDB获取别名。"""
         local_aliases = set()
         try:
+            # 1. Search with zh-CN to get a best match
             tv_task = tmdb_client.get("/search/tv", params={"query": search_title, "language": "zh-CN"})
             movie_task = tmdb_client.get("/search/movie", params={"query": search_title, "language": "zh-CN"})
             tv_res, movie_res = await asyncio.gather(tv_task, movie_task, return_exceptions=True)
@@ -225,15 +226,32 @@ async def search_anime_provider(
             if tmdb_results:
                 best_match = tmdb_results[0]
                 media_type = "tv" if "name" in best_match else "movie"
-                details_res = await tmdb_client.get(f"/{media_type}/{best_match['id']}", params={"append_to_response": "alternative_titles"})
-                if details_res.status_code == 200:
-                    details = details_res.json()
+                media_id = best_match['id']
+
+                # 2. Fetch details for zh-CN (with all alternative titles) and zh-TW concurrently
+                details_cn_task = tmdb_client.get(f"/{media_type}/{media_id}", params={"append_to_response": "alternative_titles", "language": "zh-CN"})
+                details_tw_task = tmdb_client.get(f"/{media_type}/{media_id}", params={"language": "zh-TW"})
+                
+                details_cn_res, details_tw_res = await asyncio.gather(details_cn_task, details_tw_task, return_exceptions=True)
+
+                # Process zh-CN response (which includes all alternative_titles)
+                if isinstance(details_cn_res, httpx.Response) and details_cn_res.status_code == 200:
+                    details = details_cn_res.json()
+                    # Add the main title from zh-CN response
+                    local_aliases.add(details.get('name') or details.get('title'))
+                    # Add the original title
+                    local_aliases.add(details.get('original_name') or details.get('original_title'))
+                    # Add all alternative titles from all regions
                     alt_titles = details.get("alternative_titles", {}).get("titles", [])
                     for title_info in alt_titles:
                         local_aliases.add(title_info['title'])
-                    local_aliases.add(details.get('name') or details.get('title'))
-                    local_aliases.add(details.get('original_name') or details.get('original_title'))
-                    logger.info(f"TMDB辅助搜索成功，找到别名: {[a for a in local_aliases if a]}")
+                
+                # Process zh-TW response to specifically get the Taiwanese title
+                if isinstance(details_tw_res, httpx.Response) and details_tw_res.status_code == 200:
+                    details_tw = details_tw_res.json()
+                    local_aliases.add(details_tw.get('name') or details_tw.get('title'))
+
+                logger.info(f"TMDB辅助搜索成功，找到别名: {[a for a in local_aliases if a]}")
         except Exception as e:
             logger.warning(f"TMDB辅助搜索失败: {e}")
         return {alias for alias in local_aliases if alias}
@@ -704,6 +722,32 @@ async def update_tmdb_settings(
     await asyncio.gather(*tasks)
     logger.info(f"用户 '{current_user.username}' 更新了 TMDB 配置。")
     
+@router.get("/config/bangumi", response_model=Dict[str, str], summary="获取Bangumi配置")
+async def get_bangumi_settings(
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """获取Bangumi OAuth相关的配置。"""
+    keys = ["bangumi_client_id", "bangumi_client_secret"]
+    tasks = [crud.get_config_value(pool, key, "") for key in keys]
+    values = await asyncio.gather(*tasks)
+    return dict(zip(keys, values))
+
+@router.put("/config/bangumi", status_code=status.HTTP_204_NO_CONTENT, summary="更新Bangumi配置")
+async def update_bangumi_settings(
+    payload: Dict[str, str],
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """批量更新Bangumi OAuth相关的配置。"""
+    tasks = []
+    for key, value in payload.items():
+        if key in ["bangumi_client_id", "bangumi_client_secret"]:
+            tasks.append(crud.update_config_value(pool, key, value or ""))
+    if tasks:
+        await asyncio.gather(*tasks)
+    logger.info(f"用户 '{current_user.username}' 更新了 Bangumi 配置。")
+
 @router.post("/cache/clear", status_code=status.HTTP_200_OK, summary="清除所有缓存")
 async def clear_all_caches(
     current_user: models.User = Depends(security.get_current_user),

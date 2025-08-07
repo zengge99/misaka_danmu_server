@@ -7,6 +7,7 @@ let changePasswordForm, passwordChangeMessage;
 // Webhook
 let webhookApiKeyInput, regenerateWebhookKeyBtn, webhookHandlersList;
 // Bangumi
+let bangumiSettingsForm, bangumiSaveMessage;
 let bangumiLoginBtn, bangumiLogoutBtn, bangumiAuthStateAuthenticated, bangumiAuthStateUnauthenticated;
 let bangumiUserNickname, bangumiUserId, bangumiAuthorizedAt, bangumiExpiresAt, bangumiUserAvatar;
 // TMDB
@@ -33,6 +34,8 @@ function initializeElements() {
     webhookHandlersList = document.getElementById('webhook-handlers-list');
 
     // Bangumi
+    bangumiSettingsForm = document.getElementById('bangumi-settings-form');
+    bangumiSaveMessage = document.getElementById('bangumi-save-message');
     bangumiLoginBtn = document.getElementById('bangumi-login-btn');
     bangumiLogoutBtn = document.getElementById('bangumi-logout-btn');
     bangumiAuthStateAuthenticated = document.getElementById('bangumi-auth-state-authenticated');
@@ -79,6 +82,7 @@ function handleSettingsSubNav(e) {
             loadWebhookSettings();
             break;
         case 'bangumi-settings-subview':
+            loadBangumiSettings();
             loadBangumiAuthState();
             break;
         case 'tmdb-settings-subview':
@@ -173,6 +177,43 @@ async function handleRegenerateWebhookKey() {
 }
 
 // --- Bangumi Settings ---
+async function loadBangumiSettings() {
+    bangumiSaveMessage.textContent = '';
+    try {
+        const data = await apiFetch('/api/ui/config/bangumi');
+        document.getElementById('bangumi-client-id').value = data.bangumi_client_id || '';
+        document.getElementById('bangumi-client-secret').value = data.bangumi_client_secret || '';
+    } catch (error) {
+        bangumiSaveMessage.textContent = `加载Bangumi配置失败: ${error.message}`;
+        bangumiSaveMessage.classList.add('error');
+    }
+}
+
+async function handleSaveBangumiSettings(e) {
+    e.preventDefault();
+    const payload = {
+        bangumi_client_id: document.getElementById('bangumi-client-id').value.trim(),
+        bangumi_client_secret: document.getElementById('bangumi-client-secret').value.trim(),
+    };
+    const saveBtn = e.target.querySelector('button[type="submit"]');
+    saveBtn.disabled = true;
+    bangumiSaveMessage.textContent = '保存中...';
+    bangumiSaveMessage.className = 'message';
+    try {
+        await apiFetch('/api/ui/config/bangumi', {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+        });
+        bangumiSaveMessage.textContent = 'Bangumi 配置保存成功！';
+        bangumiSaveMessage.classList.add('success');
+    } catch (error) {
+        bangumiSaveMessage.textContent = `保存失败: ${error.message}`;
+        bangumiSaveMessage.classList.add('error');
+    } finally {
+        saveBtn.disabled = false;
+    }
+}
+
 async function loadBangumiAuthState() {
     try {
         const state = await apiFetch('/api/bgm/auth/state');
@@ -351,6 +392,7 @@ export function setupSettingsEventListeners() {
     regenerateWebhookKeyBtn.addEventListener('click', handleRegenerateWebhookKey);
 
     // Bangumi
+    bangumiSettingsForm.addEventListener('submit', handleSaveBangumiSettings);
     bangumiLoginBtn.addEventListener('click', handleBangumiLogin);
     bangumiLogoutBtn.addEventListener('click', handleBangumiLogout);
     window.addEventListener('message', (event) => {
