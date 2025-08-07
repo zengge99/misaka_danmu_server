@@ -128,8 +128,8 @@ class MgtvComment(BaseModel):
     color: Optional[MgtvCommentColor] = Field(None, alias="v2_color")
 
 class MgtvCommentSegmentData(BaseModel):
-    # 修正：将 items 设为可选并提供默认空列表，以处理API在无弹幕时可能不返回此字段的情况。
-    items: List[MgtvComment] = []
+    # 修正：将 items 设为 Optional，以处理API在无弹幕的分段中可能不返回此字段的情况。
+    items: Optional[List[MgtvComment]] = None
     next: int = 0
 
 class MgtvCommentSegmentResult(BaseModel):
