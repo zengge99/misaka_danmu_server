@@ -1,0 +1,328 @@
+import asyncio
+import logging
+import re
+from typing import Any, Callable, Dict, List, Optional
+
+import aiomysql
+import httpx
+from pydantic import BaseModel, Field, ValidationError
+
+from .. import models
+from .base import BaseScraper, get_season_from_title
+
+# --- Pydantic Models for Mgtv API ---
+
+class MgtvSearchItem(BaseModel):
+    id: str = Field(alias="collection_id")
+    title: str
+    url: str
+    type_name: str = Field(alias="typeName")
+    year: Optional[int] = None
+    video_count: int = Field(0, alias="videoCount")
+
+class MgtvSearchContent(BaseModel):
+    type: str
+    data: List[MgtvSearchItem]
+
+class MgtvSearchData(BaseModel):
+    contents: List[MgtvSearchContent]
+
+class MgtvSearchResult(BaseModel):
+    data: MgtvSearchData
+
+class MgtvEpisode(BaseModel):
+    source_clip_id: str = Field(alias="src_clip_id")
+    clip_id: str = Field(alias="clip_id")
+    title: str = Field(alias="t1")
+    title2: str = Field("", alias="t2")
+    video_id: str = Field(alias="video_id")
+
+class MgtvEpisodeListTab(BaseModel):
+    month: str = Field(alias="m")
+
+class MgtvEpisodeListData(BaseModel):
+    list: List[MgtvEpisode]
+    tabs: List[MgtvEpisodeListTab]
+
+class MgtvEpisodeListResult(BaseModel):
+    data: MgtvEpisodeListData
+
+class MgtvControlBarrage(BaseModel):
+    cdn_host: str = Field("bullet-ali.hitv.com", alias="cdn_host")
+    cdn_version: str = Field(alias="cdn_version")
+
+class MgtvControlBarrageResult(BaseModel):
+    data: Optional[MgtvControlBarrage] = None
+
+class MgtvVideoInfo(BaseModel):
+    time: str
+
+    @property
+    def total_minutes(self) -> int:
+        parts = self.time.split(':')
+        try:
+            if len(parts) == 2:
+                return (int(parts[0]) * 60 + int(parts[1])) // 60 + 1
+            if len(parts) == 3:
+                return (int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])) // 60 + 1
+        except (ValueError, IndexError):
+            return 0
+        return 0
+
+class MgtvVideoInfoData(BaseModel):
+    info: MgtvVideoInfo
+
+class MgtvVideoInfoResult(BaseModel):
+    data: MgtvVideoInfoData
+
+class MgtvCommentColorRGB(BaseModel):
+    r: int
+    g: int
+    b: int
+
+class MgtvCommentColor(BaseModel):
+    color_left: MgtvCommentColorRGB = Field(alias="color_left")
+
+class MgtvComment(BaseModel):
+    id: int
+    content: str
+    time: int
+    type: int
+    uuid: str
+    color: Optional[MgtvCommentColor] = Field(None, alias="v2_color")
+
+class MgtvCommentSegmentData(BaseModel):
+    items: List[MgtvComment]
+    next: int = 0
+
+class MgtvCommentSegmentResult(BaseModel):
+    data: Optional[MgtvCommentSegmentData] = None
+
+# --- Main Scraper Class ---
+
+class MgtvScraper(BaseScraper):
+    provider_name = "mgtv"
+
+    def __init__(self, pool: aiomysql.Pool):
+        super().__init__(pool)
+        self.client = httpx.AsyncClient(
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://www.mgtv.com/",
+                "Sec-Fetch-Site": "same-site",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Dest": "empty",
+            },
+            timeout=20.0,
+            follow_redirects=True
+        )
+        self._api_lock = asyncio.Lock()
+        self._last_request_time = 0
+        self._min_interval = 0.5
+
+    async def _request_with_rate_limit(self, method: str, url: str, **kwargs) -> httpx.Response:
+        async with self._api_lock:
+            now = time.time()
+            time_since_last = now - self._last_request_time
+            if time_since_last < self._min_interval:
+                await asyncio.sleep(self._min_interval - time_since_last)
+            response = await self.client.request(method, url, **kwargs)
+            self._last_request_time = time.time()
+            return response
+
+    async def close(self):
+        await self.client.aclose()
+
+    async def search(self, keyword: str, episode_info: Optional[Dict[str, Any]] = None) -> List[models.ProviderSearchInfo]:
+        self.logger.info(f"MGTV: 正在搜索 '{keyword}'...")
+        url = f"https://mobileso.bz.mgtv.com/msite/search/v2?q={keyword}&pc=30&pn=1&sort=-99&ty=0&du=0&pt=0&corr=1&abroad=0&_support=10000000000000000"
+        
+        try:
+            response = await self._request_with_rate_limit("GET", url)
+            response.raise_for_status()
+            search_result = MgtvSearchResult.model_validate(response.json())
+
+            results = []
+            if search_result.data and search_result.data.contents:
+                for content in search_result.data.contents:
+                    if content.type != "media":
+                        continue
+                    for item in content.data:
+                        if not item.id:
+                            continue
+                        
+                        media_type = "movie" if item.type_name == "电影" else "tv_series"
+                        
+                        provider_search_info = models.ProviderSearchInfo(
+                            provider=self.provider_name,
+                            mediaId=item.id,
+                            title=item.title.replace(":", "："),
+                            type=media_type,
+                            season=get_season_from_title(item.title),
+                            year=item.year,
+                            episodeCount=item.video_count,
+                            currentEpisodeIndex=episode_info.get("episode") if episode_info else None
+                        )
+                        results.append(provider_search_info)
+            
+            self.logger.info(f"MGTV: 搜索 '{keyword}' 完成，找到 {len(results)} 个结果。")
+            return results
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            self.logger.warning(f"MGTV: 搜索 '{keyword}' 时连接超时或网络错误: {e}")
+            return []
+        except Exception as e:
+            self.logger.error(f"MGTV: 搜索 '{keyword}' 失败: {e}", exc_info=True)
+            return []
+
+    async def get_episodes(self, media_id: str, target_episode_index: Optional[int] = None, db_media_type: Optional[str] = None) -> List[models.ProviderEpisodeInfo]:
+        self.logger.info(f"MGTV: 正在为 media_id={media_id} 获取分集列表...")
+        
+        all_episodes: List[MgtvEpisode] = []
+        month = ""
+        page_index = 0
+        total_pages = 1 # Start with 1 to enter the loop
+
+        try:
+            while page_index < total_pages:
+                url = f"https://pcweb.api.mgtv.com/variety/showlist?allowedRC=1&collection_id={media_id}&month={month}&page=1&_support=10000000"
+                response = await self._request_with_rate_limit("GET", url)
+                response.raise_for_status()
+                result = MgtvEpisodeListResult.model_validate(response.json())
+
+                if result.data and result.data.list:
+                    # Filter episodes that belong to the current collection
+                    all_episodes.extend([ep for ep in result.data.list if ep.source_clip_id == media_id])
+
+                if page_index == 0:
+                    total_pages = len(result.data.tabs) if result.data and result.data.tabs else 1
+                
+                page_index += 1
+                if page_index < total_pages and result.data and result.data.tabs:
+                    month = result.data.tabs[page_index].month
+                else:
+                    break # No more pages
+
+            # Sort and format episodes
+            sorted_episodes = sorted(all_episodes, key=lambda x: int(x.video_id))
+            
+            provider_episodes = [
+                models.ProviderEpisodeInfo(
+                    provider=self.provider_name,
+                    # The comment ID is a combination of collection_id and video_id
+                    episodeId=f"{media_id},{ep.video_id}",
+                    title=ep.title2 if re.match(r"^第.+?集$", ep.title2) else ep.title,
+                    episodeIndex=i + 1,
+                    url=f"https://www.mgtv.com/b/{media_id}/{ep.video_id}.html"
+                ) for i, ep in enumerate(sorted_episodes)
+            ]
+
+            if target_episode_index:
+                return [ep for ep in provider_episodes if ep.episodeIndex == target_episode_index]
+            
+            return provider_episodes
+
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            self.logger.warning(f"MGTV: 获取分集列表失败 (media_id={media_id})，连接超时或网络错误: {e}")
+            return []
+        except Exception as e:
+            self.logger.error(f"MGTV: 获取分集列表失败 (media_id={media_id}): {e}", exc_info=True)
+            return []
+
+    async def get_comments(self, episode_id: str, progress_callback: Optional[Callable] = None) -> List[dict]:
+        try:
+            cid, vid = episode_id.split(',')
+        except (ValueError, IndexError):
+            self.logger.error(f"MGTV: 无效的 episode_id 格式: '{episode_id}'")
+            return []
+
+        self.logger.info(f"MGTV: 正在为 cid={cid}, vid={vid} 获取弹幕...")
+
+        # Strategy 1: Use getctlbarrage
+        try:
+            ctl_url = f"https://galaxy.bz.mgtv.com/getctlbarrage?version=8.1.39&abroad=0&uuid=&os=10.15.7&platform=0&mac=&vid={vid}&pid=&cid={cid}&ticket="
+            ctl_response = await self._request_with_rate_limit("GET", ctl_url)
+            ctl_response.raise_for_status()
+            ctl_result = MgtvControlBarrageResult.model_validate(ctl_response.json())
+
+            if ctl_result.data and ctl_result.data.cdn_version:
+                self.logger.info("MGTV: 使用主策略 (getctlbarrage) 获取弹幕。")
+                video_info_url = f"https://pcweb.api.mgtv.com/video/info?allowedRC=1&cid={cid}&vid={vid}&change=3&datatype=1&type=1&_support=10000000"
+                video_info_response = await self._request_with_rate_limit("GET", video_info_url)
+                video_info_response.raise_for_status()
+                video_info_result = MgtvVideoInfoResult.model_validate(video_info_response.json())
+
+                if video_info_result.data and video_info_result.data.info:
+                    total_minutes = video_info_result.data.info.total_minutes
+                    all_comments = []
+                    for minute in range(total_minutes):
+                        if progress_callback:
+                            progress_callback(int((minute + 1) / total_minutes * 100), f"正在下载分段 {minute + 1}/{total_minutes}")
+                        
+                        segment_url = f"https://{ctl_result.data.cdn_host}/{ctl_result.data.cdn_version}/{minute}.json"
+                        try:
+                            segment_response = await self._request_with_rate_limit("GET", segment_url)
+                            segment_response.raise_for_status()
+                            segment_data = MgtvCommentSegmentResult.model_validate(segment_response.json())
+                            if segment_data.data and segment_data.data.items:
+                                all_comments.extend(segment_data.data.items)
+                        except Exception as seg_e:
+                            self.logger.warning(f"MGTV: 下载弹幕分段 {minute} 失败，跳过。错误: {seg_e}")
+                    
+                    return self._format_comments(all_comments)
+        except Exception as e:
+            self.logger.warning(f"MGTV: 主弹幕获取策略失败，将尝试备用策略。错误: {e}")
+
+        # Strategy 2: Fallback to opbarrage
+        self.logger.info("MGTV: 使用备用策略 (opbarrage) 获取弹幕。")
+        try:
+            all_comments = []
+            time_offset = 0
+            while True:
+                if progress_callback:
+                    progress_callback(min(95, time_offset // 60), f"正在下载分段 (time={time_offset})")
+
+                fallback_url = f"https://galaxy.bz.mgtv.com/cdn/opbarrage?vid={vid}&pid=&cid={cid}&ticket=&time={time_offset}&allowedRC=1"
+                fallback_response = await self._request_with_rate_limit("GET", fallback_url)
+                fallback_response.raise_for_status()
+                fallback_result = MgtvCommentSegmentResult.model_validate(fallback_response.json())
+
+                if fallback_result.data and fallback_result.data.items:
+                    all_comments.extend(fallback_result.data.items)
+                    time_offset = fallback_result.data.next
+                    if time_offset == 0:
+                        break
+                else:
+                    break
+            
+            if progress_callback: progress_callback(100, "弹幕处理完成")
+            return self._format_comments(all_comments)
+
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            self.logger.warning(f"MGTV: 获取弹幕失败 (episode_id={episode_id})，连接超时或网络错误: {e}")
+            return []
+        except Exception as e:
+            self.logger.error(f"MGTV: 备用弹幕获取策略失败 (episode_id={episode_id}): {e}", exc_info=True)
+            return []
+
+    def _format_comments(self, comments: List[MgtvComment]) -> List[dict]:
+        formatted_comments = []
+        for c in comments:
+            mode = 1 # 滚动
+            if c.type == 1: mode = 5 # 顶部
+            elif c.type == 2: mode = 4 # 底部
+
+            color = 16777215 # 白色
+            if c.color and c.color.color_left:
+                rgb = c.color.color_left
+                color = (rgb.r << 16) | (rgb.g << 8) | rgb.b
+
+            timestamp = c.time / 1000.0
+            p_string = f"{timestamp:.3f},{mode},{color},[{self.provider_name}]"
+            
+            formatted_comments.append({
+                "cid": str(c.id),
+                "p": p_string,
+                "m": c.content,
+                "t": round(timestamp, 2)
+            })
+        return formatted_comments
