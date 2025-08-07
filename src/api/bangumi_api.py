@@ -185,7 +185,7 @@ async def get_bangumi_client(
             client_secret_task = crud.get_config_value(pool, "bangumi_client_secret", "")
             client_id, client_secret = await asyncio.gather(client_id_task, client_secret_task)
             if not client_id or not client_secret:
-                raise ValueError("Bangumi Client ID/Secret 未配置，无法刷新Token。")
+                raise ValueError("Bangumi App ID/Secret 未配置，无法刷新Token。")
 
             async with httpx.AsyncClient() as client:
                 token_data = {
@@ -227,7 +227,7 @@ async def get_bangumi_auth_url(
 
     client_id = await crud.get_config_value(pool, "bangumi_client_id", "")
     if not client_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bangumi Client ID 未在设置中配置。")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bangumi App ID 未在设置中配置。")
 
     # 构建回调 URL，它将指向我们的 /auth/callback 端点
     redirect_uri = request.url_for('bangumi_auth_callback')
@@ -266,7 +266,7 @@ async def bangumi_auth_callback(
     client_secret_task = crud.get_config_value(pool, "bangumi_client_secret", "")
     client_id, client_secret = await asyncio.gather(client_id_task, client_secret_task)
     if not client_id or not client_secret:
-        return HTMLResponse("<h1>认证失败：服务器未配置Bangumi Client ID或Secret。</h1>", status_code=500)
+        return HTMLResponse("<h1>认证失败：服务器未配置Bangumi App ID或App Secret。</h1>", status_code=500)
 
     token_data = {
         "grant_type": "authorization_code",
