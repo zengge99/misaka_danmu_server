@@ -147,7 +147,7 @@ class MgtvScraper(BaseScraper):
         # 英文缩写/单词，需要单词边界或括号
         r'(\[|\【|\b)(OP|ED|SP|OVA|OAD|CM|PV|MV|BDMenu|Menu|Bonus|Recap|Teaser|Trailer|Preview|OST|BGM)(\d{1,2})?(\s|_ALL)?(\]|\】|\b)'
         # 中文关键词，直接匹配
-        r'|(特典|预告|广告|菜单|花絮|特辑|速看|资讯|彩蛋|直拍|直播回顾|片头|片尾|映像|纪录片|访谈)',
+        r'|(特典|预告|广告|菜单|花絮|特辑|速看|资讯|彩蛋|直拍|直播回顾|片头|片尾|映像|纪录片|访谈|番外|短片)',
         re.IGNORECASE
     )
 
