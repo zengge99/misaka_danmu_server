@@ -18,6 +18,7 @@ class MgtvSearchItem(BaseModel):
     title: str
     url: str
     desc: Optional[List[str]] = None
+    source: Optional[str] = None
     video_count: int = Field(0, alias="videoCount")
 
     @property
@@ -177,6 +178,11 @@ class MgtvScraper(BaseScraper):
                         try:
                             # 修正：在循环内部单独验证每个项目
                             item = MgtvSearchItem.model_validate(item_dict)
+                            # 新增：只处理芒果TV自有的内容 (source为'imgo')
+                            if item.source != "imgo":
+                                self.logger.debug(f"MGTV: 跳过一个非芒果TV自有的搜索结果: {item.title} (源: {item.source})")
+                                continue
+
                             if not item.id:
                                 continue
                             
