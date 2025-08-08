@@ -31,14 +31,35 @@ async def handle_webhook(
     if not stored_key or api_key != stored_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的Webhook API Key")
 
+    # 新增：先读取原始请求体并记录日志，再尝试解析
+    raw_body = await request.body()
+    logger.info(f"收到来自 '{webhook_type}' 的 Webhook 原始请求体:\n{raw_body.decode(errors='ignore')}")
+
     try:
-        payload = await request.json()
+        # 尝试将原始请求体直接解析为JSON
+        payload = json.loads(raw_body)
     except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="无效的请求体。Webhook 必须使用 'json' 类型发送。"
-        )
-    logger.info(f"收到来自 '{webhook_type}' 的 Webhook 原始负载:\n{json.dumps(payload, indent=2, ensure_ascii=False)}")
+        # 如果直接解析JSON失败，尝试将其作为表单数据处理（这是Jellyfin的常见情况）
+        try:
+            from urllib.parse import parse_qs
+            form_data = parse_qs(raw_body.decode())
+            if 'payload' in form_data:
+                # 实际的JSON数据在名为'payload'的表单字段中
+                payload_str = form_data['payload'][0]
+                logger.info(f"检测到表单数据，正在解析 'payload' 字段:\n{payload_str}")
+                payload = json.loads(payload_str)
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="请求体既不是有效的JSON，也不是包含'payload'字段的表单。"
+                )
+        except Exception as form_e:
+            logger.error(f"解析 Webhook 表单数据失败: {form_e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="无法解析请求体。它必须是JSON或包含'payload'字段的表单。"
+            )
+    logger.info(f"Webhook '{webhook_type}' 解析后的负载:\n{json.dumps(payload, indent=2, ensure_ascii=False)}")
     try:
         handler = webhook_manager.get_handler(webhook_type)
         await handler.handle(payload)
