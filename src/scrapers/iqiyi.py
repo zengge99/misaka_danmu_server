@@ -196,7 +196,14 @@ class IqiyiScraper(BaseScraper):
         cached_info = await self._get_from_cache(cache_key)
         if cached_info is not None:
             self.logger.info(f"爱奇艺: 从缓存中命中基础信息 (link_id={link_id})")
-            return IqiyiHtmlVideoInfo.model_validate(cached_info)
+            try:
+                return IqiyiHtmlVideoInfo.model_validate(cached_info)
+            except ValidationError as e:
+                self.logger.error(f"爱奇艺: 缓存的基础信息 (link_id={link_id}) 验证失败。这可能是一个陈旧或损坏的缓存。")
+                self.logger.error(f"导致验证失败的数据: {cached_info}")
+                self.logger.error(f"Pydantic 验证错误: {e}")
+                # 返回None，让上层调用者知道信息获取失败，而不是让任务崩溃
+                return None
 
         url = f"https://m.iqiyi.com/v_{link_id}.html"
         # 模仿 C# 代码中的 LimitRequestFrequently

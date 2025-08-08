@@ -900,6 +900,20 @@ async def get_available_webhook_types(
 async def delete_anime_task(anime_id: int, pool: aiomysql.Pool, progress_callback: Callable):
     """Background task to delete an anime and all its related data."""
     progress_callback(0, "开始删除...")
+
+    # 新增：在删除数据库记录前，先清理关联的缓存
+    try:
+        sources = await crud.get_anime_sources(pool, anime_id)
+        for source in sources:
+            media_id = source.get('media_id')
+            if media_id:
+                # 清理可能存在的各种缓存
+                await crud.delete_cache(pool, f"episodes_{media_id}")
+                await crud.delete_cache(pool, f"base_info_{media_id}") # 针对爱奇艺
+        logger.info(f"已为作品 ID {anime_id} 清理了 {len(sources)} 个数据源的关联缓存。")
+    except Exception as e:
+        logger.warning(f"为作品 ID {anime_id} 清理缓存时发生非致命错误: {e}")
+
     try:
         deleted = await crud.delete_anime(pool, anime_id)
         if deleted:

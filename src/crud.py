@@ -1011,6 +1011,13 @@ async def clear_all_cache(pool: aiomysql.Pool) -> int:
                 logging.getLogger(__name__).info(f"清除了所有 ({deleted_rows} 条) 数据库缓存。")
             return deleted_rows
 
+async def delete_cache(pool: aiomysql.Pool, key: str) -> bool:
+    """从数据库缓存中删除指定的键。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            affected_rows = await cursor.execute("DELETE FROM cache_data WHERE cache_key = %s", (key,))
+            return affected_rows > 0
+
 async def update_episode_fetch_time(pool: aiomysql.Pool, episode_id: int):
     """更新分集的采集时间"""
     async with pool.acquire() as conn:
