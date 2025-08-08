@@ -259,7 +259,7 @@ class YoukuScraper(BaseScraper):
             for mat in range(total_mat):
                 if progress_callback:
                     progress = int((mat + 1) / total_mat * 100) if total_mat > 0 else 100
-                    progress_callback(progress, f"正在获取分段 {mat + 1}/{total_mat}")
+                    await progress_callback(progress, f"正在获取分段 {mat + 1}/{total_mat}")
 
                 comments_in_mat = await self._get_danmu_content_by_mat(vid, mat)
                 if comments_in_mat:
@@ -267,7 +267,7 @@ class YoukuScraper(BaseScraper):
                 await asyncio.sleep(0.2)
 
             if progress_callback:
-                progress_callback(100, "弹幕整合完成")
+                await progress_callback(100, "弹幕整合完成")
 
             return self._format_comments(all_comments)
 
@@ -380,9 +380,12 @@ class YoukuScraper(BaseScraper):
         if not comments:
             return []
 
+        # 新增：按弹幕ID去重
+        unique_comments = list({c.id: c for c in comments}.values())
+
         # 1. 按内容对弹幕进行分组
         grouped_by_content: Dict[str, List[YoukuComment]] = defaultdict(list)
-        for c in comments:
+        for c in unique_comments: # 使用去重后的列表
             grouped_by_content[c.content].append(c)
 
         # 2. 处理重复项

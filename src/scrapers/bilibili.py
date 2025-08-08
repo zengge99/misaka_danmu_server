@@ -519,7 +519,7 @@ class BilibiliScraper(BaseScraper):
         while True:
             try:
                 if progress_callback:
-                    progress_callback(min(95, segment_index * 10), f"获取弹幕池 {cid} 的分段 {segment_index}")
+                    await progress_callback(min(95, segment_index * 10), f"获取弹幕池 {cid} 的分段 {segment_index}")
 
                 url = f"https://api.bilibili.com/x/v2/dm/web/seg.so?type=1&oid={cid}&pid={aid}&segment_index={segment_index}"
                 response = await self._request_with_rate_limit("GET", url)
@@ -562,7 +562,7 @@ class BilibiliScraper(BaseScraper):
 
         await self._ensure_session_cookie()
 
-        if progress_callback: progress_callback(0, "正在获取弹幕池列表...")
+        if progress_callback: await progress_callback(0, "正在获取弹幕池列表...")
         all_cids = await self._get_danmaku_pools(aid, main_cid)
         total_cids = len(all_cids)
 
@@ -570,19 +570,19 @@ class BilibiliScraper(BaseScraper):
         for i, cid in enumerate(all_cids):
             self.logger.info(f"Bilibili: 正在获取弹幕池 {i + 1}/{total_cids} (CID: {cid})...")
 
-            def sub_progress_callback(danmaku_progress: int, danmaku_description: str):
+            async def sub_progress_callback(danmaku_progress: int, danmaku_description: str):
                 if progress_callback:
                     base_progress = (i / total_cids) * 100
                     progress_range = (1 / total_cids) * 100
                     current_total_progress = base_progress + (danmaku_progress / 100) * progress_range
                     # 修正：使用位置参数调用，以匹配 generic_import_task 中回调的签名
-                    progress_callback(current_total_progress, f"池 {i + 1}/{total_cids}: {danmaku_description}")
+                    await progress_callback(current_total_progress, f"池 {i + 1}/{total_cids}: {danmaku_description}")
 
             comments_for_cid = await self._fetch_comments_for_cid(aid, cid, sub_progress_callback)
             all_comments.extend(comments_for_cid)
 
         if progress_callback:
-            progress_callback(100, "弹幕整合完成")
+            await progress_callback(100, "弹幕整合完成")
 
         unique_comments = {c.id: c for c in all_comments}.values()
         self.logger.info(f"Bilibili: 为 episode_id='{episode_id}' 获取了 {len(unique_comments)} 条唯一弹幕。")

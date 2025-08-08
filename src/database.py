@@ -1,22 +1,47 @@
 import aiomysql
 import secrets
 import string
+import logging
 from fastapi import FastAPI, Request
 from .config import settings
+from pymysql.err import OperationalError
+
+# 使用模块级日志记录器
+logger = logging.getLogger(__name__)
 
 
 async def create_db_pool(app: FastAPI) -> aiomysql.Pool:
     """创建数据库连接池并存储在 app.state 中"""
-    app.state.db_pool = await aiomysql.create_pool(
-        host=settings.database.host,
-        port=settings.database.port,
-        user=settings.database.user,
-        password=settings.database.password,
-        db=settings.database.name,
-        autocommit=True  # 建议在Web应用中开启自动提交
-    )
-    print("数据库连接池创建成功。")
-    return app.state.db_pool
+    try:
+        app.state.db_pool = await aiomysql.create_pool(
+            host=settings.database.host,
+            port=settings.database.port,
+            user=settings.database.user,
+            password=settings.database.password,
+            db=settings.database.name,
+            autocommit=True  # 建议在Web应用中开启自动提交
+        )
+        logger.info("数据库连接池创建成功。")
+        return app.state.db_pool
+    except OperationalError as e:
+        # 捕获特定的 OperationalError 以提供更具指导性的错误消息
+        logger.error("="*60)
+        logger.error("=== 无法创建数据库连接池，应用无法启动。 ===")
+        logger.error(f"=== 错误类型: {type(e).__name__}")
+        logger.error(f"=== 错误详情: {e}")
+        logger.error("---")
+        logger.error("--- 可能的原因与排查建议: ---")
+        logger.error("--- 1. 数据库服务未运行: 请确认您的 MySQL/MariaDB 服务正在运行。")
+        logger.error(f"--- 2. 配置错误: 请检查您的配置文件或环境变量中的数据库连接信息是否正确。")
+        logger.error(f"---    - 主机 (Host): {settings.database.host}")
+        logger.error(f"---    - 端口 (Port): {settings.database.port}")
+        logger.error(f"---    - 用户 (User): {settings.database.user}")
+        logger.error(f"---    - 数据库 (DB Name): {settings.database.name}")
+        logger.error("--- 3. 网络问题: 如果应用和数据库在不同的容器或机器上，请检查它们之间的网络连接和防火墙设置。")
+        logger.error("--- 4. 权限问题: 确认提供的用户有权限从应用所在的IP地址连接。")
+        logger.error("="*60)
+        # 重新抛出异常以终止应用启动，因为没有数据库连接应用无法运行
+        raise
 
 async def get_db_pool(request: Request) -> aiomysql.Pool:
     """依赖项：从应用状态获取数据库连接池"""
@@ -27,7 +52,7 @@ async def close_db_pool(app: FastAPI):
     if hasattr(app.state, "db_pool") and app.state.db_pool:
         app.state.db_pool.close()
         await app.state.db_pool.wait_closed()
-        print("数据库连接池已关闭。")
+        logger.info("数据库连接池已关闭。")
 
 async def create_initial_admin_user(app: FastAPI):
     """在应用启动时创建初始管理员用户（如果已配置且不存在）"""
@@ -43,7 +68,7 @@ async def create_initial_admin_user(app: FastAPI):
     existing_user = await crud.get_user_by_username(pool, admin_user)
 
     if existing_user:
-        print(f"管理员用户 '{admin_user}' 已存在，跳过创建。")
+        logger.info(f"管理员用户 '{admin_user}' 已存在，跳过创建。")
         return
 
     # 用户不存在，开始创建
@@ -52,16 +77,16 @@ async def create_initial_admin_user(app: FastAPI):
         # 生成一个安全的16位随机密码
         alphabet = string.ascii_letters + string.digits
         admin_pass = ''.join(secrets.choice(alphabet) for _ in range(16))
-        print("未提供初始管理员密码，已生成随机密码。")
+        logger.info("未提供初始管理员密码，已生成随机密码。")
 
     user_to_create = models.UserCreate(username=admin_user, password=admin_pass)
     await crud.create_user(pool, user_to_create)
 
     # 打印凭据信息，方便用户查看日志
-    print("\n" + "="*60)
-    print(f"=== 初始管理员账户已创建 (用户: {admin_user}) ".ljust(56) + "===")
-    print(f"=== 请使用以下随机生成的密码登录: {admin_pass} ".ljust(56) + "===")
-    print("="*60 + "\n")
+    logger.info("\n" + "="*60)
+    logger.info(f"=== 初始管理员账户已创建 (用户: {admin_user}) ".ljust(56) + "===")
+    logger.info(f"=== 请使用以下随机生成的密码登录: {admin_pass} ".ljust(56) + "===")
+    logger.info("="*60 + "\n")
 
 async def init_db_tables(app: FastAPI):
     """初始化数据库和表"""
@@ -72,24 +97,24 @@ async def init_db_tables(app: FastAPI):
             host=settings.database.host, port=settings.database.port,
             user=settings.database.user, password=settings.database.password
         )
-    except Exception as e:
-        print(f"数据库连接失败，请检查配置: {e}")
+    except OperationalError as e:
+        logger.error(f"数据库连接失败，请检查配置: {e}")
         raise RuntimeError(f"无法连接到数据库: {e}") from e
 
     async with conn.cursor() as cursor:
         # 2. 创建数据库 (如果不存在)
         await cursor.execute("SHOW DATABASES LIKE %s", (db_name,))
         if not await cursor.fetchone():
-            print(f"数据库 '{db_name}' 不存在，正在创建...")
+            logger.info(f"数据库 '{db_name}' 不存在，正在创建...")
             await cursor.execute(f"CREATE DATABASE `{db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-            print(f"数据库 '{db_name}' 创建成功。")
+            logger.info(f"数据库 '{db_name}' 创建成功。")
     conn.close()
 
     # 3. 检查并创建/更新表
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor() as cursor:
             # --- 步骤 3.1: 检查并创建所有表 ---
-            print("正在检查并创建数据表...")
+            logger.info("正在检查并创建数据表...")
             
             # 将所有建表语句放入一个字典中
             tables_to_create = {
@@ -99,7 +124,7 @@ async def init_db_tables(app: FastAPI):
                 "users": """CREATE TABLE `users` (`id` BIGINT NOT NULL AUTO_INCREMENT, `username` VARCHAR(50) NOT NULL, `hashed_password` VARCHAR(255) NOT NULL, `token` TEXT NULL, `token_update` TIMESTAMP NULL, `created_at` TIMESTAMP NULL, PRIMARY KEY (`id`), UNIQUE INDEX `idx_username_unique` (`username` ASC)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
                 "scrapers": """CREATE TABLE `scrapers` (`provider_name` VARCHAR(50) NOT NULL, `is_enabled` BOOLEAN NOT NULL DEFAULT TRUE, `display_order` INT NOT NULL DEFAULT 0, PRIMARY KEY (`provider_name`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
                 "anime_sources": """CREATE TABLE `anime_sources` (`id` BIGINT NOT NULL AUTO_INCREMENT, `anime_id` BIGINT NOT NULL, `provider_name` VARCHAR(50) NOT NULL, `media_id` VARCHAR(255) NOT NULL, `is_favorited` BOOLEAN NOT NULL DEFAULT FALSE, `created_at` TIMESTAMP NULL, PRIMARY KEY (`id`), UNIQUE INDEX `idx_anime_provider_media_unique` (`anime_id` ASC, `provider_name` ASC, `media_id` ASC)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
-                "anime_metadata": """CREATE TABLE `anime_metadata` (`id` BIGINT NOT NULL AUTO_INCREMENT, `anime_id` BIGINT NOT NULL, `tmdb_id` VARCHAR(50) NULL, `tmdb_episode_group_id` VARCHAR(50) NULL, `imdb_id` VARCHAR(50) NULL, `tvdb_id` VARCHAR(50) NULL, `douban_id` VARCHAR(50) NULL, `bangumi_id` VARCHAR(50) NULL, PRIMARY KEY (`id`), UNIQUE INDEX `idx_anime_id_unique` (`anime_id` ASC)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
+                "anime_metadata": """CREATE TABLE `anime_metadata` (`id` BIGINT NOT NULL AUTO_INCREMENT, `anime_id` BIGINT NOT NULL, `tmdb_id` VARCHAR(50) NULL, `tmdb_episode_group_id` VARCHAR(50) NULL, `imdb_id` VARCHAR(50) NULL, `tvdb_id` VARCHAR(50) NULL, `douban_id` VARCHAR(50) NULL, `bangumi_id` VARCHAR(50) NULL, PRIMARY KEY (`id`), UNIQUE INDEX `idx_anime_id_unique` (`anime_id` ASC), CONSTRAINT `fk_metadata_anime` FOREIGN KEY (`anime_id`) REFERENCES `anime`(`id`) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
                 "config": """CREATE TABLE `config` (`config_key` VARCHAR(100) NOT NULL, `config_value` TEXT NOT NULL, `description` TEXT NULL, PRIMARY KEY (`config_key`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
                 "cache_data": """CREATE TABLE `cache_data` (`cache_provider` VARCHAR(50) NULL, `cache_key` VARCHAR(255) NOT NULL, `cache_value` LONGTEXT NOT NULL, `expires_at` TIMESTAMP NOT NULL, PRIMARY KEY (`cache_key`), INDEX `idx_expires_at` (`expires_at`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
                 "api_tokens": """CREATE TABLE `api_tokens` (`id` INT NOT NULL AUTO_INCREMENT, `name` VARCHAR(100) NOT NULL, `token` VARCHAR(50) NOT NULL, `is_enabled` BOOLEAN NOT NULL DEFAULT TRUE, `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `expires_at` TIMESTAMP NULL DEFAULT NULL, PRIMARY KEY (`id`), UNIQUE INDEX `idx_token_unique` (`token` ASC)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""",
@@ -120,17 +145,17 @@ async def init_db_tables(app: FastAPI):
             # 遍历需要创建的表
             for table_name, create_sql in tables_to_create.items():
                 if table_name in existing_tables:
-                    print(f"数据表 '{table_name}' 已存在，跳过创建。")
+                    logger.info(f"数据表 '{table_name}' 已存在，跳过创建。")
                 else:
-                    print(f"正在创建数据表 '{table_name}'...")
+                    logger.info(f"正在创建数据表 '{table_name}'...")
                     # 在建表语句中保留 IF NOT EXISTS 作为最后的保险
                     await cursor.execute(create_sql.replace(f"CREATE TABLE `{table_name}`", f"CREATE TABLE IF NOT EXISTS `{table_name}`"))
-                    print(f"数据表 '{table_name}' 创建成功。")
+                    logger.info(f"数据表 '{table_name}' 创建成功。")
             
-            print("数据表检查完成。")
+            logger.info("数据表检查完成。")
 
             # --- 步骤 3.2: 检查并修正旧的表结构 ---
-            print("正在检查并修正表结构...")
+            logger.info("正在检查并修正表结构...")
             try:
                 # 检查 token_access_logs.status
                 await cursor.execute("""
@@ -139,9 +164,9 @@ async def init_db_tables(app: FastAPI):
                 """, (db_name,))
                 status_col_len_row = await cursor.fetchone()
                 if status_col_len_row and status_col_len_row[0] < 50:
-                    print("检测到旧的 'token_access_logs.status' 列定义，正在将其更新为 VARCHAR(50)...")
+                    logger.info("检测到旧的 'token_access_logs.status' 列定义，正在将其更新为 VARCHAR(50)...")
                     await cursor.execute("ALTER TABLE token_access_logs MODIFY COLUMN status VARCHAR(50) NOT NULL;")
-                    print("列 'token_access_logs.status' 更新成功。")
+                    logger.info("列 'token_access_logs.status' 更新成功。")
 
                 # 检查 task_history.status
                 await cursor.execute("""
@@ -150,9 +175,9 @@ async def init_db_tables(app: FastAPI):
                 """, (db_name,))
                 task_status_col_len_row = await cursor.fetchone()
                 if task_status_col_len_row and task_status_col_len_row[0] < 50:
-                    print("检测到旧的 'task_history.status' 列定义，正在将其更新为 VARCHAR(50)...")
+                    logger.info("检测到旧的 'task_history.status' 列定义，正在将其更新为 VARCHAR(50)...")
                     await cursor.execute("ALTER TABLE task_history MODIFY COLUMN status VARCHAR(50) NOT NULL;")
-                    print("列 'task_history.status' 更新成功。")
+                    logger.info("列 'task_history.status' 更新成功。")
 
                 # 新增：检查 config.config_value 的类型
                 await cursor.execute("""
@@ -161,24 +186,27 @@ async def init_db_tables(app: FastAPI):
                 """, (db_name,))
                 config_value_col_type_row = await cursor.fetchone()
                 if config_value_col_type_row and config_value_col_type_row[0].lower() not in ['text', 'longtext']:
-                    print("检测到旧的 'config.config_value' 列定义，正在将其更新为 TEXT...")
+                    logger.info("检测到旧的 'config.config_value' 列定义，正在将其更新为 TEXT...")
                     await cursor.execute("ALTER TABLE config MODIFY COLUMN config_value TEXT NOT NULL;")
-                    print("列 'config.config_value' 更新成功。")
+                    logger.info("列 'config.config_value' 更新成功。")
             except Exception as e:
                 # 仅记录错误，不中断启动流程
-                print(f"检查或更新表结构时发生非致命错误: {e}")
+                logger.warning(f"检查或更新表结构时发生非致命错误: {e}")
 
             # --- 步骤 3.2: 初始化默认配置 ---
             await _init_default_config(cursor)
 
 async def _init_default_config(cursor: aiomysql.Cursor):
-    """初始化配置表的默认值，并避免打印重复键的警告。"""
-    print("正在检查并初始化默认配置...")
+    """初始化配置表的默认值，并强制执行最低缓存时间。"""
+    logger.info("正在检查并初始化默认配置...")
+
+    MIN_TTL_SECONDS = 10800  # 3 hours
+
     default_configs = [
-        ('search_ttl_seconds', '300', '搜索结果的缓存时间（秒），默认5分钟。'),
-        ('episodes_ttl_seconds', '1800', '分集列表的缓存时间（秒），默认30分钟。'),
-        ('base_info_ttl_seconds', '1800', '基础媒体信息（如爱奇艺）的缓存时间（秒），默认30分钟。'),
-        ('metadata_search_ttl_seconds', '1800', '元数据（如TMDB, Bangumi）搜索结果的缓存时间（秒），默认30分钟。'),
+        ('search_ttl_seconds', str(MIN_TTL_SECONDS), '搜索结果的缓存时间（秒），最低3小时。'),
+        ('episodes_ttl_seconds', str(MIN_TTL_SECONDS), '分集列表的缓存时间（秒），最低3小时。'),
+        ('base_info_ttl_seconds', str(MIN_TTL_SECONDS), '基础媒体信息（如爱奇艺）的缓存时间（秒），最低3小时。'),
+        ('metadata_search_ttl_seconds', str(MIN_TTL_SECONDS), '元数据（如TMDB, Bangumi）搜索结果的缓存时间（秒），最低3小时。'),
         ('custom_api_domain', '', '用于拼接弹幕API地址的自定义域名。'),
         ('jwt_expire_minutes', str(settings.jwt.access_token_expire_minutes), 'JWT令牌的有效期（分钟）。-1 表示永不过期。'),
         ('tmdb_api_key', '', '用于访问 The Movie Database API 的密钥。'),
@@ -187,26 +215,54 @@ async def _init_default_config(cursor: aiomysql.Cursor):
         ('ua_filter_mode', 'off', 'UA过滤模式: off, blacklist, whitelist'),
         ('douban_cookie', '', '用于访问豆瓣API的Cookie。'),
         ('webhook_api_key', '', '用于Webhook调用的安全密钥。'),
-        ('tvdb_api_key', '', '用于访问 TheTVDB API 的密钥。')
+        ('webhook_custom_domain', '', '用于拼接Webhook URL的自定义域名。'),
+        ('tvdb_api_key', '', '用于访问 TheTVDB API 的密钥。'),
+        ('bangumi_client_id', '', '用于Bangumi OAuth的App ID。'),
+        ('bangumi_client_secret', '', '用于Bangumi OAuth的App Secret。')
     ]
 
-    # 1. 获取所有已存在的配置键
-    await cursor.execute("SELECT config_key FROM config")
-    existing_keys = {row[0] for row in await cursor.fetchall()}
+    # 1. 获取所有已存在的配置
+    await cursor.execute("SELECT config_key, config_value FROM config")
+    existing_configs = {row[0]: row[1] for row in await cursor.fetchall()}
 
-    # 2. 找出需要插入的新配置
+    # 2. 准备插入和更新操作
     configs_to_insert = []
+    configs_to_update = []
+
+    ttl_keys = {
+        'search_ttl_seconds',
+        'episodes_ttl_seconds',
+        'base_info_ttl_seconds',
+        'metadata_search_ttl_seconds'
+    }
+
     for key, value, description in default_configs:
-        if key in existing_keys:
-            print(f"配置项 '{key}' 已存在，跳过初始化。")
-        else:
-            print(f"正在初始化配置项 '{key}'...")
+        if key not in existing_configs:
+            # 如果配置项不存在，则添加
+            logger.info(f"正在初始化配置项 '{key}'...")
             configs_to_insert.append((key, value, description))
+        elif key in ttl_keys:
+            # 如果是TTL配置项且已存在，检查其值
+            try:
+                current_value = int(existing_configs[key])
+                if current_value < MIN_TTL_SECONDS:
+                    logger.info(f"配置项 '{key}' 的值 ({current_value}s) 低于最低要求 ({MIN_TTL_SECONDS}s)，将自动更新。")
+                    configs_to_update.append((str(MIN_TTL_SECONDS), key))
+            except (ValueError, TypeError):
+                # 如果值不是有效的整数，也强制更新
+                logger.warning(f"配置项 '{key}' 的值 '{existing_configs[key]}' 无效，将自动更新为默认值。")
+                configs_to_update.append((str(MIN_TTL_SECONDS), key))
 
     # 3. 批量插入新配置
     if configs_to_insert:
-        query = "INSERT INTO config (config_key, config_value, description) VALUES (%s, %s, %s)"
-        await cursor.executemany(query, configs_to_insert)
-        print(f"成功初始化 {len(configs_to_insert)} 个新配置项。")
-    
-    print("默认配置检查完成。")
+        query_insert = "INSERT INTO config (config_key, config_value, description) VALUES (%s, %s, %s)"
+        await cursor.executemany(query_insert, configs_to_insert)
+        logger.info(f"成功初始化 {len(configs_to_insert)} 个新配置项。")
+
+    # 4. 批量更新不符合最低要求的TTL配置
+    if configs_to_update:
+        query_update = "UPDATE config SET config_value = %s WHERE config_key = %s"
+        await cursor.executemany(query_update, configs_to_update)
+        logger.info(f"成功更新了 {len(configs_to_update)} 个不符合最低缓存时间的配置项。")
+
+    logger.info("默认配置检查完成。")

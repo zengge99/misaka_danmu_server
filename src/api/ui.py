@@ -13,7 +13,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from .. import crud, models, security
 from ..log_manager import get_logs
-from ..task_manager import TaskManager, TaskSuccess
+from ..task_manager import TaskManager, TaskSuccess, TaskStatus
 from ..scraper_manager import ScraperManager
 from ..webhook_manager import WebhookManager
 from ..scheduler import SchedulerManager
@@ -179,8 +179,6 @@ async def search_anime_provider(
     manager: ScraperManager = Depends(get_scraper_manager),
     current_user: models.User = Depends(security.get_current_user),
     tmdb_client: httpx.AsyncClient = Depends(get_tmdb_client),
-    douban_client: httpx.AsyncClient = Depends(get_douban_client),
-    imdb_client: httpx.AsyncClient = Depends(get_imdb_client),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
     """
@@ -212,6 +210,7 @@ async def search_anime_provider(
         """从TMDB获取别名。"""
         local_aliases = set()
         try:
+            # 1. Search with zh-CN to get a best match
             tv_task = tmdb_client.get("/search/tv", params={"query": search_title, "language": "zh-CN"})
             movie_task = tmdb_client.get("/search/movie", params={"query": search_title, "language": "zh-CN"})
             tv_res, movie_res = await asyncio.gather(tv_task, movie_task, return_exceptions=True)
@@ -225,72 +224,39 @@ async def search_anime_provider(
             if tmdb_results:
                 best_match = tmdb_results[0]
                 media_type = "tv" if "name" in best_match else "movie"
-                details_res = await tmdb_client.get(f"/{media_type}/{best_match['id']}", params={"append_to_response": "alternative_titles"})
-                if details_res.status_code == 200:
-                    details = details_res.json()
+                media_id = best_match['id']
+
+                # 2. Fetch details for zh-CN (with all alternative titles) and zh-TW concurrently
+                details_cn_task = tmdb_client.get(f"/{media_type}/{media_id}", params={"append_to_response": "alternative_titles", "language": "zh-CN"})
+                details_tw_task = tmdb_client.get(f"/{media_type}/{media_id}", params={"language": "zh-TW"})
+                
+                details_cn_res, details_tw_res = await asyncio.gather(details_cn_task, details_tw_task, return_exceptions=True)
+
+                # Process zh-CN response (which includes all alternative_titles)
+                if isinstance(details_cn_res, httpx.Response) and details_cn_res.status_code == 200:
+                    details = details_cn_res.json()
+                    # Add the main title from zh-CN response
+                    local_aliases.add(details.get('name') or details.get('title'))
+                    # Add the original title
+                    local_aliases.add(details.get('original_name') or details.get('original_title'))
+                    # Add all alternative titles from all regions
                     alt_titles = details.get("alternative_titles", {}).get("titles", [])
                     for title_info in alt_titles:
                         local_aliases.add(title_info['title'])
-                    local_aliases.add(details.get('name') or details.get('title'))
-                    local_aliases.add(details.get('original_name') or details.get('original_title'))
-                    logger.info(f"TMDB辅助搜索成功，找到别名: {[a for a in local_aliases if a]}")
+                
+                # Process zh-TW response to specifically get the Taiwanese title
+                if isinstance(details_tw_res, httpx.Response) and details_tw_res.status_code == 200:
+                    details_tw = details_tw_res.json()
+                    local_aliases.add(details_tw.get('name') or details_tw.get('title'))
+
+                logger.info(f"TMDB辅助搜索成功，找到别名: {[a for a in local_aliases if a]}")
         except Exception as e:
             logger.warning(f"TMDB辅助搜索失败: {e}")
-        return {alias for alias in local_aliases if alias}
-
-    async def _get_douban_aliases() -> set:
-        """从豆瓣获取别名。"""
-        local_aliases = set()
-        try:
-            # 直接调用重构后的内部抓取函数
-            from .douban_api import _scrape_douban_search, _scrape_douban_details
-            search_results = await _scrape_douban_search(search_title, douban_client)
-            if not search_results: return set()
-            
-            best_match = search_results[0]
-            media_id = best_match.id
-            if not media_id: return set()
-            
-            details = await _scrape_douban_details(media_id, douban_client)
-            
-            local_aliases.add(details.get("name_en"))
-            local_aliases.add(details.get("name_jp"))
-            if isinstance(details.get("aliases_cn"), list):
-                local_aliases.update(details.get("aliases_cn"))
-            logger.info(f"Douban辅助搜索成功，找到别名: {[a for a in local_aliases if a]}")
-        except Exception as e:
-            logger.warning(f"Douban辅助搜索时发生错误: {e}")
-        return {alias for alias in local_aliases if alias}
-
-    async def _get_imdb_aliases() -> set:
-        """从IMDb获取别名。"""
-        local_aliases = set()
-        try:
-            # 直接调用重构后的内部抓取函数
-            from .imdb_api import _scrape_imdb_search, _scrape_imdb_details
-            search_results = await _scrape_imdb_search(search_title, imdb_client)
-            if not search_results: return set()
-            
-            best_match = search_results[0]
-            media_id = best_match.id
-            if not media_id: return set()
-
-            details = await _scrape_imdb_details(media_id, imdb_client)
-
-            local_aliases.add(details.get("name_en"))
-            local_aliases.add(details.get("name_jp"))
-            if isinstance(details.get("aliases_cn"), list):
-                local_aliases.update(details.get("aliases_cn"))
-            logger.info(f"IMDb辅助搜索成功，找到别名: {[a for a in local_aliases if a]}")
-        except Exception as e:
-            logger.warning(f"IMDb辅助搜索时发生错误: {e}")
         return {alias for alias in local_aliases if alias}
 
     # 并发执行所有辅助搜索
     tasks = [
         _get_tmdb_aliases(),
-        _get_douban_aliases(),
-        _get_imdb_aliases(),
     ]
     results = await asyncio.gather(*tasks)
     for alias_set in results:
@@ -501,6 +467,25 @@ async def edit_episode_info(
     logger.info(f"用户 '{current_user.username}' 更新了分集 ID: {episode_id} 的信息。")
     return
 
+@router.post("/library/source/{source_id}/reorder-episodes", status_code=status.HTTP_202_ACCEPTED, summary="重整指定源的分集顺序")
+async def reorder_source_episodes(
+    source_id: int,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    task_manager: TaskManager = Depends(get_task_manager)
+):
+    """提交一个后台任务，按当前顺序重新编号指定数据源的所有分集。"""
+    source_info = await crud.get_anime_source_info(pool, source_id)
+    if not source_info:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
+
+    task_title = f"重整集数: {source_info['title']} ({source_info['provider_name']})"
+    task_coro = lambda callback: reorder_episodes_task(source_id, pool, callback)
+    task_id, _ = await task_manager.submit_task(task_coro, task_title)
+
+    logger.info(f"用户 '{current_user.username}' 提交了重整源 ID: {source_id} 集数的任务 (Task ID: {task_id})。")
+    return {"message": f"重整集数任务 '{task_title}' 已提交。", "task_id": task_id}
+
 @router.delete("/library/episode/{episode_id}", status_code=status.HTTP_202_ACCEPTED, summary="提交删除指定分集的任务")
 async def delete_episode_from_source(
     episode_id: int,
@@ -704,7 +689,34 @@ async def update_tmdb_settings(
     await asyncio.gather(*tasks)
     logger.info(f"用户 '{current_user.username}' 更新了 TMDB 配置。")
     
+@router.get("/config/bangumi", response_model=Dict[str, str], summary="获取Bangumi配置")
+async def get_bangumi_settings(
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """获取Bangumi OAuth相关的配置。"""
+    keys = ["bangumi_client_id", "bangumi_client_secret"]
+    tasks = [crud.get_config_value(pool, key, "") for key in keys]
+    values = await asyncio.gather(*tasks)
+    return dict(zip(keys, values))
+
+@router.put("/config/bangumi", status_code=status.HTTP_204_NO_CONTENT, summary="更新Bangumi配置")
+async def update_bangumi_settings(
+    payload: Dict[str, str],
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool)
+):
+    """批量更新Bangumi OAuth相关的配置。"""
+    tasks = []
+    for key, value in payload.items():
+        if key in ["bangumi_client_id", "bangumi_client_secret"]:
+            tasks.append(crud.update_config_value(pool, key, value or ""))
+    if tasks:
+        await asyncio.gather(*tasks)
+    logger.info(f"用户 '{current_user.username}' 更新了 Bangumi 配置。")
+
 @router.post("/cache/clear", status_code=status.HTTP_200_OK, summary="清除所有缓存")
+
 async def clear_all_caches(
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool)
@@ -731,10 +743,19 @@ async def delete_task_from_history_endpoint(
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
-    """从历史记录中删除一个任务。"""
+    """从历史记录中删除一个任务。只能删除已完成、失败或已暂停的任务。"""
+    task = await crud.get_task_from_history_by_id(pool, task_id)
+    if not task:
+        # 如果任务不存在，直接返回成功，因为最终状态是一致的
+        return
+
+    if task['status'] in [TaskStatus.RUNNING, TaskStatus.PENDING]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能删除正在运行或排队中的任务。")
+
     deleted = await crud.delete_task_from_history(pool, task_id)
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+        # This case should be rare if the first check passed, but good for safety
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="在删除过程中未找到任务。")
     return
 
 @router.get("/tokens", response_model=List[models.ApiTokenInfo], summary="获取所有弹幕API Token")
@@ -898,6 +919,20 @@ async def get_available_webhook_types(
 async def delete_anime_task(anime_id: int, pool: aiomysql.Pool, progress_callback: Callable):
     """Background task to delete an anime and all its related data."""
     progress_callback(0, "开始删除...")
+
+    # 新增：在删除数据库记录前，先清理关联的缓存
+    try:
+        sources = await crud.get_anime_sources(pool, anime_id)
+        for source in sources:
+            media_id = source.get('media_id')
+            if media_id:
+                # 清理可能存在的各种缓存
+                await crud.delete_cache(pool, f"episodes_{media_id}")
+                await crud.delete_cache(pool, f"base_info_{media_id}") # 针对爱奇艺
+        logger.info(f"已为作品 ID {anime_id} 清理了 {len(sources)} 个数据源的关联缓存。")
+    except Exception as e:
+        logger.warning(f"为作品 ID {anime_id} 清理缓存时发生非致命错误: {e}")
+
     try:
         deleted = await crud.delete_anime(pool, anime_id)
         if deleted:
@@ -991,8 +1026,8 @@ async def generic_import_task(
         # 3. 为每个分集获取并存储弹幕
         for i, episode in enumerate(episodes):
             logger.info(f"--- 开始处理分集 {i+1}/{len(episodes)}: '{episode.title}' (ID: {episode.episodeId}) ---")
-            progress_callback(progress=(i / len(episodes)) * 100, description=f"正在处理: {episode.title} ({i+1}/{len(episodes)})")
-            
+            await progress_callback(progress=(i / len(episodes)) * 100, description=f"正在处理: {episode.title} ({i+1}/{len(episodes)})")
+
             # 3.1 在数据库中创建或获取分集ID
             episode_db_id = await crud.get_or_create_episode(pool, source_id, episode.episodeIndex, episode.title, episode.url, episode.episodeId)
 
@@ -1000,12 +1035,12 @@ async def generic_import_task(
             base_progress = (i / len(episodes)) * 100
             progress_range = (1 / len(episodes)) * 100
 
-            def sub_progress_callback(danmaku_progress: int, danmaku_description: str):
+            async def sub_progress_callback(danmaku_progress: int, danmaku_description: str):
                 # danmaku_progress is 0-100
                 # Map it to the current episode's progress slice
                 current_total_progress = base_progress + (danmaku_progress / 100) * progress_range
                 # 使用位置参数调用，以保持与其他任务回调的一致性
-                progress_callback(current_total_progress, f"处理: {episode.title} - {danmaku_description}")
+                await progress_callback(current_total_progress, f"处理: {episode.title} - {danmaku_description}")
 
             # 3.2 获取弹幕
             comments = await scraper.get_comments(episode.episodeId, progress_callback=sub_progress_callback)
@@ -1014,7 +1049,7 @@ async def generic_import_task(
                 continue
 
             # 3.3 批量插入弹幕 (get_comments 已按要求格式化)
-            progress_callback(base_progress + progress_range * 0.98, f"处理: {episode.title} - 正在写入数据库")
+            await progress_callback(base_progress + progress_range * 0.98, f"处理: {episode.title} - 正在写入数据库")
             added_count = await crud.bulk_insert_comments(pool, episode_db_id, comments)
             total_comments_added += added_count
             logger.info(f"分集 '{episode.title}' (DB ID: {episode_db_id}) 新增 {added_count} 条弹幕。")
@@ -1038,7 +1073,7 @@ async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: Scrape
     
     anime_id = source_info["anime_id"]
     # 1. 清空旧数据
-    progress_callback(10, "正在清空旧数据...")
+    await progress_callback(10, "正在清空旧数据...")
     await crud.clear_source_data(pool, source_id)
     logger.info(f"已清空源 ID: {source_id} 的旧分集和弹幕。") # image_url 在这里不会被传递，因为刷新时我们不希望覆盖已有的海报
     # 2. 重新执行通用导入逻辑
@@ -1063,7 +1098,7 @@ async def delete_bulk_sources_task(source_ids: List[int], pool: aiomysql.Pool, p
     deleted_count = 0
     for i, source_id in enumerate(source_ids):
         progress = int((i / total) * 100)
-        progress_callback(progress, f"正在删除源 {i+1}/{total} (ID: {source_id})...")
+        await progress_callback(progress, f"正在删除源 {i+1}/{total} (ID: {source_id})...")
         try:
             if await crud.delete_anime_source(pool, source_id):
                 deleted_count += 1
@@ -1076,7 +1111,7 @@ async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: Sc
     """后台任务：刷新单个分集的弹幕"""
     logger.info(f"开始刷新分集 ID: {episode_id}")
     try:
-        progress_callback(0, "正在获取分集信息...")
+        await progress_callback(0, "正在获取分集信息...")
         # 1. 获取分集的源信息
         info = await crud.get_episode_provider_info(pool, episode_id)
         if not info or not info.get("provider_name") or not info.get("provider_episode_id"):
@@ -1089,30 +1124,64 @@ async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: Sc
         scraper = manager.get_scraper(provider_name)
 
         # 2. 清空旧弹幕
-        progress_callback(25, "正在清空旧弹幕...")
+        await progress_callback(25, "正在清空旧弹幕...")
         await crud.clear_episode_comments(pool, episode_id)
         logger.info(f"已清空分集 ID: {episode_id} 的旧弹幕。")
 
         # 3. 获取新弹幕并插入
-        progress_callback(30, "正在从源获取新弹幕...")
+        await progress_callback(30, "正在从源获取新弹幕...")
         
-        def sub_progress_callback(danmaku_progress: int, danmaku_description: str):
+        async def sub_progress_callback(danmaku_progress: int, danmaku_description: str):
             # 30% for setup, 65% for download, 5% for db write
             current_total_progress = 30 + (danmaku_progress / 100) * 65
-            progress_callback(current_total_progress, danmaku_description)
+            await progress_callback(current_total_progress, danmaku_description)
 
         comments = await scraper.get_comments(provider_episode_id, progress_callback=sub_progress_callback)
 
-        progress_callback(96, f"正在写入 {len(comments)} 条新弹幕...")
+        await progress_callback(96, f"正在写入 {len(comments)} 条新弹幕...")
         added_count = await crud.bulk_insert_comments(pool, episode_id, comments)
         await crud.update_episode_fetch_time(pool, episode_id)
         logger.info(f"分集 ID: {episode_id} 刷新完成，新增 {added_count} 条弹幕。")
-        progress_callback(100, f"刷新完成，新增 {added_count} 条弹幕。")
+        raise TaskSuccess(f"刷新完成，新增 {added_count} 条弹幕。")
 
     except Exception as e:
         logger.error(f"刷新分集 ID: {episode_id} 时发生严重错误: {e}", exc_info=True)
-        progress_callback(100, "任务失败")
         raise e # Re-raise so the task manager catches it and marks as FAILED
+
+async def reorder_episodes_task(source_id: int, pool: aiomysql.Pool, progress_callback: Callable):
+    """后台任务：重新编号一个源的所有分集。"""
+    logger.info(f"开始重整源 ID: {source_id} 的分集顺序。")
+    await progress_callback(0, "正在获取分集列表...")
+    
+    try:
+        # 获取所有分集，按现有顺序排序
+        episodes = await crud.get_episodes_for_source(pool, source_id)
+        if not episodes:
+            raise TaskSuccess("没有找到分集，无需重整。")
+
+        total_episodes = len(episodes)
+        updated_count = 0
+        
+        # 开始事务
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                await conn.begin()
+                try:
+                    for i, episode in enumerate(episodes):
+                        new_index = i + 1
+                        if episode['episode_index'] != new_index:
+                            await cursor.execute("UPDATE episode SET episode_index = %s WHERE id = %s", (new_index, episode['id']))
+                            updated_count += 1
+                        await progress_callback(int(((i + 1) / total_episodes) * 100), f"正在处理分集 {i+1}/{total_episodes}...")
+                    await conn.commit()
+                except Exception as e:
+                    await conn.rollback()
+                    logger.error(f"重整源 ID {source_id} 时数据库事务失败: {e}", exc_info=True)
+                    raise
+        raise TaskSuccess(f"重整完成，共更新了 {updated_count} 个分集的集数。")
+    except Exception as e:
+        logger.error(f"重整分集任务 (源ID: {source_id}) 失败: {e}", exc_info=True)
+        raise
 
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED, summary="从指定数据源导入弹幕")
 async def import_from_provider(
@@ -1165,6 +1234,24 @@ async def import_from_provider(
     task_id, _ = await task_manager.submit_task(task_coro, task_title)
 
     return {"message": f"'{request_data.anime_title}' 的导入任务已提交。请在任务管理器中查看进度。", "task_id": task_id}
+
+@router.post("/tasks/pause", status_code=status.HTTP_202_ACCEPTED, summary="暂停当前正在运行的任务")
+async def pause_current_task(
+    current_user: models.User = Depends(security.get_current_user),
+    task_manager: TaskManager = Depends(get_task_manager)
+):
+    """暂停当前正在运行的任务。注意：此操作只对当前队列中正在执行的单个任务有效。"""
+    await task_manager.pause_current_task()
+    return {"message": "暂停请求已发送。"}
+
+@router.post("/tasks/resume", status_code=status.HTTP_202_ACCEPTED, summary="恢复当前已暂停的任务")
+async def resume_current_task(
+    current_user: models.User = Depends(security.get_current_user),
+    task_manager: TaskManager = Depends(get_task_manager)
+):
+    """恢复当前已暂停的任务。"""
+    await task_manager.resume_current_task()
+    return {"message": "恢复请求已发送。"}
 
 @auth_router.post("/token", response_model=models.Token, summary="用户登录获取令牌")
 async def login_for_access_token(

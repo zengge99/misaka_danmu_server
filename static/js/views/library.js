@@ -220,7 +220,10 @@ function renderEpisodeListView(sourceId, animeTitle, episodes, animeId) {
     episodeListView.innerHTML = `
         <div class="episode-list-header">
             <h3>分集列表: ${animeTitle}</h3>
-            <button id="back-to-detail-view-btn">&lt; 返回作品详情</button>
+            <div class="header-actions">
+                <button id="reorder-episodes-btn" class="secondary-btn">重整集数</button>
+                <button id="back-to-detail-view-btn">&lt; 返回作品详情</button>
+            </div>
         </div>
         <table id="episode-list-table">
             <thead><tr><th>ID</th><th>剧集名</th><th>集数</th><th>弹幕数</th><th>采集时间</th><th>官方链接</th><th>剧集操作</th></tr></thead>
@@ -253,8 +256,24 @@ function renderEpisodeListView(sourceId, animeTitle, episodes, animeId) {
         tableBody.innerHTML = `<tr><td colspan="7">未找到任何分集数据。</td></tr>`;
     }
 
+    document.getElementById('reorder-episodes-btn').addEventListener('click', () => handleReorderEpisodes(sourceId, animeTitle));
     document.getElementById('back-to-detail-view-btn').addEventListener('click', () => showAnimeDetailView(animeId));
     tableBody.addEventListener('click', handleEpisodeAction);
+}
+
+async function handleReorderEpisodes(sourceId, animeTitle) {
+    if (!confirm(`您确定要为 '${animeTitle}' 的这个数据源重整集数吗？\n\n此操作会按当前顺序将集数重新编号为 1, 2, 3...`)) {
+        return;
+    }
+
+    try {
+        const response = await apiFetch(`/api/ui/library/source/${sourceId}/reorder-episodes`, { method: 'POST' });
+        if (confirm((response.message || "重整任务已提交。") + "\n\n是否立即跳转到任务管理器查看进度？")) {
+            document.querySelector('.nav-link[data-view="task-manager-view"]').click();
+        }
+    } catch (error) {
+        alert(`提交重整任务失败: ${error.message}`);
+    }
 }
 
 async function handleEpisodeAction(e) {

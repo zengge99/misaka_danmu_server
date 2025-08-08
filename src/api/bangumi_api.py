@@ -181,11 +181,17 @@ async def get_bangumi_client(
     if expires_at and datetime.now() >= expires_at:
         # 尝试刷新 token
         try:
+            client_id_task = crud.get_config_value(pool, "bangumi_client_id", "")
+            client_secret_task = crud.get_config_value(pool, "bangumi_client_secret", "")
+            client_id, client_secret = await asyncio.gather(client_id_task, client_secret_task)
+            if not client_id or not client_secret:
+                raise ValueError("Bangumi App ID/Secret 未配置，无法刷新Token。")
+
             async with httpx.AsyncClient() as client:
                 token_data = {
                     "grant_type": "refresh_token",
-                    "client_id": settings.bangumi.client_id,
-                    "client_secret": settings.bangumi.client_secret,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
                     "refresh_token": auth_info["refresh_token"],
                 }
                 response = await client.post("https://bgm.tv/oauth/access_token", data=token_data)
@@ -219,10 +225,14 @@ async def get_bangumi_auth_url(
     # 1. 创建并存储一个唯一的、有有效期的 state
     state = await crud.create_oauth_state(pool, current_user.id)
 
+    client_id = await crud.get_config_value(pool, "bangumi_client_id", "")
+    if not client_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bangumi App ID 未在设置中配置。")
+
     # 构建回调 URL，它将指向我们的 /auth/callback 端点
     redirect_uri = request.url_for('bangumi_auth_callback')
     params = {
-        "client_id": settings.bangumi.client_id,
+        "client_id": client_id,
         "response_type": "code",
         "redirect_uri": str(redirect_uri),
         "state": state, # 2. 将 state 添加到授权 URL
@@ -252,10 +262,16 @@ async def bangumi_auth_callback(
         return HTMLResponse("<h1>认证失败：找不到与此授权请求关联的用户。</h1>", status_code=404)
     user = models.User.model_validate(user_dict)
 
+    client_id_task = crud.get_config_value(pool, "bangumi_client_id", "")
+    client_secret_task = crud.get_config_value(pool, "bangumi_client_secret", "")
+    client_id, client_secret = await asyncio.gather(client_id_task, client_secret_task)
+    if not client_id or not client_secret:
+        return HTMLResponse("<h1>认证失败：服务器未配置Bangumi App ID或App Secret。</h1>", status_code=500)
+
     token_data = {
         "grant_type": "authorization_code",
-        "client_id": settings.bangumi.client_id,
-        "client_secret": settings.bangumi.client_secret,
+        "client_id": client_id,
+        "client_secret": client_secret,
         "code": code,
         "redirect_uri": str(request.url_for('bangumi_auth_callback')),
     }

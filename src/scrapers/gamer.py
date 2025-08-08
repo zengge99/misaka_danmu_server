@@ -165,6 +165,9 @@ class GamerScraper(BaseScraper):
             self.logger.info(f"Gamer: 搜索 '{keyword}' 完成，找到 {len(results)} 个结果。")
             return results
 
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            self.logger.warning(f"Gamer: 搜索 '{keyword}' 时连接超时或网络错误: {e}")
+            return []
         except Exception as e:
             self.logger.error(f"Gamer: 搜索 '{keyword}' 失败: {e}", exc_info=True)
             return []
@@ -214,6 +217,9 @@ class GamerScraper(BaseScraper):
             
             return episodes
 
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            self.logger.warning(f"Gamer: 获取分集列表失败 (media_id={media_id})，连接超时或网络错误: {e}")
+            return []
         except Exception as e:
             self.logger.error(f"Gamer: 获取分集列表失败 (media_id={media_id}): {e}", exc_info=True)
             return []
@@ -226,7 +232,7 @@ class GamerScraper(BaseScraper):
         data = {"sn": episode_id}
         
         try:
-            if progress_callback: progress_callback(10, "正在请求弹幕数据...")
+            if progress_callback: await progress_callback(10, "正在请求弹幕数据...")
             
             await self._ensure_config()
             response = await self.client.post(url, data=data)
@@ -245,11 +251,20 @@ class GamerScraper(BaseScraper):
                 self.logger.error(f"Gamer: 刷新Cookie后，弹幕API仍未返回列表 (episode_id={episode_id})")
                 return []
 
-            if progress_callback: progress_callback(50, f"收到 {len(danmu_data)} 条原始弹幕，正在处理...")
+            if progress_callback: await progress_callback(50, f"收到 {len(danmu_data)} 条原始弹幕，正在处理...")
+
+            # 新增：按 'sn' (弹幕流水号) 去重
+            unique_danmu_map: Dict[str, Dict] = {}
+            for c in danmu_data:
+                sn = c.get("sn")
+                if sn and sn not in unique_danmu_map:
+                    unique_danmu_map[sn] = c
+            
+            unique_danmu_list = list(unique_danmu_map.values())
 
             # 像Lua脚本一样处理重复弹幕
             grouped_by_content: Dict[str, List[Dict]] = defaultdict(list)
-            for c in danmu_data:
+            for c in unique_danmu_list: # 使用去重后的列表
                 grouped_by_content[c.get("text")].append(c)
 
             processed_comments: List[Dict] = []
@@ -288,9 +303,12 @@ class GamerScraper(BaseScraper):
                     self.logger.warning(f"Gamer: 跳过一条格式错误的弹幕: {comment}, 错误: {e}")
                     continue
             
-            if progress_callback: progress_callback(100, "弹幕处理完成")
+            if progress_callback: await progress_callback(100, "弹幕处理完成")
             return formatted_comments
 
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            self.logger.warning(f"Gamer: 获取弹幕失败 (episode_id={episode_id})，连接超时或网络错误: {e}")
+            return []
         except Exception as e:
             self.logger.error(f"Gamer: 获取弹幕失败 (episode_id={episode_id}): {e}", exc_info=True)
             return []

@@ -196,7 +196,14 @@ class IqiyiScraper(BaseScraper):
         cached_info = await self._get_from_cache(cache_key)
         if cached_info is not None:
             self.logger.info(f"爱奇艺: 从缓存中命中基础信息 (link_id={link_id})")
-            return IqiyiHtmlVideoInfo.model_validate(cached_info)
+            try:
+                return IqiyiHtmlVideoInfo.model_validate(cached_info)
+            except ValidationError as e:
+                self.logger.error(f"爱奇艺: 缓存的基础信息 (link_id={link_id}) 验证失败。这可能是一个陈旧或损坏的缓存。")
+                self.logger.error(f"导致验证失败的数据: {cached_info}")
+                self.logger.error(f"Pydantic 验证错误: {e}")
+                # 返回None，让上层调用者知道信息获取失败，而不是让任务崩溃
+                return None
 
         url = f"https://m.iqiyi.com/v_{link_id}.html"
         # 模仿 C# 代码中的 LimitRequestFrequently
@@ -406,7 +413,7 @@ class IqiyiScraper(BaseScraper):
                 # 爱奇艺没有总分段数，因此我们只能显示当前正在获取哪个分段
                 # 进度条可以模拟一个递增的值
                 progress = min(95, mat * 5) # 假设大部分视频不会超过20个分段 (100分钟)
-                progress_callback(progress, f"正在获取第 {mat} 分段")
+                await progress_callback(progress, f"正在获取第 {mat} 分段")
 
             comments_in_mat = await self._get_danmu_content_by_mat(tv_id, mat)
             if not comments_in_mat:
@@ -415,7 +422,7 @@ class IqiyiScraper(BaseScraper):
             await asyncio.sleep(0.1) # Be nice to the server
 
         if progress_callback:
-            progress_callback(100, "弹幕整合完成")
+            await progress_callback(100, "弹幕整合完成")
 
         return self._format_comments(all_comments)
 
@@ -423,9 +430,18 @@ class IqiyiScraper(BaseScraper):
         if not comments:
             return []
 
+        # 新增：按 content_id 去重
+        unique_comments_map: Dict[str, IqiyiComment] = {}
+        for c in comments:
+            # 保留第一次出现的弹幕
+            if c.content_id not in unique_comments_map:
+                unique_comments_map[c.content_id] = c
+        
+        unique_comments = list(unique_comments_map.values())
+
         # 1. 按内容对弹幕进行分组
         grouped_by_content: Dict[str, List[IqiyiComment]] = defaultdict(list)
-        for c in comments:
+        for c in unique_comments: # 使用去重后的列表
             grouped_by_content[c.content].append(c)
 
         # 2. 处理重复项

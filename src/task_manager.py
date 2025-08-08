@@ -15,6 +15,7 @@ class TaskStatus(str, Enum):
     RUNNING = "运行中"
     COMPLETED = "已完成"
     FAILED = "失败"
+    PAUSED = "已暂停"
 
 class TaskSuccess(Exception):
     """自定义异常，用于表示任务成功完成并附带一条最终消息。"""
@@ -26,12 +27,15 @@ class Task:
         self.title = title
         self.coro_factory = coro_factory
         self.done_event = asyncio.Event()
+        self.pause_event = asyncio.Event()
+        self.pause_event.set() # 默认为运行状态 (事件被设置)
 
 class TaskManager:
     def __init__(self, pool: aiomysql.Pool):
         self._pool = pool
         self._queue: asyncio.Queue = asyncio.Queue()
         self._worker_task: asyncio.Task | None = None
+        self._current_task: Optional[Task] = None
 
     def start(self):
         """启动后台工作协程来处理任务队列。"""
@@ -53,7 +57,9 @@ class TaskManager:
     async def _worker(self):
         """从队列中获取并执行任务。"""
         while True:
+            self._current_task = None # 清理上一个任务
             task: Task = await self._queue.get()
+            self._current_task = task
             logger.info(f"开始执行任务 '{task.title}' (ID: {task.task_id})")
             
             await crud.update_task_progress_in_history(
@@ -62,7 +68,7 @@ class TaskManager:
             
             try:
                 # 创建一个回调函数，该函数将由任务内部调用以更新其进度
-                progress_callback = self.get_progress_callback(task.task_id)
+                progress_callback = self._get_progress_callback(task)
                 # task.coro_factory 是一个需要回调函数作为参数的 lambda
                 # 调用它以获取真正的、可等待的协程
                 actual_coroutine = task.coro_factory(progress_callback)
@@ -103,13 +109,27 @@ class TaskManager:
         logger.info(f"任务 '{title}' 已提交，ID: {task_id}")
         return task_id, task.done_event
 
-    def get_progress_callback(self, task_id: str) -> Callable:
-        """为特定任务创建一个回调闭包。"""
-        def callback(progress: int, description: str):
+    def _get_progress_callback(self, task: Task) -> Callable:
+        """为特定任务创建一个可暂停的回调闭包。"""
+        async def pausable_callback(progress: int, description: str):
+            # 核心暂停逻辑：在每次更新进度前，检查暂停事件。
+            # 如果事件被清除 (cleared)，.wait() 将会阻塞，直到事件被重新设置 (set)。
+            await task.pause_event.wait()
+
             # 这是一个“即发即忘”的调用，以避免阻塞正在运行的任务
             asyncio.create_task(
                 crud.update_task_progress_in_history(
-                    self._pool, task_id, TaskStatus.RUNNING, int(progress), description
+                    self._pool, task.task_id, TaskStatus.RUNNING, int(progress), description
                 )
             )
-        return callback
+        return pausable_callback
+
+    async def pause_current_task(self):
+        if self._current_task:
+            self._current_task.pause_event.clear()
+            await crud.update_task_status(self._pool, self._current_task.task_id, TaskStatus.PAUSED)
+
+    async def resume_current_task(self):
+        if self._current_task:
+            self._current_task.pause_event.set()
+            await crud.update_task_status(self._pool, self._current_task.task_id, TaskStatus.RUNNING)

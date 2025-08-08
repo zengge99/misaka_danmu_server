@@ -1,5 +1,7 @@
 # 御坂网络弹幕服务
-  
+[![GitHub](https://img.shields.io/badge/-GitHub-181717?logo=github)](https://github.com/l429609201/misaka_danmu_server)
+![GitHub License](https://img.shields.io/github/license/l429609201/misaka_danmu_server)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/l429609201/misaka_danmu_server?color=blue&label=download&sort=semver)](https://github.com/l429609201/misaka_danmu_server/releases/latest)  
 
 一个功能强大的自托管弹幕（Danmaku）聚合与管理服务，兼容 [dandanplay](https://api.dandanplay.net/swagger/index.html) API 规范。
 
@@ -173,6 +175,9 @@
     -   `{服务名}`: webhook界面中下方已加载的服务名称，例如 `emby`。
     -   `<你的API_Key>`: 您在 Webhook 设置页面获取的密钥。
 
+3.  现在已经增加拼接URL后的复制按钮
+
+
 ### 2. 配置媒体服务器
   - **对于Emby**
 
@@ -207,3 +212,9 @@
 
 现在，当有新的电影或剧集添加到您的 Emby/Jellyfin 媒体库时，本服务将自动收到通知，并创建一个后台任务来为其搜索和导入弹幕。
 
+
+### 贡献者
+
+<a href="https://github.com/l429609201/misaka_danmu_server/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=l429609201/misaka_danmu_server" alt="contributors" />
+</a>

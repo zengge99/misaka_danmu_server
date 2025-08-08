@@ -40,7 +40,7 @@
             <header>
                 <div class="header-title-group">
                     <img src="/static/logo.png" alt="Logo" id="header-logo">
-                    <h1>御坂网络弹幕服务 v1.0.5</h1>
+                    <h1>御坂网络弹幕服务 v1.0.6</h1>
                 </div>
                 <div class="header-user-info">
                     <span id="current-user"></span>
@@ -448,7 +448,7 @@
                                 <h2>运行中任务</h2>
                                 <div class="view-controls">
                                     <div class="task-actions">
-                                        <button id="pause-running-task-btn" class="control-btn" title="暂停/恢复功能暂未实现" disabled>暂停/恢复</button>
+                                        <button id="pause-resume-task-btn" class="control-btn" disabled>暂停/恢复</button>
                                         <button id="delete-running-task-btn" class="control-btn danger">删除任务</button>
                                     </div>
                                     <input type="text" id="running-tasks-search-input" placeholder="按任务标题搜索...">
@@ -680,14 +680,45 @@
                                         <button type="button" id="regenerate-webhook-key-btn" class="icon-btn" title="重新生成">🔄</button>
                                     </div>
                                 </div>
-                                <div id="webhook-handlers-list-container">
-                                    <h4>已加载的服务:</h4>
-                                    <ul id="webhook-handlers-list"></ul>
+                                <div class="form-row" style="margin-top: 15px;">
+                                    <label for="webhook-custom-domain-input">自定义域名 (可选)</label>
+                                    <input type="text" id="webhook-custom-domain-input" placeholder="例如: https://danmu.example.com">
+                                    <button id="save-webhook-domain-btn" style="margin-left: 10px;">保存域名</button>
+                                </div>
+                                <p id="webhook-domain-save-message" class="message"></p>
+                                <div class="webhook-url-generator">
+                                    <h4>Webhook URL 生成</h4>
+                                    <div class="form-row">
+                                        <label for="webhook-service-select">选择服务</label>
+                                        <select id="webhook-service-select"></select>
+                                        <div class="input-with-icon" style="flex-grow: 1.5;">
+                                            <input type="text" id="webhook-generated-url" readonly placeholder="选择服务后自动生成">
+                                            <button type="button" id="copy-webhook-url-btn" class="icon-btn" title="复制">📋</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         <div id="bangumi-settings-subview" class="settings-subview hidden">
+                            <div class="form-card">
+                                <h3>Bangumi API 配置</h3>
+                                <p>请从 <a href="https://bgm.tv/dev/app" target="_blank" rel="noopener noreferrer">Bangumi开发者中心</a> 创建应用以获取您自己的 App ID 和 App Secret。</p>
+                                <form id="bangumi-settings-form">
+                                    <div class="form-row">
+                                        <label for="bangumi-client-id">App ID</label>
+                                        <input type="text" id="bangumi-client-id" placeholder="在此输入您的 App ID">
+                                    </div>
+                                    <div class="form-row">
+                                        <label for="bangumi-client-secret">App Secret</label>
+                                        <input type="password" id="bangumi-client-secret" placeholder="在此输入您的 App Secret">
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit">保存</button>
+                                    </div>
+                                </form>
+                                <p id="bangumi-save-message" class="message"></p>
+                            </div>
                             <div class="form-card">
                                 <h3>Bangumi 授权</h3>
                                 <div id="bangumi-auth-state-unauthenticated">
@@ -791,4 +822,3 @@
     <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>
-

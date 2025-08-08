@@ -29,8 +29,8 @@ class AdminConfig(BaseModel):
 
 # 5. (新增) Bangumi OAuth 配置
 class BangumiConfig(BaseModel):
-    client_id: str = "bgm4222688b7532ef439"
-    client_secret: str = "379c426b8f26b561642334445761361f"
+    client_id: str = "" # 将从数据库加载
+    client_secret: str = "" # 将从数据库加载
 
 # 2. 创建一个自定义的配置源，用于从 YAML 文件加载设置
 class YamlConfigSettingsSource(PydanticBaseSettingsSource):

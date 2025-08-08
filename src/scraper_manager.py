@@ -15,6 +15,7 @@ class ScraperManager:
     def __init__(self, pool: aiomysql.Pool):
         self.scrapers: Dict[str, BaseScraper] = {}
         self._scraper_classes: Dict[str, Type[BaseScraper]] = {}
+        self.scraper_settings: Dict[str, Dict[str, Any]] = {}
         self.pool = pool
         # 注意：加载逻辑现在是异步的，将在应用启动时调用
 
@@ -49,6 +50,7 @@ class ScraperManager:
         await self.close_all()
         self.scrapers.clear()
         self._scraper_classes.clear()
+        self.scraper_settings.clear()
 
         scrapers_dir = Path(__file__).parent / "scrapers"
         discovered_providers = []
@@ -81,29 +83,40 @@ class ScraperManager:
                 logging.getLogger(__name__).error(f"加载搜索源模块 {module_name} 失败，已跳过。错误: {e}", exc_info=True)
         
         await crud.sync_scrapers_to_db(self.pool, discovered_providers)
-        settings = await crud.get_all_scraper_settings(self.pool)
+        settings_list = await crud.get_all_scraper_settings(self.pool)
+        self.scraper_settings = {s['provider_name']: s for s in settings_list}
 
-        for setting in settings:
-            if setting['is_enabled'] and setting['provider_name'] in self._scraper_classes:
-                provider_name = setting['provider_name']
-                self.scrapers[provider_name] = self._scraper_classes[provider_name](self.pool)
-                print(f"已启用搜索源 '{provider_name}' (顺序: {setting['display_order']})。")
+        # Instantiate all discovered scrapers
+        for provider_name, scraper_class in self._scraper_classes.items():
+            self.scrapers[provider_name] = scraper_class(self.pool)
+            setting = self.scraper_settings.get(provider_name)
+            if setting:
+                status = "已启用" if setting.get('is_enabled') else "已禁用"
+                order = setting.get('display_order', 'N/A')
+                logging.getLogger(__name__).info(f"已加载搜索源 '{provider_name}' (状态: {status}, 顺序: {order})。")
+            else:
+                logging.getLogger(__name__).warning(f"已加载搜索源 '{provider_name}'，但在数据库中未找到其设置。")
 
     @property
     def has_enabled_scrapers(self) -> bool:
         """检查是否有任何已启用的爬虫。"""
-        return bool(self.scrapers)
+        return any(s.get('is_enabled') for s in self.scraper_settings.values())
 
     async def search_all(self, keywords: List[str], episode_info: Optional[Dict[str, Any]] = None) -> List[ProviderSearchInfo]:
         """
         在所有已启用的搜索源上并发搜索关键词列表。
         """
-        if not self.scrapers:
+        enabled_scrapers = [
+            scraper for name, scraper in self.scrapers.items()
+            if self.scraper_settings.get(name, {}).get('is_enabled')
+        ]
+
+        if not enabled_scrapers:
             return []
 
         tasks = []
         for keyword in keywords:
-            for scraper in self.scrapers.values():
+            for scraper in enabled_scrapers:
                 tasks.append(scraper.search(keyword, episode_info=episode_info))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -132,11 +145,13 @@ class ScraperManager:
         if not self.scrapers:
             return None, None
 
-        # 从数据库获取有序且已启用的搜索源列表
-        ordered_settings = await crud.get_all_scraper_settings(self.pool)
-        enabled_providers = [s['provider_name'] for s in ordered_settings if s['is_enabled']]
+        # 使用缓存的设置来获取有序且已启用的搜索源列表
+        ordered_providers = sorted(
+            [p for p, s in self.scraper_settings.items() if s.get('is_enabled')],
+            key=lambda p: self.scraper_settings[p].get('display_order', 99)
+        )
 
-        for provider_name in enabled_providers:
+        for provider_name in ordered_providers:
             scraper = self.scrapers.get(provider_name)
             if not scraper: continue
 

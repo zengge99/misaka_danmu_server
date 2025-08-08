@@ -403,10 +403,10 @@ async def get_or_create_anime(pool: aiomysql.Pool, title: str, media_type: str, 
                     (title, media_type, season, image_url, datetime.now())
                 )
                 anime_id = cursor.lastrowid
-                # 2.2 插入元数据表
-                await cursor.execute("INSERT INTO anime_metadata (anime_id) VALUES (%s)", (anime_id, ))
-                # 2.3 插入别名表
-                await cursor.execute("INSERT INTO anime_aliases (anime_id) VALUES (%s)", (anime_id, ))
+                # 2.2 插入元数据表 (使用 INSERT IGNORE 避免因孤儿数据导致重复键警告)
+                await cursor.execute("INSERT IGNORE INTO anime_metadata (anime_id) VALUES (%s)", (anime_id, ))
+                # 2.3 插入别名表 (同样使用 INSERT IGNORE)
+                await cursor.execute("INSERT IGNORE INTO anime_aliases (anime_id) VALUES (%s)", (anime_id, ))
                 await conn.commit()
                 return anime_id
             except Exception as e:
@@ -623,13 +623,13 @@ async def update_anime_details(pool: aiomysql.Pool, anime_id: int, update_data: 
             try:
                 await conn.begin()
 
-                # 1. 更新 anime 表
+                # 1. 更新 anime 表 (此表没有 ON DUPLICATE KEY UPDATE，无需修改)
                 await cursor.execute(
                     "UPDATE anime SET title = %s, type = %s, season = %s, episode_count = %s WHERE id = %s",
                     (update_data.title, update_data.type, update_data.season, update_data.episode_count, anime_id)
                 )
                 
-                # 2. 更新 anime_metadata 表 (使用 INSERT ... ON DUPLICATE KEY UPDATE)
+                # 2. 更新 anime_metadata 表 (使用新的 AS alias 语法)
                 await cursor.execute("""
                     INSERT INTO anime_metadata (anime_id, tmdb_id, tmdb_episode_group_id, bangumi_id, tvdb_id, douban_id, imdb_id)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -639,11 +639,11 @@ async def update_anime_details(pool: aiomysql.Pool, anime_id: int, update_data: 
                         douban_id = VALUES(douban_id), imdb_id = VALUES(imdb_id)
                 """, (anime_id, update_data.tmdb_id, update_data.tmdb_episode_group_id, update_data.bangumi_id, update_data.tvdb_id, update_data.douban_id, update_data.imdb_id))
 
-                # 3. 更新 anime_aliases 表
+                # 3. 更新 anime_aliases 表 (使用新的 AS alias 语法)
                 await cursor.execute("""
                     INSERT INTO anime_aliases (anime_id, name_en, name_jp, name_romaji, alias_cn_1, alias_cn_2, alias_cn_3)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE
+                    AS new_values ON DUPLICATE KEY UPDATE
                         name_en = VALUES(name_en), name_jp = VALUES(name_jp),
                         name_romaji = VALUES(name_romaji), alias_cn_1 = VALUES(alias_cn_1),
                         alias_cn_2 = VALUES(alias_cn_2), alias_cn_3 = VALUES(alias_cn_3)
@@ -967,7 +967,7 @@ async def set_cache(pool: aiomysql.Pool, key: str, value: Any, ttl_seconds: int,
             query = """
                 INSERT INTO cache_data (cache_provider, cache_key, cache_value, expires_at) 
                 VALUES (%s, %s, %s, NOW() + INTERVAL %s SECOND) 
-                ON DUPLICATE KEY UPDATE
+                AS new_values ON DUPLICATE KEY UPDATE
                     cache_provider = VALUES(cache_provider),
                     cache_value = VALUES(cache_value),
                     expires_at = VALUES(expires_at)
@@ -980,8 +980,8 @@ async def update_config_value(pool: aiomysql.Pool, key: str, value: str):
         async with conn.cursor() as cursor:
             query = """
                 INSERT INTO config (config_key, config_value)
-                VALUES (%s, %s)
-                ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)
+                VALUES (%s, %s) AS new_values
+                ON DUPLICATE KEY UPDATE config_value = new_values.config_value
             """
             await cursor.execute(query, (key, value))
 
@@ -1010,6 +1010,13 @@ async def clear_all_cache(pool: aiomysql.Pool) -> int:
             if deleted_rows > 0:
                 logging.getLogger(__name__).info(f"清除了所有 ({deleted_rows} 条) 数据库缓存。")
             return deleted_rows
+
+async def delete_cache(pool: aiomysql.Pool, key: str) -> bool:
+    """从数据库缓存中删除指定的键。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            affected_rows = await cursor.execute("DELETE FROM cache_data WHERE cache_key = %s", (key,))
+            return affected_rows > 0
 
 async def update_episode_fetch_time(pool: aiomysql.Pool, episode_id: int):
     """更新分集的采集时间"""
@@ -1192,7 +1199,7 @@ async def save_bangumi_auth(pool: aiomysql.Pool, user_id: int, auth_data: Dict[s
             # 当记录已存在时（ON DUPLICATE KEY UPDATE），authorized_at 不会被更新，保留首次授权时间。
             query = """
                 INSERT INTO bangumi_auth (user_id, bangumi_user_id, nickname, avatar_url, access_token, refresh_token, expires_at, authorized_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s) AS new_values
                 ON DUPLICATE KEY UPDATE
                     bangumi_user_id = VALUES(bangumi_user_id),
                     nickname = VALUES(nickname),
@@ -1200,7 +1207,7 @@ async def save_bangumi_auth(pool: aiomysql.Pool, user_id: int, auth_data: Dict[s
                     access_token = VALUES(access_token),
                     refresh_token = VALUES(refresh_token),
                     expires_at = VALUES(expires_at),
-                    authorized_at = IF(bangumi_auth.authorized_at IS NULL, VALUES(authorized_at), bangumi_auth.authorized_at)
+                    authorized_at = IF(bangumi_auth.authorized_at IS NULL, new_values.authorized_at, bangumi_auth.authorized_at)
             """
             await cursor.execute(query, (
                 user_id, auth_data.get('bangumi_user_id'), auth_data.get('nickname'),
@@ -1330,6 +1337,14 @@ async def finalize_task_in_history(pool: aiomysql.Pool, task_id: str, status: st
                 (status, description, task_id)
             )
 
+async def update_task_status(pool: aiomysql.Pool, task_id: str, status: str):
+    """仅更新任务的状态，不改变进度和描述。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "UPDATE task_history SET status = %s WHERE id = %s", (status, task_id)
+            )
+
 async def get_tasks_from_history(pool: aiomysql.Pool, search_term: Optional[str], status_filter: str) -> List[Dict[str, Any]]:
     """从数据库获取任务历史记录，支持搜索和过滤。"""
     query = "SELECT id as task_id, title, status, progress, description, created_at FROM task_history"
@@ -1340,7 +1355,7 @@ async def get_tasks_from_history(pool: aiomysql.Pool, search_term: Optional[str]
         params.append(f"%{search_term}%")
 
     if status_filter == 'in_progress':
-        conditions.append("status IN ('排队中', '运行中')")
+        conditions.append("status IN ('排队中', '运行中', '已暂停')")
     elif status_filter == 'completed':
         conditions.append("status = '已完成'")
 
@@ -1353,6 +1368,13 @@ async def get_tasks_from_history(pool: aiomysql.Pool, search_term: Optional[str]
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             await cursor.execute(query, tuple(params))
             return await cursor.fetchall()
+
+async def get_task_from_history_by_id(pool: aiomysql.Pool, task_id: str) -> Optional[Dict[str, Any]]:
+    """从数据库获取单个任务历史记录。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("SELECT id, title, status FROM task_history WHERE id = %s", (task_id,))
+            return await cursor.fetchone()
 
 async def delete_task_from_history(pool: aiomysql.Pool, task_id: str) -> bool:
     """从 task_history 表中删除一个任务记录。"""
