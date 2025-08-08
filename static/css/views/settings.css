@@ -46,63 +46,15 @@ textarea#douban-cookie {
     background-color: var(--secondary-color);
 }
 
-#webhook-handlers-list-container {
+.webhook-url-generator {
     margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
 }
 
-#webhook-handlers-list-container h4 {
+.webhook-url-generator h4 {
     margin-top: 0;
-    margin-bottom: 10px;
-    font-size: 1em;
-    color: #606266;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 5px;
-}
-
-#webhook-handlers-list {
-    /* Old styles for simple list - will be overridden by .webhook-url-list */
-    list-style: none;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-#webhook-handlers-list li {
-    background-color: var(--secondary-color);
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 0.9em;
-}
-
-/* New styles for the URL list */
-#webhook-handlers-list.webhook-url-list {
-    flex-direction: column; /* Stack items vertically */
-}
-
-#webhook-handlers-list.webhook-url-list li {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px;
-}
-
-#webhook-handlers-list.webhook-url-list .webhook-service-name {
-    font-weight: 500;
-    width: 80px; /* Fixed width for alignment */
-    flex-shrink: 0;
-}
-
-#webhook-handlers-list.webhook-url-list .webhook-url-input {
-    flex-grow: 1;
-    background-color: #fff;
-    border: 1px solid var(--border-color);
-    padding: 5px 8px;
-    border-radius: 4px;
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 14px;
-}
-
-#webhook-handlers-list.webhook-url-list .copy-webhook-url-btn {
-    padding: 5px 10px;
-    font-size: 14px;
+    margin-bottom: 15px;
+    font-size: 1.1em;
+    color: #333;
 }

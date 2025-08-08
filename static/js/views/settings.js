@@ -5,8 +5,8 @@ let settingsSubNav, settingsSubViews;
 // Account
 let changePasswordForm, passwordChangeMessage;
 // Webhook
-let webhookApiKeyInput, regenerateWebhookKeyBtn, webhookHandlersList, webhookCustomDomainInput, saveWebhookDomainBtn,
-    webhookDomainSaveMessage;
+let webhookApiKeyInput, regenerateWebhookKeyBtn, webhookCustomDomainInput, saveWebhookDomainBtn, webhookDomainSaveMessage;
+let webhookServiceSelect, webhookGeneratedUrlInput, copyWebhookUrlBtn;
 // Bangumi
 let bangumiSettingsForm, bangumiSaveMessage;
 let bangumiLoginBtn, bangumiLogoutBtn, bangumiAuthStateAuthenticated, bangumiAuthStateUnauthenticated;
@@ -32,10 +32,12 @@ function initializeElements() {
     // Webhook
     webhookApiKeyInput = document.getElementById('webhook-api-key');
     regenerateWebhookKeyBtn = document.getElementById('regenerate-webhook-key-btn');
-    webhookHandlersList = document.getElementById('webhook-handlers-list');
     webhookCustomDomainInput = document.getElementById('webhook-custom-domain-input');
     saveWebhookDomainBtn = document.getElementById('save-webhook-domain-btn');
     webhookDomainSaveMessage = document.getElementById('webhook-domain-save-message');
+    webhookServiceSelect = document.getElementById('webhook-service-select');
+    webhookGeneratedUrlInput = document.getElementById('webhook-generated-url');
+    copyWebhookUrlBtn = document.getElementById('copy-webhook-url-btn');
 
     // Bangumi
     bangumiSettingsForm = document.getElementById('bangumi-settings-form');
@@ -146,7 +148,8 @@ async function handleChangePassword(e) {
 async function loadWebhookSettings() {
     webhookApiKeyInput.value = '加载中...';
     webhookCustomDomainInput.value = '加载中...';
-    webhookHandlersList.innerHTML = '<li>加载中...</li>';
+    webhookServiceSelect.innerHTML = '<option>加载中...</option>';
+    webhookGeneratedUrlInput.value = '';
     webhookDomainSaveMessage.textContent = '';
     try {
         const [keyData, domainData, handlersData] = await Promise.all([
@@ -159,28 +162,31 @@ async function loadWebhookSettings() {
         webhookApiKeyInput.value = apiKey;
         webhookCustomDomainInput.value = customDomain;
         
-        webhookHandlersList.innerHTML = '';
-        webhookHandlersList.classList.add('webhook-url-list');
+        webhookServiceSelect.innerHTML = '';
         if (handlersData.length > 0) {
-            const baseUrl = customDomain || window.location.origin;
             handlersData.forEach(handler => {
-                const li = document.createElement('li');
-                const fullUrl = `${baseUrl}/api/webhook/${handler}?api_key=${apiKey}`;
-                li.innerHTML = `
-                    <span class="webhook-service-name">${handler}</span>
-                    <input type="text" class="webhook-url-input" value="${fullUrl}" readonly>
-                    <button class="copy-webhook-url-btn" data-url="${fullUrl}">复制</button>
-                `;
-                webhookHandlersList.appendChild(li);
+                const option = document.createElement('option');
+                option.value = handler;
+                option.textContent = handler;
+                webhookServiceSelect.appendChild(option);
             });
+            webhookServiceSelect.disabled = false;
+            copyWebhookUrlBtn.disabled = false;
         } else {
-            webhookHandlersList.innerHTML = '<li>无可用服务</li>';
-            webhookHandlersList.classList.remove('webhook-url-list');
+            const option = document.createElement('option');
+            option.textContent = '无可用服务';
+            webhookServiceSelect.appendChild(option);
+            webhookServiceSelect.disabled = true;
+            copyWebhookUrlBtn.disabled = true;
         }
+        // Trigger change event to populate the URL for the first item
+        updateWebhookUrl();
     } catch (error) {
         webhookApiKeyInput.value = '加载失败';
         webhookCustomDomainInput.value = '加载失败';
-        webhookHandlersList.innerHTML = `<li class="error">加载失败: ${error.message}</li>`;
+        webhookServiceSelect.innerHTML = `<option>加载失败</option>`;
+        webhookServiceSelect.disabled = true;
+        copyWebhookUrlBtn.disabled = true;
     }
 }
 
@@ -189,6 +195,7 @@ async function handleRegenerateWebhookKey() {
     try {
         const data = await apiFetch('/api/ui/config/webhook_api_key/regenerate', { method: 'POST' });
         webhookApiKeyInput.value = data.value;
+        updateWebhookUrl(); // Update the URL with the new key
         alert('新的Webhook API Key已生成！');
     } catch (error) {
         alert(`生成失败: ${error.message}`);
@@ -222,16 +229,37 @@ async function handleSaveWebhookDomain() {
     }
 }
 
-function handleWebhookUrlCopy(e) {
-    const button = e.target.closest('.copy-webhook-url-btn');
-    if (!button) return;
-    const urlToCopy = button.dataset.url;
-    if (!urlToCopy) return;
-    navigator.clipboard.writeText(urlToCopy).then(() => {
-        const originalText = button.textContent;
-        button.textContent = '已复制!';
-        setTimeout(() => { button.textContent = originalText; }, 2000);
-    }).catch(err => { alert(`复制失败: ${err}`); });
+function updateWebhookUrl() {
+    const selectedService = webhookServiceSelect.value;
+    if (!selectedService || webhookServiceSelect.disabled) {
+        webhookGeneratedUrlInput.value = '';
+        return;
+    }
+
+    const apiKey = webhookApiKeyInput.value;
+    const customDomain = webhookCustomDomainInput.value;
+    const baseUrl = customDomain || window.location.origin;
+    
+    const fullUrl = `${baseUrl}/api/webhook/${selectedService}?api_key=${apiKey}`;
+    webhookGeneratedUrlInput.value = fullUrl;
+}
+
+async function handleCopyWebhookUrl() {
+    const urlToCopy = webhookGeneratedUrlInput.value;
+    if (!urlToCopy || copyWebhookUrlBtn.disabled) return;
+
+    try {
+        await navigator.clipboard.writeText(urlToCopy);
+        const originalContent = copyWebhookUrlBtn.innerHTML;
+        copyWebhookUrlBtn.innerHTML = '✅';
+        copyWebhookUrlBtn.disabled = true;
+        setTimeout(() => { 
+            copyWebhookUrlBtn.innerHTML = originalContent; 
+            copyWebhookUrlBtn.disabled = false;
+        }, 2000);
+    } catch (err) {
+        alert(`复制失败: ${err}`);
+    }
 }
 
 // --- Bangumi Settings ---
@@ -450,7 +478,8 @@ export function setupSettingsEventListeners() {
     // Webhook
     regenerateWebhookKeyBtn.addEventListener('click', handleRegenerateWebhookKey);
     saveWebhookDomainBtn.addEventListener('click', handleSaveWebhookDomain);
-    webhookHandlersList.addEventListener('click', handleWebhookUrlCopy);
+    webhookServiceSelect.addEventListener('change', updateWebhookUrl);
+    copyWebhookUrlBtn.addEventListener('click', handleCopyWebhookUrl);
 
     // Bangumi
     bangumiSettingsForm.addEventListener('submit', handleSaveBangumiSettings);

@@ -681,14 +681,21 @@
                                     </div>
                                 </div>
                                 <div class="form-row" style="margin-top: 15px;">
-                                    <label for="webhook-custom-domain-input">自定义域名</label>
+                                    <label for="webhook-custom-domain-input">自定义域名 (可选)</label>
                                     <input type="text" id="webhook-custom-domain-input" placeholder="例如: https://danmu.example.com">
                                     <button id="save-webhook-domain-btn" style="margin-left: 10px;">保存域名</button>
                                 </div>
                                 <p id="webhook-domain-save-message" class="message"></p>
-                                <div id="webhook-handlers-list-container">
-                                    <h4>已加载的服务:</h4>
-                                    <ul id="webhook-handlers-list" class="webhook-url-list"></ul>
+                                <div class="webhook-url-generator">
+                                    <h4>Webhook URL 生成</h4>
+                                    <div class="form-row">
+                                        <label for="webhook-service-select">选择服务</label>
+                                        <select id="webhook-service-select"></select>
+                                        <div class="input-with-icon" style="flex-grow: 1.5;">
+                                            <input type="text" id="webhook-generated-url" readonly placeholder="选择服务后自动生成">
+                                            <button type="button" id="copy-webhook-url-btn" class="icon-btn" title="复制">📋</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
