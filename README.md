@@ -71,6 +71,11 @@
       container_name: misaka-danmu-server
       restart: unless-stopped
       environment:
+        # 设置运行容器的用户和组ID，以匹配您宿主机的用户，避免挂载卷的权限问题。
+        - PUID=1000
+        - PGID=1000
+        - UMASK=0022
+       #  连接MySql数据库相关配置
         - DANMUAPI_DATABASE__HOST=mysql
         - DANMUAPI_DATABASE__PORT=3306
         - DANMUAPI_DATABASE__NAME=danmuapi
