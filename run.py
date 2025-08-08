@@ -13,9 +13,9 @@ async def main():
     pool = await aiomysql.create_pool(
         host='localhost',
         port=3306,
-        user='your_username',
-        password='your_password',
-        db='your_database',
+        user='root',
+        password='root',
+        db='127.0.0.1',
         minsize=1,
         maxsize=10
     )
