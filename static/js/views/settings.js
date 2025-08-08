@@ -247,18 +247,43 @@ function updateWebhookUrl() {
 async function handleCopyWebhookUrl() {
     const urlToCopy = webhookGeneratedUrlInput.value;
     if (!urlToCopy || copyWebhookUrlBtn.disabled) return;
-
-    try {
-        await navigator.clipboard.writeText(urlToCopy);
+    
+    // Helper function to update button state after copy
+    const showSuccessOnButton = () => {
         const originalContent = copyWebhookUrlBtn.innerHTML;
         copyWebhookUrlBtn.innerHTML = '✅';
         copyWebhookUrlBtn.disabled = true;
-        setTimeout(() => { 
-            copyWebhookUrlBtn.innerHTML = originalContent; 
+        setTimeout(() => {
+            copyWebhookUrlBtn.innerHTML = originalContent;
             copyWebhookUrlBtn.disabled = false;
         }, 2000);
-    } catch (err) {
-        alert(`复制失败: ${err}`);
+    };
+
+    // Use the modern, secure Clipboard API if available (HTTPS or localhost)
+    if (navigator.clipboard && window.isSecureContext) {
+        try {
+            await navigator.clipboard.writeText(urlToCopy);
+            showSuccessOnButton();
+        } catch (err) {
+            alert(`复制失败: ${err}`);
+        }
+    } else {
+        // Fallback for non-secure contexts (e.g., http://192.168.x.x) or older browsers
+        const textArea = document.createElement("textarea");
+        textArea.value = urlToCopy;
+        textArea.style.position = "fixed";
+        textArea.style.top = "-9999px";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showSuccessOnButton();
+        } catch (err) {
+            alert('复制失败，请手动复制。');
+        }
+        document.body.removeChild(textArea);
     }
 }
 
