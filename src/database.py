@@ -197,13 +197,16 @@ async def init_db_tables(app: FastAPI):
             await _init_default_config(cursor)
 
 async def _init_default_config(cursor: aiomysql.Cursor):
-    """初始化配置表的默认值，并避免打印重复键的警告。"""
+    """初始化配置表的默认值，并强制执行最低缓存时间。"""
     logger.info("正在检查并初始化默认配置...")
+
+    MIN_TTL_SECONDS = 10800  # 3 hours
+
     default_configs = [
-        ('search_ttl_seconds', '300', '搜索结果的缓存时间（秒），默认5分钟。'),
-        ('episodes_ttl_seconds', '1800', '分集列表的缓存时间（秒），默认30分钟。'),
-        ('base_info_ttl_seconds', '1800', '基础媒体信息（如爱奇艺）的缓存时间（秒），默认30分钟。'),
-        ('metadata_search_ttl_seconds', '1800', '元数据（如TMDB, Bangumi）搜索结果的缓存时间（秒），默认30分钟。'),
+        ('search_ttl_seconds', str(MIN_TTL_SECONDS), '搜索结果的缓存时间（秒），最低3小时。'),
+        ('episodes_ttl_seconds', str(MIN_TTL_SECONDS), '分集列表的缓存时间（秒），最低3小时。'),
+        ('base_info_ttl_seconds', str(MIN_TTL_SECONDS), '基础媒体信息（如爱奇艺）的缓存时间（秒），最低3小时。'),
+        ('metadata_search_ttl_seconds', str(MIN_TTL_SECONDS), '元数据（如TMDB, Bangumi）搜索结果的缓存时间（秒），最低3小时。'),
         ('custom_api_domain', '', '用于拼接弹幕API地址的自定义域名。'),
         ('jwt_expire_minutes', str(settings.jwt.access_token_expire_minutes), 'JWT令牌的有效期（分钟）。-1 表示永不过期。'),
         ('tmdb_api_key', '', '用于访问 The Movie Database API 的密钥。'),
@@ -218,23 +221,48 @@ async def _init_default_config(cursor: aiomysql.Cursor):
         ('bangumi_client_secret', '', '用于Bangumi OAuth的App Secret。')
     ]
 
-    # 1. 获取所有已存在的配置键
-    await cursor.execute("SELECT config_key FROM config")
-    existing_keys = {row[0] for row in await cursor.fetchall()}
+    # 1. 获取所有已存在的配置
+    await cursor.execute("SELECT config_key, config_value FROM config")
+    existing_configs = {row[0]: row[1] for row in await cursor.fetchall()}
 
-    # 2. 找出需要插入的新配置
+    # 2. 准备插入和更新操作
     configs_to_insert = []
+    configs_to_update = []
+
+    ttl_keys = {
+        'search_ttl_seconds',
+        'episodes_ttl_seconds',
+        'base_info_ttl_seconds',
+        'metadata_search_ttl_seconds'
+    }
+
     for key, value, description in default_configs:
-        if key in existing_keys:
-            logger.debug(f"配置项 '{key}' 已存在，跳过初始化。")
-        else:
+        if key not in existing_configs:
+            # 如果配置项不存在，则添加
             logger.info(f"正在初始化配置项 '{key}'...")
             configs_to_insert.append((key, value, description))
+        elif key in ttl_keys:
+            # 如果是TTL配置项且已存在，检查其值
+            try:
+                current_value = int(existing_configs[key])
+                if current_value < MIN_TTL_SECONDS:
+                    logger.info(f"配置项 '{key}' 的值 ({current_value}s) 低于最低要求 ({MIN_TTL_SECONDS}s)，将自动更新。")
+                    configs_to_update.append((str(MIN_TTL_SECONDS), key))
+            except (ValueError, TypeError):
+                # 如果值不是有效的整数，也强制更新
+                logger.warning(f"配置项 '{key}' 的值 '{existing_configs[key]}' 无效，将自动更新为默认值。")
+                configs_to_update.append((str(MIN_TTL_SECONDS), key))
 
     # 3. 批量插入新配置
     if configs_to_insert:
-        query = "INSERT INTO config (config_key, config_value, description) VALUES (%s, %s, %s)"
-        await cursor.executemany(query, configs_to_insert)
+        query_insert = "INSERT INTO config (config_key, config_value, description) VALUES (%s, %s, %s)"
+        await cursor.executemany(query_insert, configs_to_insert)
         logger.info(f"成功初始化 {len(configs_to_insert)} 个新配置项。")
-    
+
+    # 4. 批量更新不符合最低要求的TTL配置
+    if configs_to_update:
+        query_update = "UPDATE config SET config_value = %s WHERE config_key = %s"
+        await cursor.executemany(query_update, configs_to_update)
+        logger.info(f"成功更新了 {len(configs_to_update)} 个不符合最低缓存时间的配置项。")
+
     logger.info("默认配置检查完成。")
