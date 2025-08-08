@@ -724,14 +724,14 @@ async def delete_task_from_history_endpoint(
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
-    """从历史记录中删除一个任务。只能删除已完成或失败的任务。"""
+    """从历史记录中删除一个任务。只能删除已完成、失败或已暂停的任务。"""
     task = await crud.get_task_from_history_by_id(pool, task_id)
     if not task:
         # 如果任务不存在，直接返回成功，因为最终状态是一致的
         return
 
-    if task['status'] in [TaskStatus.RUNNING, TaskStatus.PENDING, TaskStatus.PAUSED]:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能删除正在运行、排队中或已暂停的任务。")
+    if task['status'] in [TaskStatus.RUNNING, TaskStatus.PENDING]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能删除正在运行或排队中的任务。")
 
     deleted = await crud.delete_task_from_history(pool, task_id)
     if not deleted:
