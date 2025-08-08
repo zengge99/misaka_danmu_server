@@ -467,6 +467,25 @@ async def edit_episode_info(
     logger.info(f"用户 '{current_user.username}' 更新了分集 ID: {episode_id} 的信息。")
     return
 
+@router.post("/library/source/{source_id}/reorder-episodes", status_code=status.HTTP_202_ACCEPTED, summary="重整指定源的分集顺序")
+async def reorder_source_episodes(
+    source_id: int,
+    current_user: models.User = Depends(security.get_current_user),
+    pool: aiomysql.Pool = Depends(get_db_pool),
+    task_manager: TaskManager = Depends(get_task_manager)
+):
+    """提交一个后台任务，按当前顺序重新编号指定数据源的所有分集。"""
+    source_info = await crud.get_anime_source_info(pool, source_id)
+    if not source_info:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
+
+    task_title = f"重整集数: {source_info['title']} ({source_info['provider_name']})"
+    task_coro = lambda callback: reorder_episodes_task(source_id, pool, callback)
+    task_id, _ = await task_manager.submit_task(task_coro, task_title)
+
+    logger.info(f"用户 '{current_user.username}' 提交了重整源 ID: {source_id} 集数的任务 (Task ID: {task_id})。")
+    return {"message": f"重整集数任务 '{task_title}' 已提交。", "task_id": task_id}
+
 @router.delete("/library/episode/{episode_id}", status_code=status.HTTP_202_ACCEPTED, summary="提交删除指定分集的任务")
 async def delete_episode_from_source(
     episode_id: int,
@@ -1128,6 +1147,41 @@ async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: Sc
     except Exception as e:
         logger.error(f"刷新分集 ID: {episode_id} 时发生严重错误: {e}", exc_info=True)
         raise e # Re-raise so the task manager catches it and marks as FAILED
+
+async def reorder_episodes_task(source_id: int, pool: aiomysql.Pool, progress_callback: Callable):
+    """后台任务：重新编号一个源的所有分集。"""
+    logger.info(f"开始重整源 ID: {source_id} 的分集顺序。")
+    await progress_callback(0, "正在获取分集列表...")
+    
+    try:
+        # 获取所有分集，按现有顺序排序
+        episodes = await crud.get_episodes_for_source(pool, source_id)
+        if not episodes:
+            raise TaskSuccess("没有找到分集，无需重整。")
+
+        total_episodes = len(episodes)
+        updated_count = 0
+        
+        # 开始事务
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                await conn.begin()
+                try:
+                    for i, episode in enumerate(episodes):
+                        new_index = i + 1
+                        if episode['episode_index'] != new_index:
+                            await cursor.execute("UPDATE episode SET episode_index = %s WHERE id = %s", (new_index, episode['id']))
+                            updated_count += 1
+                        await progress_callback(int(((i + 1) / total_episodes) * 100), f"正在处理分集 {i+1}/{total_episodes}...")
+                    await conn.commit()
+                except Exception as e:
+                    await conn.rollback()
+                    logger.error(f"重整源 ID {source_id} 时数据库事务失败: {e}", exc_info=True)
+                    raise
+        raise TaskSuccess(f"重整完成，共更新了 {updated_count} 个分集的集数。")
+    except Exception as e:
+        logger.error(f"重整分集任务 (源ID: {source_id}) 失败: {e}", exc_info=True)
+        raise
 
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED, summary="从指定数据源导入弹幕")
 async def import_from_provider(
