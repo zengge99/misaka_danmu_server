@@ -39,6 +39,10 @@ async def handle_webhook(
             detail="无效的请求体。Webhook 必须使用 'json' 类型发送。"
         )
     logger.info(f"收到来自 '{webhook_type}' 的 Webhook 原始负载:\n{json.dumps(payload, indent=2, ensure_ascii=False)}")
-    handler = webhook_manager.get_handler(webhook_type)
-    await handler.handle(payload)
+    try:
+        handler = webhook_manager.get_handler(webhook_type)
+        await handler.handle(payload)
+    except ValueError as e:
+        # 捕获在 get_handler 中当 webhook_type 无效时抛出的 ValueError
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return {"message": "Webhook received and is being processed."}
