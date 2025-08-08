@@ -31,7 +31,7 @@ async def handle_webhook(
     if not stored_key or api_key != stored_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的Webhook API Key")
 
-    # 新增：先读取原始请求体并记录日志，再尝试解析
+    # 1. 记录原始请求体以供调试
     raw_body = await request.body()
     decoded_body = raw_body.decode(errors='ignore')
     log_body = decoded_body if decoded_body.strip() else "[请求体为空]"
@@ -43,30 +43,37 @@ async def handle_webhook(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="请求体为空 (Request body is empty)。"
         )
+
+    # 2. 参考 Jellyfin 插件，根据 Content-Type 解析负载
+    content_type = request.headers.get("content-type", "").lower()
+    payload = None
+
     try:
-        # 尝试将原始请求体直接解析为JSON
-        payload = json.loads(raw_body)
-    except json.JSONDecodeError:
-        # 如果直接解析JSON失败，尝试将其作为表单数据处理（这是Jellyfin的常见情况）
-        try:
+        if "application/x-www-form-urlencoded" in content_type:
             from urllib.parse import parse_qs
             form_data = parse_qs(raw_body.decode())
             if 'payload' in form_data:
-                # 实际的JSON数据在名为'payload'的表单字段中
                 payload_str = form_data['payload'][0]
-                logger.info(f"检测到表单数据，正在解析 'payload' 字段:\n{payload_str}")
+                logger.info(f"检测到表单数据，正在解析 'payload' 字段...")
                 payload = json.loads(payload_str)
             else:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="请求体既不是有效的JSON，也不是包含'payload'字段的表单。"
+                    detail="表单数据中不包含 'payload' 字段。"
                 )
-        except Exception as form_e:
-            logger.error(f"解析 Webhook 表单数据失败: {form_e}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="无法解析请求体。它必须是JSON或包含'payload'字段的表单。"
-            )
+        else: # Default to JSON, covers 'application/json' and cases with no/wrong content-type
+            if "application/json" not in content_type:
+                 logger.warning(f"未知的 Content-Type: '{content_type}'，将尝试直接解析为 JSON。")
+            payload = json.loads(raw_body)
+
+    except json.JSONDecodeError:
+        logger.error(f"无法将请求体解析为 JSON。Content-Type: '{content_type}'")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请求体不是有效的JSON格式。")
+    except Exception as e:
+        logger.error(f"解析 Webhook 负载时发生未知错误: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"无法解析请求体。错误: {e}")
+
+    # 3. 处理解析后的负载
     logger.info(f"Webhook '{webhook_type}' 解析后的负载:\n{json.dumps(payload, indent=2, ensure_ascii=False)}")
     try:
         handler = webhook_manager.get_handler(webhook_type)
