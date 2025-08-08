@@ -15,7 +15,7 @@ async def main():
         port=3306,
         user='root',
         password='root',
-        db='127.0.0.1',
+        db='testdb',
         minsize=1,
         maxsize=10
     )
@@ -52,4 +52,5 @@ async def main():
         print("资源已清理")
 
 if __name__ == "__main__":
+
     asyncio.run(main())
