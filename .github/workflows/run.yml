@@ -38,7 +38,7 @@ jobs:
         env:
           DB_HOST: localhost
           DB_PORT: 3306
-          DB_USER: root
-          DB_PASSWORD: root
+          DB_USER: your_username
+          DB_PASSWORD: YES
           DB_NAME: testdb
         run: python ${{ github.workspace }}/run.py
