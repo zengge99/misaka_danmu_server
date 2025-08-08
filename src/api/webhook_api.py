@@ -33,8 +33,16 @@ async def handle_webhook(
 
     # 新增：先读取原始请求体并记录日志，再尝试解析
     raw_body = await request.body()
-    logger.info(f"收到来自 '{webhook_type}' 的 Webhook 原始请求体:\n{raw_body.decode(errors='ignore')}")
+    decoded_body = raw_body.decode(errors='ignore')
+    log_body = decoded_body if decoded_body.strip() else "[请求体为空]"
+    logger.info(f"收到来自 '{webhook_type}' 的 Webhook 原始请求体 (长度: {len(raw_body)} bytes):\n---\n{log_body}\n---")
 
+    if not raw_body:
+        logger.warning(f"Webhook '{webhook_type}' 收到了一个空的请求体，无法处理。")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请求体为空 (Request body is empty)。"
+        )
     try:
         # 尝试将原始请求体直接解析为JSON
         payload = json.loads(raw_body)
