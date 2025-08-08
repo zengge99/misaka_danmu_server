@@ -31,11 +31,8 @@ async def handle_webhook(
     if not stored_key or api_key != stored_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的Webhook API Key")
 
-    # 1. 记录原始请求体以供调试
+    # 1. 读取请求体
     raw_body = await request.body()
-    decoded_body = raw_body.decode(errors='ignore')
-    log_body = decoded_body if decoded_body.strip() else "[请求体为空]"
-    logger.info(f"收到来自 '{webhook_type}' 的 Webhook 原始请求体 (长度: {len(raw_body)} bytes):\n---\n{log_body}\n---")
 
     if not raw_body:
         logger.warning(f"Webhook '{webhook_type}' 收到了一个空的请求体，无法处理。")
