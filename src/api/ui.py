@@ -13,7 +13,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from .. import crud, models, security
 from ..log_manager import get_logs
-from ..task_manager import TaskManager, TaskSuccess
+from ..task_manager import TaskManager, TaskSuccess, TaskStatus
 from ..scraper_manager import ScraperManager
 from ..webhook_manager import WebhookManager
 from ..scheduler import SchedulerManager
@@ -724,10 +724,19 @@ async def delete_task_from_history_endpoint(
     current_user: models.User = Depends(security.get_current_user),
     pool: aiomysql.Pool = Depends(get_db_pool)
 ):
-    """从历史记录中删除一个任务。"""
+    """从历史记录中删除一个任务。只能删除已完成或失败的任务。"""
+    task = await crud.get_task_from_history_by_id(pool, task_id)
+    if not task:
+        # 如果任务不存在，直接返回成功，因为最终状态是一致的
+        return
+
+    if task['status'] in [TaskStatus.RUNNING, TaskStatus.PENDING, TaskStatus.PAUSED]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能删除正在运行、排队中或已暂停的任务。")
+
     deleted = await crud.delete_task_from_history(pool, task_id)
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+        # This case should be rare if the first check passed, but good for safety
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="在删除过程中未找到任务。")
     return
 
 @router.get("/tokens", response_model=List[models.ApiTokenInfo], summary="获取所有弹幕API Token")
@@ -984,8 +993,8 @@ async def generic_import_task(
         # 3. 为每个分集获取并存储弹幕
         for i, episode in enumerate(episodes):
             logger.info(f"--- 开始处理分集 {i+1}/{len(episodes)}: '{episode.title}' (ID: {episode.episodeId}) ---")
-            progress_callback(progress=(i / len(episodes)) * 100, description=f"正在处理: {episode.title} ({i+1}/{len(episodes)})")
-            
+            await progress_callback(progress=(i / len(episodes)) * 100, description=f"正在处理: {episode.title} ({i+1}/{len(episodes)})")
+
             # 3.1 在数据库中创建或获取分集ID
             episode_db_id = await crud.get_or_create_episode(pool, source_id, episode.episodeIndex, episode.title, episode.url, episode.episodeId)
 
@@ -993,12 +1002,12 @@ async def generic_import_task(
             base_progress = (i / len(episodes)) * 100
             progress_range = (1 / len(episodes)) * 100
 
-            def sub_progress_callback(danmaku_progress: int, danmaku_description: str):
+            async def sub_progress_callback(danmaku_progress: int, danmaku_description: str):
                 # danmaku_progress is 0-100
                 # Map it to the current episode's progress slice
                 current_total_progress = base_progress + (danmaku_progress / 100) * progress_range
                 # 使用位置参数调用，以保持与其他任务回调的一致性
-                progress_callback(current_total_progress, f"处理: {episode.title} - {danmaku_description}")
+                await progress_callback(current_total_progress, f"处理: {episode.title} - {danmaku_description}")
 
             # 3.2 获取弹幕
             comments = await scraper.get_comments(episode.episodeId, progress_callback=sub_progress_callback)
@@ -1007,7 +1016,7 @@ async def generic_import_task(
                 continue
 
             # 3.3 批量插入弹幕 (get_comments 已按要求格式化)
-            progress_callback(base_progress + progress_range * 0.98, f"处理: {episode.title} - 正在写入数据库")
+            await progress_callback(base_progress + progress_range * 0.98, f"处理: {episode.title} - 正在写入数据库")
             added_count = await crud.bulk_insert_comments(pool, episode_db_id, comments)
             total_comments_added += added_count
             logger.info(f"分集 '{episode.title}' (DB ID: {episode_db_id}) 新增 {added_count} 条弹幕。")
@@ -1031,7 +1040,7 @@ async def full_refresh_task(source_id: int, pool: aiomysql.Pool, manager: Scrape
     
     anime_id = source_info["anime_id"]
     # 1. 清空旧数据
-    progress_callback(10, "正在清空旧数据...")
+    await progress_callback(10, "正在清空旧数据...")
     await crud.clear_source_data(pool, source_id)
     logger.info(f"已清空源 ID: {source_id} 的旧分集和弹幕。") # image_url 在这里不会被传递，因为刷新时我们不希望覆盖已有的海报
     # 2. 重新执行通用导入逻辑
@@ -1056,7 +1065,7 @@ async def delete_bulk_sources_task(source_ids: List[int], pool: aiomysql.Pool, p
     deleted_count = 0
     for i, source_id in enumerate(source_ids):
         progress = int((i / total) * 100)
-        progress_callback(progress, f"正在删除源 {i+1}/{total} (ID: {source_id})...")
+        await progress_callback(progress, f"正在删除源 {i+1}/{total} (ID: {source_id})...")
         try:
             if await crud.delete_anime_source(pool, source_id):
                 deleted_count += 1
@@ -1069,7 +1078,7 @@ async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: Sc
     """后台任务：刷新单个分集的弹幕"""
     logger.info(f"开始刷新分集 ID: {episode_id}")
     try:
-        progress_callback(0, "正在获取分集信息...")
+        await progress_callback(0, "正在获取分集信息...")
         # 1. 获取分集的源信息
         info = await crud.get_episode_provider_info(pool, episode_id)
         if not info or not info.get("provider_name") or not info.get("provider_episode_id"):
@@ -1082,29 +1091,28 @@ async def refresh_episode_task(episode_id: int, pool: aiomysql.Pool, manager: Sc
         scraper = manager.get_scraper(provider_name)
 
         # 2. 清空旧弹幕
-        progress_callback(25, "正在清空旧弹幕...")
+        await progress_callback(25, "正在清空旧弹幕...")
         await crud.clear_episode_comments(pool, episode_id)
         logger.info(f"已清空分集 ID: {episode_id} 的旧弹幕。")
 
         # 3. 获取新弹幕并插入
-        progress_callback(30, "正在从源获取新弹幕...")
+        await progress_callback(30, "正在从源获取新弹幕...")
         
-        def sub_progress_callback(danmaku_progress: int, danmaku_description: str):
+        async def sub_progress_callback(danmaku_progress: int, danmaku_description: str):
             # 30% for setup, 65% for download, 5% for db write
             current_total_progress = 30 + (danmaku_progress / 100) * 65
-            progress_callback(current_total_progress, danmaku_description)
+            await progress_callback(current_total_progress, danmaku_description)
 
         comments = await scraper.get_comments(provider_episode_id, progress_callback=sub_progress_callback)
 
-        progress_callback(96, f"正在写入 {len(comments)} 条新弹幕...")
+        await progress_callback(96, f"正在写入 {len(comments)} 条新弹幕...")
         added_count = await crud.bulk_insert_comments(pool, episode_id, comments)
         await crud.update_episode_fetch_time(pool, episode_id)
         logger.info(f"分集 ID: {episode_id} 刷新完成，新增 {added_count} 条弹幕。")
-        progress_callback(100, f"刷新完成，新增 {added_count} 条弹幕。")
+        raise TaskSuccess(f"刷新完成，新增 {added_count} 条弹幕。")
 
     except Exception as e:
         logger.error(f"刷新分集 ID: {episode_id} 时发生严重错误: {e}", exc_info=True)
-        progress_callback(100, "任务失败")
         raise e # Re-raise so the task manager catches it and marks as FAILED
 
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED, summary="从指定数据源导入弹幕")
@@ -1158,6 +1166,24 @@ async def import_from_provider(
     task_id, _ = await task_manager.submit_task(task_coro, task_title)
 
     return {"message": f"'{request_data.anime_title}' 的导入任务已提交。请在任务管理器中查看进度。", "task_id": task_id}
+
+@router.post("/tasks/pause", status_code=status.HTTP_202_ACCEPTED, summary="暂停当前正在运行的任务")
+async def pause_current_task(
+    current_user: models.User = Depends(security.get_current_user),
+    task_manager: TaskManager = Depends(get_task_manager)
+):
+    """暂停当前正在运行的任务。注意：此操作只对当前队列中正在执行的单个任务有效。"""
+    await task_manager.pause_current_task()
+    return {"message": "暂停请求已发送。"}
+
+@router.post("/tasks/resume", status_code=status.HTTP_202_ACCEPTED, summary="恢复当前已暂停的任务")
+async def resume_current_task(
+    current_user: models.User = Depends(security.get_current_user),
+    task_manager: TaskManager = Depends(get_task_manager)
+):
+    """恢复当前已暂停的任务。"""
+    await task_manager.resume_current_task()
+    return {"message": "恢复请求已发送。"}
 
 @auth_router.post("/token", response_model=models.Token, summary="用户登录获取令牌")
 async def login_for_access_token(

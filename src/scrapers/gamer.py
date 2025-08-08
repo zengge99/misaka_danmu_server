@@ -232,7 +232,7 @@ class GamerScraper(BaseScraper):
         data = {"sn": episode_id}
         
         try:
-            if progress_callback: progress_callback(10, "正在请求弹幕数据...")
+            if progress_callback: await progress_callback(10, "正在请求弹幕数据...")
             
             await self._ensure_config()
             response = await self.client.post(url, data=data)
@@ -251,7 +251,7 @@ class GamerScraper(BaseScraper):
                 self.logger.error(f"Gamer: 刷新Cookie后，弹幕API仍未返回列表 (episode_id={episode_id})")
                 return []
 
-            if progress_callback: progress_callback(50, f"收到 {len(danmu_data)} 条原始弹幕，正在处理...")
+            if progress_callback: await progress_callback(50, f"收到 {len(danmu_data)} 条原始弹幕，正在处理...")
 
             # 像Lua脚本一样处理重复弹幕
             grouped_by_content: Dict[str, List[Dict]] = defaultdict(list)
@@ -294,7 +294,7 @@ class GamerScraper(BaseScraper):
                     self.logger.warning(f"Gamer: 跳过一条格式错误的弹幕: {comment}, 错误: {e}")
                     continue
             
-            if progress_callback: progress_callback(100, "弹幕处理完成")
+            if progress_callback: await progress_callback(100, "弹幕处理完成")
             return formatted_comments
 
         except (httpx.TimeoutException, httpx.ConnectError) as e:

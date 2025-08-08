@@ -343,10 +343,9 @@ class MgtvScraper(BaseScraper):
                     total_minutes = video_info_result.data.info.total_minutes
                     all_comments = []
                     for minute in range(total_minutes):
-                        # 新增：在循环中调用进度回调
                         if progress_callback:
                             progress = int((minute + 1) / total_minutes * 100) if total_minutes > 0 else 100
-                            progress_callback(progress, f"正在下载分段 {minute + 1}/{total_minutes}")
+                            await progress_callback(progress, f"正在下载分段 {minute + 1}/{total_minutes}")
 
                         segment_url = f"https://{ctl_result.data.cdn_host}/{ctl_result.data.cdn_version}/{minute}.json"
                         try:
@@ -368,11 +367,10 @@ class MgtvScraper(BaseScraper):
             all_comments = []
             time_offset = 0
             while True:
-                # 新增：在循环中调用进度回调
                 if progress_callback:
                     # 假设大部分视频时长在200分钟内，以此估算进度
                     progress = min(95, int((time_offset / (200 * 60)) * 100))
-                    progress_callback(progress, f"正在下载分段 (time={time_offset})")
+                    await progress_callback(progress, f"正在下载分段 (time={time_offset})")
 
                 fallback_url = f"https://galaxy.bz.mgtv.com/cdn/opbarrage?vid={vid}&pid=&cid={cid}&ticket=&time={time_offset}&allowedRC=1"
                 fallback_response = await self._request_with_rate_limit("GET", fallback_url)

@@ -406,7 +406,7 @@ class IqiyiScraper(BaseScraper):
                 # 爱奇艺没有总分段数，因此我们只能显示当前正在获取哪个分段
                 # 进度条可以模拟一个递增的值
                 progress = min(95, mat * 5) # 假设大部分视频不会超过20个分段 (100分钟)
-                progress_callback(progress, f"正在获取第 {mat} 分段")
+                await progress_callback(progress, f"正在获取第 {mat} 分段")
 
             comments_in_mat = await self._get_danmu_content_by_mat(tv_id, mat)
             if not comments_in_mat:
@@ -415,7 +415,7 @@ class IqiyiScraper(BaseScraper):
             await asyncio.sleep(0.1) # Be nice to the server
 
         if progress_callback:
-            progress_callback(100, "弹幕整合完成")
+            await progress_callback(100, "弹幕整合完成")
 
         return self._format_comments(all_comments)
 

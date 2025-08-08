@@ -362,7 +362,7 @@ class TencentScraper(BaseScraper):
         total_segments = len(segment_index)
         self.logger.debug(f"为 vid='{vid}' 找到 {total_segments} 个弹幕分段，开始获取...")
         if progress_callback:
-            progress_callback(5, f"找到 {total_segments} 个弹幕分段")
+            await progress_callback(5, f"找到 {total_segments} 个弹幕分段")
 
         # 与C#代码不同，这里我们直接遍历所有分段以获取全部弹幕，而不是抽样
         # 按key（时间戳）排序，确保弹幕顺序正确
@@ -376,7 +376,7 @@ class TencentScraper(BaseScraper):
             if progress_callback:
                 # 5%用于获取索引，90%用于下载，5%用于格式化
                 progress = 5 + int(((i + 1) / total_segments) * 90)
-                progress_callback(progress, f"正在下载分段 {i+1}/{total_segments}")
+                await progress_callback(progress, f"正在下载分段 {i+1}/{total_segments}")
 
             segment_url = f"https://dm.video.qq.com/barrage/segment/{vid}/{segment_name}"
             try:
@@ -400,7 +400,7 @@ class TencentScraper(BaseScraper):
                 continue
         
         if progress_callback:
-            progress_callback(100, "弹幕整合完成")
+            await progress_callback(100, "弹幕整合完成")
 
         self.logger.info(f"vid='{vid}' 弹幕获取完成，共 {len(all_comments)} 条。")
         return all_comments

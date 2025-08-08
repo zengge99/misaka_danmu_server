@@ -1330,6 +1330,14 @@ async def finalize_task_in_history(pool: aiomysql.Pool, task_id: str, status: st
                 (status, description, task_id)
             )
 
+async def update_task_status(pool: aiomysql.Pool, task_id: str, status: str):
+    """仅更新任务的状态，不改变进度和描述。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "UPDATE task_history SET status = %s WHERE id = %s", (status, task_id)
+            )
+
 async def get_tasks_from_history(pool: aiomysql.Pool, search_term: Optional[str], status_filter: str) -> List[Dict[str, Any]]:
     """从数据库获取任务历史记录，支持搜索和过滤。"""
     query = "SELECT id as task_id, title, status, progress, description, created_at FROM task_history"
@@ -1340,7 +1348,7 @@ async def get_tasks_from_history(pool: aiomysql.Pool, search_term: Optional[str]
         params.append(f"%{search_term}%")
 
     if status_filter == 'in_progress':
-        conditions.append("status IN ('排队中', '运行中')")
+        conditions.append("status IN ('排队中', '运行中', '已暂停')")
     elif status_filter == 'completed':
         conditions.append("status = '已完成'")
 
@@ -1353,6 +1361,13 @@ async def get_tasks_from_history(pool: aiomysql.Pool, search_term: Optional[str]
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             await cursor.execute(query, tuple(params))
             return await cursor.fetchall()
+
+async def get_task_from_history_by_id(pool: aiomysql.Pool, task_id: str) -> Optional[Dict[str, Any]]:
+    """从数据库获取单个任务历史记录。"""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            await cursor.execute("SELECT id, title, status FROM task_history WHERE id = %s", (task_id,))
+            return await cursor.fetchone()
 
 async def delete_task_from_history(pool: aiomysql.Pool, task_id: str) -> bool:
     """从 task_history 表中删除一个任务记录。"""
