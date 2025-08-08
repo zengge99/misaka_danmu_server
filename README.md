@@ -173,21 +173,37 @@
     -   `{服务名}`: webhook界面中下方已加载的服务名称，例如 `emby`。
     -   `<你的API_Key>`: 您在 Webhook 设置页面获取的密钥。
 
-### 2. 配置 Emby
+### 2. 配置媒体服务器
+  - **对于Emby**
 
-在 Emby 中设置 Webhook 以在媒体入库时通知本服务。
 
-1.  登录您的 Emby 服务器管理后台。
-2.  导航到 **通知** (Notifications)。
-3.  点击 **添加通知** (Add Notification)，选择 **Webhook** 类型。
-4.  在 **Webhook URL** 字段中，填入您的 Emby Webhook URL，例如：
-    ```
-    http://192.168.1.100:7768/api/webhook/emby?api_key=your_webhook_api_key_here
-    ```
-5.  **关键步骤**: 在 **事件** (Events) 部分，请务必**只勾选**以下事件：
-    -   **项目已添加 (Item Added)**: 这是新媒体入库的事件，其对应的事件名为 `新媒体添加`。
-6.  确保 **发送内容类型** (Content type) 设置为 `application/json`。
-7.  保存设置。
+    1.  登录您的 Emby 服务器管理后台。
+    2.  导航到 **通知** (Notifications)。
+    3.  点击 **添加通知** (Add Notification)，选择 **Webhook** 类型。
+    4.  在 **Webhook URL** 字段中，填入您的 Emby Webhook URL，例如：
+        ```
+        http://192.168.1.100:7768/api/webhook/emby?api_key=your_webhook_api_key_here
+        ```
+    5.  **关键步骤**: 在 **事件** (Events) 部分，请务必**只勾选**以下事件：
+        -   **项目已添加 (Item Added)**: 这是新媒体入库的事件，其对应的事件名为 `新媒体添加`。
+    6.  确保 **发送内容类型** (Content type) 设置为 `application/json`。
+    7.  保存设置。
 
-现在，当有新的电影或剧集添加到您的 Emby 媒体库时，本服务将自动收到通知，并创建一个后台任务来为其搜索和导入弹幕。
+  - **对于Jellyfin**
+    1.  登录您的 Jellyfin 服务器管理后台。
+    2.  导航到 **我的插件**，找到 **Webhook** 插件，如果没有找到，请先安装插件，并重启服务器。
+    3.  点击 **Webhook** 插件，进入配置页面。
+    4.  在 **Server Url** 中输入jellyfin 访问地址（可选）。
+    5.  点击 **Add Generic Destination**。
+    6.  输入 **Webhook Name**
+    7.  在 **Webhook URL** 字段中，填入您的 Jellyfin Webhook URL，例如：
+        ```
+        http://192.168.1.100:7768/api/webhook/jellyfin?api_key=your_webhook_api_key_here
+        ```
+    8.  **关键步骤**: 在 **Notification Type** 部分，请务必**只勾选**以下事件：
+        -   **Item Added**: 这是新媒体入库的事件，其对应的事件名为 `新媒体添加`。
+    9. **关键步骤**: 一定要勾选 **Send All Properties (ignores template)** 选项。
+    10. 保存设置。
+
+现在，当有新的电影或剧集添加到您的 Emby/Jellyfin 媒体库时，本服务将自动收到通知，并创建一个后台任务来为其搜索和导入弹幕。
 
