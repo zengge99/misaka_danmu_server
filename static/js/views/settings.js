@@ -5,7 +5,8 @@ let settingsSubNav, settingsSubViews;
 // Account
 let changePasswordForm, passwordChangeMessage;
 // Webhook
-let webhookApiKeyInput, regenerateWebhookKeyBtn, webhookHandlersList;
+let webhookApiKeyInput, regenerateWebhookKeyBtn, webhookHandlersList, webhookCustomDomainInput, saveWebhookDomainBtn,
+    webhookDomainSaveMessage;
 // Bangumi
 let bangumiSettingsForm, bangumiSaveMessage;
 let bangumiLoginBtn, bangumiLogoutBtn, bangumiAuthStateAuthenticated, bangumiAuthStateUnauthenticated;
@@ -32,6 +33,9 @@ function initializeElements() {
     webhookApiKeyInput = document.getElementById('webhook-api-key');
     regenerateWebhookKeyBtn = document.getElementById('regenerate-webhook-key-btn');
     webhookHandlersList = document.getElementById('webhook-handlers-list');
+    webhookCustomDomainInput = document.getElementById('webhook-custom-domain-input');
+    saveWebhookDomainBtn = document.getElementById('save-webhook-domain-btn');
+    webhookDomainSaveMessage = document.getElementById('webhook-domain-save-message');
 
     // Bangumi
     bangumiSettingsForm = document.getElementById('bangumi-settings-form');
@@ -141,26 +145,41 @@ async function handleChangePassword(e) {
 // --- Webhook Settings ---
 async function loadWebhookSettings() {
     webhookApiKeyInput.value = '加载中...';
+    webhookCustomDomainInput.value = '加载中...';
     webhookHandlersList.innerHTML = '<li>加载中...</li>';
+    webhookDomainSaveMessage.textContent = '';
     try {
-        const [keyData, handlersData] = await Promise.all([
+        const [keyData, domainData, handlersData] = await Promise.all([
             apiFetch('/api/ui/config/webhook_api_key'),
+            apiFetch('/api/ui/config/webhook_custom_domain'),
             apiFetch('/api/ui/webhooks/available')
         ]);
-        webhookApiKeyInput.value = keyData.value || '未生成';
+        const apiKey = keyData.value || '未生成';
+        const customDomain = domainData.value || '';
+        webhookApiKeyInput.value = apiKey;
+        webhookCustomDomainInput.value = customDomain;
         
         webhookHandlersList.innerHTML = '';
+        webhookHandlersList.classList.add('webhook-url-list');
         if (handlersData.length > 0) {
+            const baseUrl = customDomain || window.location.origin;
             handlersData.forEach(handler => {
                 const li = document.createElement('li');
-                li.textContent = handler;
+                const fullUrl = `${baseUrl}/api/webhook/${handler}?api_key=${apiKey}`;
+                li.innerHTML = `
+                    <span class="webhook-service-name">${handler}</span>
+                    <input type="text" class="webhook-url-input" value="${fullUrl}" readonly>
+                    <button class="copy-webhook-url-btn" data-url="${fullUrl}">复制</button>
+                `;
                 webhookHandlersList.appendChild(li);
             });
         } else {
             webhookHandlersList.innerHTML = '<li>无可用服务</li>';
+            webhookHandlersList.classList.remove('webhook-url-list');
         }
     } catch (error) {
         webhookApiKeyInput.value = '加载失败';
+        webhookCustomDomainInput.value = '加载失败';
         webhookHandlersList.innerHTML = `<li class="error">加载失败: ${error.message}</li>`;
     }
 }
@@ -174,6 +193,45 @@ async function handleRegenerateWebhookKey() {
     } catch (error) {
         alert(`生成失败: ${error.message}`);
     }
+}
+
+async function handleSaveWebhookDomain() {
+    const domain = webhookCustomDomainInput.value.trim();
+    const cleanedDomain = domain.endsWith('/') ? domain.slice(0, -1) : domain;
+
+    webhookDomainSaveMessage.textContent = '';
+    webhookDomainSaveMessage.className = 'message';
+    saveWebhookDomainBtn.disabled = true;
+    saveWebhookDomainBtn.textContent = '保存中...';
+
+    try {
+        await apiFetch('/api/ui/config/webhook_custom_domain', {
+            method: 'PUT',
+            body: JSON.stringify({ value: cleanedDomain })
+        });
+        webhookDomainSaveMessage.textContent = '域名保存成功！';
+        webhookDomainSaveMessage.classList.add('success');
+        webhookCustomDomainInput.value = cleanedDomain;
+        await loadWebhookSettings();
+    } catch (error) {
+        webhookDomainSaveMessage.textContent = `保存失败: ${(error.message || error)}`;
+        webhookDomainSaveMessage.classList.add('error');
+    } finally {
+        saveWebhookDomainBtn.disabled = false;
+        saveWebhookDomainBtn.textContent = '保存域名';
+    }
+}
+
+function handleWebhookUrlCopy(e) {
+    const button = e.target.closest('.copy-webhook-url-btn');
+    if (!button) return;
+    const urlToCopy = button.dataset.url;
+    if (!urlToCopy) return;
+    navigator.clipboard.writeText(urlToCopy).then(() => {
+        const originalText = button.textContent;
+        button.textContent = '已复制!';
+        setTimeout(() => { button.textContent = originalText; }, 2000);
+    }).catch(err => { alert(`复制失败: ${err}`); });
 }
 
 // --- Bangumi Settings ---
@@ -391,6 +449,8 @@ export function setupSettingsEventListeners() {
 
     // Webhook
     regenerateWebhookKeyBtn.addEventListener('click', handleRegenerateWebhookKey);
+    saveWebhookDomainBtn.addEventListener('click', handleSaveWebhookDomain);
+    webhookHandlersList.addEventListener('click', handleWebhookUrlCopy);
 
     // Bangumi
     bangumiSettingsForm.addEventListener('submit', handleSaveBangumiSettings);

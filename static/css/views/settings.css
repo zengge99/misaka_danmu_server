@@ -60,16 +60,49 @@ textarea#douban-cookie {
 }
 
 #webhook-handlers-list {
+    /* Old styles for simple list - will be overridden by .webhook-url-list */
     list-style: none;
     padding: 0;
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
 }
-
 #webhook-handlers-list li {
     background-color: var(--secondary-color);
     padding: 5px 10px;
     border-radius: 4px;
     font-size: 0.9em;
+}
+
+/* New styles for the URL list */
+#webhook-handlers-list.webhook-url-list {
+    flex-direction: column; /* Stack items vertically */
+}
+
+#webhook-handlers-list.webhook-url-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+}
+
+#webhook-handlers-list.webhook-url-list .webhook-service-name {
+    font-weight: 500;
+    width: 80px; /* Fixed width for alignment */
+    flex-shrink: 0;
+}
+
+#webhook-handlers-list.webhook-url-list .webhook-url-input {
+    flex-grow: 1;
+    background-color: #fff;
+    border: 1px solid var(--border-color);
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+}
+
+#webhook-handlers-list.webhook-url-list .copy-webhook-url-btn {
+    padding: 5px 10px;
+    font-size: 14px;
 }
