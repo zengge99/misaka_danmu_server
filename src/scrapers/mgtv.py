@@ -396,8 +396,11 @@ class MgtvScraper(BaseScraper):
             return []
 
     def _format_comments(self, comments: List[MgtvComment]) -> List[dict]:
+        # 新增：按弹幕ID去重
+        unique_comments = {c.id: c for c in comments}.values()
+        
         formatted_comments = []
-        for c in comments:
+        for c in unique_comments:
             mode = 1 # 滚动
             if c.type == 1: mode = 5 # 顶部
             elif c.type == 2: mode = 4 # 底部

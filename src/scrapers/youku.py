@@ -380,9 +380,12 @@ class YoukuScraper(BaseScraper):
         if not comments:
             return []
 
+        # 新增：按弹幕ID去重
+        unique_comments = list({c.id: c for c in comments}.values())
+
         # 1. 按内容对弹幕进行分组
         grouped_by_content: Dict[str, List[YoukuComment]] = defaultdict(list)
-        for c in comments:
+        for c in unique_comments: # 使用去重后的列表
             grouped_by_content[c.content].append(c)
 
         # 2. 处理重复项

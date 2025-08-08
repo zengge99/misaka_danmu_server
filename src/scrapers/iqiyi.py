@@ -430,9 +430,18 @@ class IqiyiScraper(BaseScraper):
         if not comments:
             return []
 
+        # 新增：按 content_id 去重
+        unique_comments_map: Dict[str, IqiyiComment] = {}
+        for c in comments:
+            # 保留第一次出现的弹幕
+            if c.content_id not in unique_comments_map:
+                unique_comments_map[c.content_id] = c
+        
+        unique_comments = list(unique_comments_map.values())
+
         # 1. 按内容对弹幕进行分组
         grouped_by_content: Dict[str, List[IqiyiComment]] = defaultdict(list)
-        for c in comments:
+        for c in unique_comments: # 使用去重后的列表
             grouped_by_content[c.content].append(c)
 
         # 2. 处理重复项

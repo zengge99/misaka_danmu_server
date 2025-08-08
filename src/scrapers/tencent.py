@@ -416,9 +416,12 @@ class TencentScraper(BaseScraper):
         if not tencent_comments:
             return []
 
+        # 新增：按弹幕ID去重
+        unique_tencent_comments = list({c.id: c for c in tencent_comments}.values())
+
         # 1. 按内容对弹幕进行分组
         grouped_by_content: Dict[str, List[TencentComment]] = defaultdict(list)
-        for c in tencent_comments:
+        for c in unique_tencent_comments: # 使用去重后的列表
             grouped_by_content[c.content].append(c)
 
         # 2. 处理重复项

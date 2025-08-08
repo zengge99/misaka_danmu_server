@@ -253,9 +253,18 @@ class GamerScraper(BaseScraper):
 
             if progress_callback: await progress_callback(50, f"收到 {len(danmu_data)} 条原始弹幕，正在处理...")
 
+            # 新增：按 'sn' (弹幕流水号) 去重
+            unique_danmu_map: Dict[str, Dict] = {}
+            for c in danmu_data:
+                sn = c.get("sn")
+                if sn and sn not in unique_danmu_map:
+                    unique_danmu_map[sn] = c
+            
+            unique_danmu_list = list(unique_danmu_map.values())
+
             # 像Lua脚本一样处理重复弹幕
             grouped_by_content: Dict[str, List[Dict]] = defaultdict(list)
-            for c in danmu_data:
+            for c in unique_danmu_list: # 使用去重后的列表
                 grouped_by_content[c.get("text")].append(c)
 
             processed_comments: List[Dict] = []
